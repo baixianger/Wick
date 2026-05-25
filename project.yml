@@ -2,38 +2,43 @@ name: Wick
 options:
   bundleIdPrefix: ai.omika.wick
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "26.0"
   developmentLanguage: en
   createIntermediateGroups: true
   generateEmptyDirectories: true
   defaultConfig: Debug
   groupSortPosition: top
-configs:
-  Debug: debug
-  Release: release
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    ENABLE_USER_SCRIPT_SANDBOXING: NO
-    DEVELOPMENT_TEAM: ""
-    CODE_SIGN_STYLE: Automatic
-    SWIFT_STRICT_CONCURRENCY: targeted
-    # Swift 7 prep — warn on bare-protocol existentials.
-    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
-    # Xcode "Update to Recommended Settings" baseline.
+    # Xcode "Update to Recommended Settings" baseline (matches Pendler).
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
     DEAD_CODE_STRIPPING: YES
+    # Real Apple Developer signing — inherited by every target. Same
+    # team ID Pendler and pd3 use; without this Xcode falls back to
+    # "Sign to Run Locally" which can't ship to TestFlight / App Store.
+    DEVELOPMENT_TEAM: TN7ZDD72P2
+    CODE_SIGN_STYLE: Automatic
+    # Versioning at project-base so future targets (widget / extension)
+    # inherit the same Marketing + Current versions automatically.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
     # Typed Swift accessors for asset-catalog colors/images:
-    # `Image(.appIcon)` / `Color(.accent)` instead of stringly-typed names.
+    # `Image(.appIcon)` / `Color(.accent)` instead of stringly-typed.
     ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: YES
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+
 packages:
   CandleKit:
     path: ../CandleKit
+  TradingFloor:
+    path: TradingFloor
+
 targets:
   Wick:
     type: application
     platform: macOS
-    deploymentTarget: "14.0"
     sources:
       - path: Wick/App
       - path: Wick/Data
@@ -54,16 +59,20 @@ targets:
         product: DataAdapters
       - package: CandleKit
         product: DrawingTools
+      - package: TradingFloor
+        product: TradingFloor
     settings:
       base:
+        # NOTE: no `info:` block — xcodegen would auto-generate the
+        # plist and strip hand-added keys (LSApplicationCategoryType,
+        # ITSAppUsesNonExemptEncryption, …). We hand-manage
+        # Info.plist; xcodegen only needs INFOPLIST_FILE + the
+        # GENERATE_INFOPLIST_FILE=NO opt-out. Matches pd3's pattern.
         PRODUCT_BUNDLE_IDENTIFIER: ai.omika.wick
         PRODUCT_NAME: Wick
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: Wick/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
-        GENERATE_INFOPLIST_FILE: NO
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
         CODE_SIGN_ENTITLEMENTS: Wick/Resources/Wick.entitlements

@@ -36,3 +36,12 @@ fastlane/test_output
 # Bundler
 .bundle/
 vendor/
+
+# Secrets / local notes (API keys live in env vars, never in the repo)
+WickServer/fmp.md
+WickServer/finnhub.md
+*.env
+.env
+# Server report cache (local DiskReportStore output)
+WickServer/report-cache/
+report-cache/
