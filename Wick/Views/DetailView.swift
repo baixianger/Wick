@@ -62,41 +62,48 @@ struct DetailView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                header
-                Group {
-                    switch tab {
-                    case .overview:
-                        OverviewTab(ticker: ticker,
-                                    range: $range,
-                                    holdings: holdings)
-                    case .chart:
-                        ChartTab(ticker: ticker,
-                                 scale: $chartScale,
-                                 scale2: $chartScale2,
-                                 splitView: $splitView,
-                                 coordinator: coordinator,
-                                 coordinator2: coordinator2,
-                                 engine: engine,
-                                 engine2: engine2,
-                                 indicators: indicators,
-                                 holdings: holdings)
-                    case .news:
-                        NewsTab(ticker: ticker)
-                    case .ai:
-                        AITab(ticker: ticker, range: range)
+        VStack(alignment: .leading, spacing: 0) {
+            // Pinned chrome — the two-row header (ticker title + tab
+            // picker + price column) stays anchored at top while tab
+            // content scrolls below. Matches the pattern across
+            // MarketView / PortfolioView for cross-page consistency.
+            header
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
+
+            Divider().opacity(0.4)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Group {
+                        switch tab {
+                        case .overview:
+                            OverviewTab(ticker: ticker,
+                                        range: $range,
+                                        holdings: holdings)
+                        case .chart:
+                            ChartTab(ticker: ticker,
+                                     scale: $chartScale,
+                                     scale2: $chartScale2,
+                                     splitView: $splitView,
+                                     coordinator: coordinator,
+                                     coordinator2: coordinator2,
+                                     engine: engine,
+                                     engine2: engine2,
+                                     indicators: indicators,
+                                     holdings: holdings)
+                        case .news:
+                            NewsTab(ticker: ticker)
+                        case .ai:
+                            AITab(ticker: ticker, range: range)
+                        }
                     }
+                    .padding(.bottom, 24)
                 }
-                .padding(.bottom, 24)
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
             }
-            // Unified page padding — Portfolio is the reference
-            // (.horizontal 22, .vertical 18). Header had its own
-            // .padding(.horizontal, 16) before; consolidated into
-            // this single outer call so every page edges in by the
-            // same amount.
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
         }
         .background(appleBackground(for: colorScheme))
         .sheet(isPresented: $indicatorSheetShown) {
@@ -173,12 +180,7 @@ struct DetailView: View {
         let lastPrice = candles.last?.close ?? ticker.lastPrice
         let basePrice = candles.first?.close ?? lastPrice
         let change = lastPrice - basePrice
-        // Synthetic pre-market — Yahoo's free chart endpoint doesn't expose
-        // it, so we wiggle the last close by ±0.5% with a stable per-symbol
-        // sign. Apple Stocks shows two columns; without a fake here the
-        // right side would look empty next to its layout.
-        let pmOffset = preMarketOffset(symbol: ticker.symbol, last: lastPrice)
-        let preMarketPrice = lastPrice + pmOffset
+        let changePct = basePrice == 0 ? 0 : (change / basePrice) * 100
 
         return VStack(alignment: .leading, spacing: 6) {
             // Title section row — ticker name on left, tab picker on
@@ -223,12 +225,10 @@ struct DetailView: View {
                     sourceBadge(active: range.underlyingInterval)
                 }
                 Spacer()
-                HStack(alignment: .top, spacing: 24) {
-                    priceColumn(value: lastPrice, change: change, label: "At Close",
-                                emphasized: true)
-                    priceColumn(value: preMarketPrice, change: pmOffset,
-                                label: "Pre-Market", emphasized: false)
-                }
+                priceColumn(value: lastPrice,
+                            change: change,
+                            changePct: changePct,
+                            label: range.subtitle)
             }
         }
         // No horizontal padding here — the outer body's
@@ -236,22 +236,29 @@ struct DetailView: View {
         // covers the inset for the whole page consistently.
     }
 
-    /// One column of the Apple Stocks-style dual price header.
-    @ViewBuilder
-    private func priceColumn(value: Double, change: Double,
-                             label: String, emphasized: Bool) -> some View
+    /// Single Apple-Stocks-style price column. The pre-market sibling
+    /// was removed: Yahoo's free chart endpoint doesn't return pre/post
+    /// quotes, so the column was being fabricated from a hash of the
+    /// symbol — a UX red line in a real-money UI.
+    private func priceColumn(value: Double,
+                             change: Double,
+                             changePct: Double,
+                             label: String) -> some View
     {
         let isUp = change >= 0
         let tint: Color = isUp ? .green : .red
-        VStack(alignment: .trailing, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+        let sign = isUp ? "+" : ""
+        return VStack(alignment: .trailing, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(String(format: "%.2f", value))
-                    .font(.system(size: emphasized ? 24 : 18,
-                                  weight: .bold, design: .rounded))
-                Text((isUp ? "+" : "") + String(format: "%.2f", change))
-                    .font(.system(size: emphasized ? 14 : 12,
-                                  weight: .semibold, design: .rounded))
-                    .foregroundStyle(tint)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                HStack(spacing: 4) {
+                    Text(sign + String(format: "%.2f", change))
+                    Text(String(format: "(%@%.2f%%)", sign, changePct))
+                        .opacity(0.85)
+                }
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(tint)
             }
             Text(label)
                 .font(.system(size: 11))
@@ -259,14 +266,6 @@ struct DetailView: View {
         }
     }
 
-    /// Deterministic ±0.5% offset per symbol so the pre-market column
-    /// shows a stable price across re-renders (instead of jittering on
-    /// every body refresh).
-    private func preMarketOffset(symbol: String, last: Double) -> Double {
-        let hash = symbol.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        let signed = (hash % 7) - 3       // -3 ... +3
-        return last * Double(signed) / 1000.0   // ±0.3%
-    }
 
     /// Live / error / loading state pill. The pill itself is a tinted
     /// Liquid Glass capsule — same shape across states, only the dot

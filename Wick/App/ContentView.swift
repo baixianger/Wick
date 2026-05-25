@@ -9,9 +9,10 @@ struct ContentView: View {
     @State private var route: SidebarRoute? = .ticker(Ticker.samples[0].id)
     @State private var searchQuery: String = ""
     @State private var tab: DetailTab = .overview
-    /// Global indicator config — shared by every ticker. Survives the
-    /// `.id(...)` rebuild on watchlist switches because it lives here.
-    @State private var indicatorConfig = ChartIndicatorConfig()
+    /// Global indicator config — owned by `WickApp` and injected via
+    /// the environment so both ContentView (per-ticker chart) and
+    /// Settings (Indicators tab) read/write the same instance.
+    @Environment(ChartIndicatorConfig.self) private var indicatorConfig
     /// BYO agent + display knobs. Owns appearance + chart layout (formerly
     /// @State here) so the single Settings pane can drive them.
     @Environment(AgentSettings.self) private var agentSettings
@@ -80,7 +81,8 @@ struct ContentView: View {
                 case .wicker:
                     WickerView(store: chat)
                 case .market:
-                    MarketView()
+                    MarketView(universe: allTickers,
+                               indicators: indicatorConfig)
                 case .ticker, .none:
                     DetailView(ticker: selectedTicker,
                                tab: $tab,

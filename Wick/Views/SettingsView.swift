@@ -37,9 +37,29 @@ struct SettingsView: View {
             SkillsTab(settings: settings)
                 .tabItem { Label("Skills", systemImage: "book.closed") }
 
+            IndicatorsTab()
+                .tabItem { Label("Indicators",
+                                  systemImage: "chart.line.uptrend.xyaxis") }
+
             AppearanceTab(settings: settings)
                 .tabItem { Label("Display", systemImage: "paintpalette") }
         }
+    }
+}
+
+// MARK: - Indicators tab
+
+/// Reuses the same `IndicatorManagerView` the chart's "Indicators"
+/// button pops up — both surfaces edit the same global
+/// `ChartIndicatorConfig` (owned by `WickApp`, injected via env).
+/// Embedded form means no Done button — the close-window red dot
+/// dismisses.
+private struct IndicatorsTab: View {
+    @Environment(ChartIndicatorConfig.self) private var config
+
+    var body: some View {
+        IndicatorManagerView(config: config, presentedAsSheet: false)
+            .frame(width: 580, height: 620)
     }
 }
 

@@ -485,45 +485,374 @@ struct AITab: View {
     let ticker: Ticker
     let range: OverviewRange
     @Environment(ReportHistoryStore.self) private var history
+    @Environment(AgentSettings.self) private var settings
+    @State private var runner = DeskRunner()
     /// Which historical report's full transcript is expanded inline.
     /// `nil` = list-only view. Keyed by `generatedAt` since `Report`
     /// has no id and timestamps are unique per (ticker, run).
     @State private var expanded: Date?
+    /// Selected DAG node inside the expanded report. The
+    /// `reportView` clears this when `expanded` changes so each
+    /// report opens fresh on its first contributor.
+    @State private var selectedAgent: String?
+    /// History timeline visibility. Hidden by default — the most
+    /// recent report renders inline; clicking the History icon next
+    /// to "AI Desk" pops the alternating-vertical timeline above the
+    /// report so the user can pick an older entry.
+    @State private var historyOpen: Bool = false
 
     private var historyForTicker: [Report] {
         history.reports(for: ticker.symbol)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            historyOrEmptyState
+        let items = historyForTicker
+        return VStack(alignment: .leading, spacing: 14) {
+            header(historyCount: items.count)
+            runStatusStrip
+            if items.isEmpty {
+                emptyState
+            } else {
+                if historyOpen {
+                    historyTimeline(items)
+                        .transition(.opacity.combined(
+                            with: .move(edge: .top)))
+                }
+                if let target = activeReport(in: items) {
+                    reportView(target)
+                        .id(target.generatedAt) // re-mount per report switch
+                }
+            }
         }
+        .onAppear {
+            // Bridge runner → history so a completed run lands in the
+            // archive automatically (same behaviour as the workflow
+            // when triggered from Wicker chat).
+            runner.onCompleted = { report in
+                history.save(report)
+                expanded = report.generatedAt
+                historyOpen = false
+            }
+            // Default-expand the most recent report when entering the
+            // tab so the page never opens blank if there's history.
+            if expanded == nil, let latest = historyForTicker.first {
+                expanded = latest.generatedAt
+            }
+        }
+    }
+
+    /// Active report — explicit `expanded` selection wins; otherwise
+    /// default to most recent. Returns nil only when there's nothing
+    /// to show (empty history path is upstream).
+    private func activeReport(in items: [Report]) -> Report? {
+        if let target = expanded,
+           let hit = items.first(where: { $0.generatedAt == target }) {
+            return hit
+        }
+        return items.first
     }
 
     // MARK: - Header
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "sparkles")
-            Text("AI Desk").font(.system(size: 14, weight: .semibold))
+    private func header(historyCount: Int) -> some View {
+        let running: Bool = {
+            if case .running = runner.phase { return true }
+            return false
+        }()
+        return HStack(spacing: 12) {
+            // Apple-Intelligence "AI" mark — the system glyph
+            // (available macOS 15.1+); the Intelligence glow halos
+            // the icon to signal "this surface is the agent." Glow
+            // pulses while a workflow is running, stays subtle when
+            // idle so it doesn't feel restless.
+            Image(systemName: "apple.intelligence")
+                .font(.system(size: 18, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tint)
+                .frame(width: 28, height: 28)
+                .intelligenceGlow(active: true,
+                                  cornerRadius: 14,
+                                  intensity: running ? 1.0 : 0.55)
+            Text("AI Desk")
+                .font(.system(size: 14, weight: .semibold))
             Spacer()
-            Text("Ask Wicker to run a new analysis")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            runButton
+            if historyCount > 0 {
+                historyToggleButton(count: historyCount)
+            }
         }
     }
 
-    // MARK: - History list (or empty state)
-
-    @ViewBuilder
-    private var historyOrEmptyState: some View {
-        let items = historyForTicker
-        if items.isEmpty {
-            emptyState
-        } else {
-            historyList(items)
+    /// Compact "History" pill — clock icon + count badge. Click
+    /// toggles the alternating vertical timeline above the active
+    /// report. Active state highlights the pill so the user knows
+    /// they're in "browse history" mode.
+    private func historyToggleButton(count: Int) -> some View {
+        Button {
+            withAnimation(.spring(duration: 0.32)) {
+                historyOpen.toggle()
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .semibold,
+                                  design: .rounded))
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .foregroundStyle(historyOpen ? Color.accentColor : .secondary)
+            .background(
+                Capsule()
+                    .fill(historyOpen
+                          ? Color.accentColor.opacity(0.18)
+                          : Color.secondary.opacity(0.10))
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(historyOpen
+                                  ? Color.accentColor.opacity(0.45)
+                                  : Color.clear,
+                                  lineWidth: 1)
+            )
         }
+        .buttonStyle(.plain)
+        .help(historyOpen ? "Hide history" : "Show analysis history")
+    }
+
+    /// Prominent "Run Analysis" trigger — the user gap from earlier
+    /// versions where the only path was "ask Wicker" (which doesn't
+    /// actually kick off the multi-agent workflow yet). Disabled
+    /// while a run is in flight; label flips to a spinner during
+    /// `.running` phase.
+    private var runButton: some View {
+        let running: Bool = {
+            if case .running = runner.phase { return true }
+            return false
+        }()
+        return Button {
+            runner.run(ticker: ticker.symbol, settings: settings)
+        } label: {
+            HStack(spacing: 6) {
+                if running {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                Text(running ? "Running…" : "Run Analysis")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+        }
+        .buttonStyle(LiquidGlassButtonStyle(prominent: true))
+        .disabled(running)
+        .help(running
+              ? "Multi-agent workflow in flight"
+              : "Kick off the full desk (fundamental / technical / sentiment / news → bull-bear → trade → risk)")
+    }
+
+    /// Beneath the header — surfaces what the runner is doing now.
+    /// Idle: hidden. Running: stage label. Failed: red row with the
+    /// reason. Done: nothing here, the appended report is visible in
+    /// the list below.
+    @ViewBuilder
+    private var runStatusStrip: some View {
+        switch runner.phase {
+        case .idle, .done:
+            EmptyView()
+        case .running(let stage):
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text(stage)
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .liquidGlass(cornerRadius: 10)
+        case .failed(let message):
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Spacer()
+                Button("Retry") {
+                    runner.run(ticker: ticker.symbol, settings: settings)
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 11))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .liquidGlass(cornerRadius: 10,
+                         tint: Color.orange.opacity(0.18))
+        }
+    }
+
+    // MARK: - History timeline (vertical, alternating)
+
+    /// Vertical alternating timeline of every saved report for this
+    /// ticker. Newest first (matches `ReportHistoryStore.reports`).
+    /// Click any entry to swap the report shown below. Visible only
+    /// when the History pill in the header is toggled on.
+    private func historyTimeline(_ items: [Report]) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                Text("RATING HISTORY · \(items.count) RUNS")
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(0.8)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.bottom, 14)
+
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.generatedAt) { idx, report in
+                    timelineRow(report,
+                                 index: idx,
+                                 isFirst: idx == 0,
+                                 isLast: idx == items.count - 1)
+                }
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.regularMaterial.opacity(0.35))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.15),
+                              lineWidth: 1)
+        )
+    }
+
+    /// One timeline entry. Alternates side: even index → left chip,
+    /// odd index → right chip. The center spine threads through a
+    /// dot for each row; the dot for the active selection scales up
+    /// and glows in its rating tint.
+    private func timelineRow(_ report: Report,
+                              index: Int,
+                              isFirst: Bool,
+                              isLast: Bool) -> some View
+    {
+        let isLeft = index.isMultiple(of: 2)
+        let tint = ratingColor(report.rating)
+        let isActive = (expanded == report.generatedAt)
+            || (expanded == nil && isFirst)
+        return HStack(alignment: .center, spacing: 0) {
+            // LEFT side
+            if isLeft {
+                timelineChip(report, tint: tint,
+                             active: isActive, alignRight: true)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 14)
+            } else {
+                Color.clear.frame(maxWidth: .infinity)
+            }
+
+            // Center spine
+            ZStack {
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(isFirst ? 0 : 0.28))
+                        .frame(width: 1.2)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(isLast ? 0 : 0.28))
+                        .frame(width: 1.2)
+                }
+                Circle()
+                    .fill(tint)
+                    .frame(width: isActive ? 14 : 10,
+                           height: isActive ? 14 : 10)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.3),
+                                          lineWidth: 1.2)
+                    )
+                    .shadow(color: isActive ? tint : .clear,
+                            radius: isActive ? 8 : 0)
+                    .animation(.spring(duration: 0.3), value: isActive)
+            }
+            .frame(width: 40)
+
+            // RIGHT side
+            if !isLeft {
+                timelineChip(report, tint: tint,
+                             active: isActive, alignRight: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 14)
+            } else {
+                Color.clear.frame(maxWidth: .infinity)
+            }
+        }
+        .frame(minHeight: 78)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.spring(duration: 0.32)) {
+                expanded = report.generatedAt
+                selectedAgent = nil  // re-default to Trader on switch
+                historyOpen = false  // collapse timeline after pick
+            }
+        }
+    }
+
+    private func timelineChip(_ report: Report,
+                               tint: Color,
+                               active: Bool,
+                               alignRight: Bool) -> some View
+    {
+        let summary = report.summary
+            .components(separatedBy: "\n")
+            .first ?? report.summary
+        return VStack(alignment: alignRight ? .trailing : .leading,
+                       spacing: 6) {
+            HStack(spacing: 8) {
+                if alignRight { Spacer(minLength: 0) }
+                Text(report.rating.label.uppercased())
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(0.5)
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(tint.gradient, in: Capsule())
+                    .foregroundStyle(.white)
+                Text(report.generatedAt.formatted(
+                        date: .abbreviated, time: .shortened))
+                    .font(.system(size: 10, weight: .medium,
+                                  design: .monospaced))
+                    .foregroundStyle(.secondary)
+                if !alignRight { Spacer(minLength: 0) }
+            }
+            Text(summary)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(alignRight ? .trailing : .leading)
+                .frame(maxWidth: .infinity,
+                       alignment: alignRight ? .trailing : .leading)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(active
+                      ? tint.opacity(0.14)
+                      : Color.secondary.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(active
+                              ? tint.opacity(0.55)
+                              : Color.secondary.opacity(0.18),
+                              lineWidth: 1)
+        )
+        .frame(maxWidth: 360)
     }
 
     private var emptyState: some View {
@@ -542,135 +871,326 @@ struct AITab: View {
         .padding(.top, 6)
     }
 
-    private func historyList(_ items: [Report]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text("HISTORY")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(.tertiary)
-                Text("\(items.count)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            }
-            // GlassEffectContainer batches the per-row glass surfaces
-            // into a single compositor pass and primes any future
-            // morph when a row expands / collapses.
-            GlassEffectContainer(spacing: 10) {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(items, id: \.generatedAt) { report in
-                        historyRow(report)
-                    }
-                }
-            }
-        }
-    }
+    // MARK: - Report view (active selection)
 
-    @ViewBuilder
-    private func historyRow(_ report: Report) -> some View {
-        let isOpen = (expanded == report.generatedAt)
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                expanded = isOpen ? nil : report.generatedAt
-            } label: {
-                historyRowHeader(report, isOpen: isOpen)
-            }
-            .buttonStyle(.plain)
-
-            if isOpen {
-                reportView(report)
-                    .padding(.top, 12)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 14,
-                     tint: ratingColor(report.rating).opacity(isOpen ? 0.10 : 0))
-    }
-
-    private func historyRowHeader(_ report: Report, isOpen: Bool) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text(report.rating.label.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .padding(.horizontal, 9).padding(.vertical, 4)
-                .background(ratingColor(report.rating).gradient, in: Capsule())
-                .foregroundStyle(.white)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(report.summary.split(whereSeparator: \.isNewline)
-                        .first.map(String.init) ?? report.summary)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.primary)
-                    .lineLimit(isOpen ? nil : 2)
-                    .multilineTextAlignment(.leading)
-                Text(report.generatedAt.formatted(
-                    date: .abbreviated, time: .shortened))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: isOpen ? "chevron.down" : "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    // MARK: - Report view (per-history-row body)
-
+    /// Layout for the expanded report:
+    ///   - Verdict hero (ticker / rating chip / compact gauge)
+    ///   - "Bottom line" editorial paragraph
+    ///   - HSplitView: DAG on the left, selected contributor's
+    ///     markdown on the right (the side-by-side reading layout
+    ///     the user asked for — chart + content, not stacked)
+    ///   - Disclaimer footer
     private func reportView(_ report: Report) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 22) {
             verdictCard(report)
-
-            // Trader's bottom line.
-            Text(report.summary)
-                .font(.system(size: 13))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .liquidGlass(cornerRadius: 14)
-
-            Text("THE DESK")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.0)
-                .foregroundStyle(.tertiary)
-                .padding(.top, 2)
-
-            ForEach(report.transcript) { agentCard($0) }
-
-            Text(report.disclaimer)
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
-                .padding(.top, 4)
+            bottomLine(report)
+            deskSection(report)
+            disclaimerRow(report)
+        }
+        .onAppear {
+            // Default-select the report's verdict producer (Trader)
+            // so the right pane has content the moment the row opens.
+            if selectedAgent == nil {
+                selectedAgent = DeskDAGView.nodeId(for: "Trader")
+                    ?? DeskDAGView.nodes.first?.id
+            }
         }
     }
 
     // MARK: Verdict header + rating gauge
 
+    /// Hero card. Cleaner type stack (ticker huge, "As of <date>"
+    /// subdued, big rating chip on the right). Gauge sits in its own
+    /// row below for breathing room.
     private func verdictCard(_ report: Report) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let tint = ratingColor(report.rating)
+        return VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(report.ticker).font(.system(size: 22, weight: .bold))
-                    Text(report.asOf.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(report.ticker)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                    Text("As of " + report.asOf.formatted(
+                            date: .abbreviated, time: .omitted))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(report.rating.label.uppercased())
-                    .font(.system(size: 14, weight: .heavy))
+                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    .tracking(1.0)
                     .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(ratingColor(report.rating).gradient, in: Capsule())
+                    .background(tint.gradient, in: Capsule())
                     .foregroundStyle(.white)
             }
             ratingGauge(report.rating)
         }
-        .padding(16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 16, tint: ratingColor(report.rating).opacity(0.16))
+        .liquidGlass(cornerRadius: 16, tint: tint.opacity(0.12))
     }
 
+    /// Editorial "bottom line" — Stocks app uses a paragraph with a
+    /// thin coloured leading rule to set off the human-readable take.
+    /// No glass card around the text itself; it's content.
+    private func bottomLine(_ report: Report) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Capsule()
+                .fill(ratingColor(report.rating).opacity(0.85))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("THE BOTTOM LINE")
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(1.0)
+                    .foregroundStyle(.tertiary)
+                Text(report.summary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    /// Side-by-side desk view: workflow DAG on the left, selected
+    /// contributor's full markdown reasoning on the right. Replaces
+    /// the earlier stacked phase list — the DAG carries the structure
+    /// visually, and the reading pane is no longer a wall of text.
+    private func deskSection(_ report: Report) -> some View {
+        let messagesByNodeID: [String: AgentMessage] = Dictionary(
+            uniqueKeysWithValues: report.transcript.compactMap { msg in
+                guard let id = DeskDAGView.nodeId(for: msg.role) else {
+                    return nil
+                }
+                return (id, msg)
+            })
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("THE DESK")
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(1.0)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Text("\(report.transcript.count) contributors · click any node")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack(alignment: .top, spacing: 22) {
+                // LEFT: DAG flow chart
+                DeskDAGView(selected: Binding(
+                    get: { selectedAgent },
+                    set: { newValue in
+                        // Always keep one node selected so the right
+                        // pane never goes blank inside an open report.
+                        if let newValue { selectedAgent = newValue }
+                    }
+                ))
+                .frame(width: 460, height: 520)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(.regularMaterial.opacity(0.4))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.18),
+                                       lineWidth: 1)
+                )
+
+                // RIGHT: selected analyst's markdown
+                analystReadingPane(
+                    activeID: selectedAgent,
+                    messagesByNodeID: messagesByNodeID
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+    }
+
+    /// Right-side reading column. Renders the active DAG node's
+    /// markdown content via `WickMarkdown`, with a small header row
+    /// (avatar + name + phase pill) anchoring identity at the top.
+    @ViewBuilder
+    private func analystReadingPane(
+        activeID: String?,
+        messagesByNodeID: [String: AgentMessage]
+    ) -> some View {
+        if let id = activeID,
+           let node = DeskDAGView.nodes.first(where: { $0.id == id }),
+           let msg = messagesByNodeID[id]
+        {
+            let phase = AgentPhase.from(role: msg.role)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    DeskNodeAvatar(node: node, isSelected: false)
+                        .frame(width: 90, height: 90)
+                        .scaleEffect(0.7, anchor: .topLeading)
+                        .frame(width: 60, height: 60)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(msg.role)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Text("\(phase.title.uppercased())  ·  \(phase.subtitle)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.6)
+                            .foregroundStyle(node.color)
+                    }
+                    Spacer()
+                }
+
+                Divider().opacity(0.3)
+
+                ScrollView {
+                    WickMarkdown(text: msg.content, accent: node.color)
+                        .padding(.trailing, 4)
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.regularMaterial.opacity(0.4))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(node.color.opacity(0.35), lineWidth: 1)
+            )
+            .frame(minHeight: 520)
+            .id(id) // animate-in on switch
+            .transition(.opacity.combined(with: .move(edge: .trailing)))
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.tertiary)
+                Text("Pick a node on the left to read its full reasoning.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, minHeight: 520)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.regularMaterial.opacity(0.3))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.15),
+                                  style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            )
+        }
+    }
+
+    /// One phase of the workflow: small phase label up top, then the
+    /// member analysts as rows (divider between siblings only — no
+    /// trailing divider so the cluster reads as one block).
+    private func phaseSection(_ phase: AgentPhase, messages: [AgentMessage]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(phase.color.opacity(0.5))
+                    .frame(width: 6, height: 6)
+                Text(phase.title.uppercased())
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(0.9)
+                    .foregroundStyle(.secondary)
+                Text(phase.subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.bottom, 10)
+            ForEach(Array(messages.enumerated()), id: \.element.id) { idx, msg in
+                agentRow(msg)
+                    .padding(.vertical, 10)
+                if idx < messages.count - 1 {
+                    Divider().opacity(0.35)
+                }
+            }
+        }
+    }
+
+    private func disclaimerRow(_ report: Report) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+            Text(report.disclaimer)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 6)
+    }
+
+    /// Compact rating gauge — single horizontal track, 5 evenly
+    /// spaced dots, active one enlarged with a dropped pill badge
+    /// directly beneath it. Replaces the earlier full-width 5-segment
+    /// bar (which wasted horizontal space and competed with the
+    /// metric chips below for the eye).
     private func ratingGauge(_ rating: Rating) -> some View {
+        let labels = ["Strong Sell", "Sell", "Hold", "Buy", "Strong Buy"]
+        let tint = ratingColor(rating)
+        return VStack(spacing: 12) {
+            ZStack {
+                // Thin track line connecting the dots end-to-end.
+                Capsule()
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(width: 220, height: 1.5)
+                HStack(spacing: 0) {
+                    ForEach(Rating.allCases, id: \.self) { r in
+                        let active = r == rating
+                        ZStack {
+                            // Active gets a soft halo behind the dot.
+                            if active {
+                                Circle()
+                                    .fill(tint.opacity(0.28))
+                                    .frame(width: 22, height: 22)
+                                    .blur(radius: 3)
+                            }
+                            Circle()
+                                .fill(active ? tint : Color.secondary.opacity(0.45))
+                                .frame(width: active ? 12 : 6,
+                                       height: active ? 12 : 6)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(active
+                                            ? Color.white.opacity(0.25)
+                                            : Color.clear,
+                                            lineWidth: 1)
+                                )
+                                .shadow(color: active ? tint : .clear,
+                                        radius: active ? 6 : 0)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .frame(width: 220)
+            }
+            // Dropped badge for the active rating — anchored under
+            // the active dot via a manual offset (5 dots evenly across
+            // 220pt → step ~44pt; index 0..4 maps to -88..+88).
+            HStack {
+                Text(labels[rating.rawValue].uppercased())
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(0.8)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(tint.gradient))
+                    .offset(x: CGFloat(rating.rawValue - 2) * 44)
+            }
+            .frame(width: 220)
+        }
+    }
+
+    /// (Legacy multi-segment gauge kept for reference — unused.)
+    @ViewBuilder
+    private func legacyRatingGauge(_ rating: Rating) -> some View {
         let labels = ["Strong\nSell", "Sell", "Hold", "Buy", "Strong\nBuy"]
-        return HStack(alignment: .bottom, spacing: 5) {
+        HStack(alignment: .bottom, spacing: 5) {
             ForEach(Rating.allCases, id: \.self) { r in
                 let active = r == rating
                 VStack(spacing: 5) {
@@ -687,29 +1207,139 @@ struct AITab: View {
         }
     }
 
-    // MARK: Agent cards
+    // MARK: Agent rows (avatar circle + name + body)
 
-    private func agentCard(_ msg: AgentMessage) -> some View {
+    /// One analyst's contribution. Avatar-style header:
+    ///   - Circular gradient pill with the role's SF Symbol (the
+    ///     closest native parallel to a memoji — Apple doesn't expose
+    ///     a Memoji / Genmoji creation API on macOS, so SF Symbols
+    ///     on gradient circles are the right macOS-native equivalent
+    ///     for "analyst headshot")
+    ///   - Role name + workflow phase pill on the right
+    ///   - Content paragraph underneath in body type
+    private func agentRow(_ msg: AgentMessage) -> some View {
         let style = roleStyle(msg.role)
-        return HStack(alignment: .top, spacing: 11) {
-            Image(systemName: style.symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(style.color)
-                .frame(width: 26, height: 26)
-                .background(style.color.opacity(0.14),
-                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(msg.role).font(.system(size: 12.5, weight: .semibold))
+        let phase = AgentPhase.from(role: msg.role)
+        return HStack(alignment: .top, spacing: 12) {
+            agentAvatar(style: style)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(msg.role)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(phase.title)
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(style.color)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(style.color.opacity(0.4),
+                                              lineWidth: 0.8)
+                        )
+                }
                 Text(msg.content)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(2)
             }
             Spacer(minLength: 0)
         }
-        .padding(13)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 12)
+    }
+
+    /// 36-pt circular avatar — radial gradient in the role's tint
+    /// with the SF Symbol centered + a faint inner ring. Reads as
+    /// "this is who is speaking" at a glance, like a headshot in a
+    /// Slack thread, without committing to a real face.
+    private func agentAvatar(style: (symbol: String, color: Color)) -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [style.color.opacity(0.45),
+                                 style.color.opacity(0.18)],
+                        center: .topLeading,
+                        startRadius: 2,
+                        endRadius: 36)
+                )
+            Circle()
+                .strokeBorder(style.color.opacity(0.55),
+                              lineWidth: 1)
+            Image(systemName: style.symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(style.color)
+        }
+        .frame(width: 34, height: 34)
+    }
+
+    // MARK: Workflow phase grouping
+
+    /// The four logical phases of the multi-agent desk workflow.
+    /// Order here is rendering order (and roughly chronological:
+    /// information → debate → synthesis → gatekeep).
+    enum AgentPhase: String, CaseIterable, Identifiable, Hashable {
+        case analysts  = "Analysts"
+        case research  = "Research"
+        case decision  = "Decision"
+        case gatekeep  = "Risk"
+
+        var id: String { rawValue }
+        var title: String { rawValue }
+
+        /// One-liner under the phase header to remind the user what
+        /// happens at this stage. Same vocabulary the engine uses.
+        var subtitle: String {
+            switch self {
+            case .analysts: return "Information gathering"
+            case .research: return "Bull vs Bear debate"
+            case .decision: return "Trade synthesis"
+            case .gatekeep: return "Risk gate"
+            }
+        }
+
+        /// Phase accent — drives the leading dot + the agent name's
+        /// phase pill colour. Kept distinct from each role's own
+        /// accent so the phase reads as group-membership, not
+        /// individual identity.
+        var color: Color {
+            switch self {
+            case .analysts: return .blue
+            case .research: return .indigo
+            case .decision: return .orange
+            case .gatekeep: return .gray
+            }
+        }
+
+        static func from(role: String) -> AgentPhase {
+            switch role {
+            case "Fundamental Analyst", "Technical Analyst",
+                 "Sentiment Analyst",   "News Analyst":
+                return .analysts
+            case "Bull Researcher", "Bear Researcher":
+                return .research
+            case "Trader":
+                return .decision
+            case "Risk Manager":
+                return .gatekeep
+            default:
+                return .analysts
+            }
+        }
+
+        /// Group a flat transcript by phase, preserving each phase's
+        /// internal order. Returns a dictionary so callers can iterate
+        /// `AgentPhase.allCases` and ask for the bucket they want.
+        static func partition(_ messages: [AgentMessage])
+            -> [AgentPhase: [AgentMessage]]
+        {
+            var out: [AgentPhase: [AgentMessage]] = [:]
+            for msg in messages {
+                out[from(role: msg.role), default: []].append(msg)
+            }
+            return out
+        }
     }
 
     /// SF Symbol + accent per desk role.
@@ -810,11 +1440,38 @@ enum ChartTabState {
     /// `indicators` and `panes`. Called from `configure` and whenever the
     /// user edits the indicator list in the manager sheet — keep both in
     /// lockstep so the autoscaler / overlay / pane chrome all agree.
+    ///
+    /// Also forces a layout-pass replay using the chart's current total
+    /// pixel height. Without this, adding a brand-new sub-pane (Stochastic,
+    /// another MACD, etc) silently fails to render: the new `PaneSpec`
+    /// lands in `coordinator.panes`, but `coordinator.priceScales` has no
+    /// entry for that `PaneID`, so `IndicatorOverlay`'s
+    /// `guard let scale = priceScales[paneID]` skips the indicator and the
+    /// user sees no visual update. `setLayout(...)` walks the panes and
+    /// creates a fresh `PriceScale` for any missing entry, which is the
+    /// piece the autoscaler then fills with a y-range.
     static func syncIndicators(coordinator: ChartCoordinator,
                                config: ChartIndicatorConfig)
     {
+        let oldPanes = coordinator.panes
         coordinator.indicators = config.instances
         coordinator.panes = config.derivedPanes
+
+        let gutter: CGFloat = 4
+        var totalHeight: CGFloat = 0
+        for spec in oldPanes {
+            totalHeight += coordinator.priceScales[spec.id]?.height ?? 0
+        }
+        totalHeight += gutter * CGFloat(max(0, oldPanes.count - 1))
+        if coordinator.timeScale.width > 0 && totalHeight > 0 {
+            coordinator.setLayout(width: coordinator.timeScale.width,
+                                  height: totalHeight,
+                                  gutter: gutter)
+        }
+        // The autoscaler is gated on `autoscaleYOnPan` for normal pans;
+        // force a recompute here so the new sub-pane's y-range is
+        // available the instant the indicator is added.
+        coordinator.autoscaleIfNeeded(force: true)
     }
 
     /// React to a scale change: attach the series at the underlying bar

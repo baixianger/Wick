@@ -39,7 +39,17 @@ struct WickerView: View {
             conversationPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .topTrailing) {
+                    // Liquid Glass capsule around the action cluster
+                    // means message bubbles scrolling past it look
+                    // visually separated (material blur), instead of
+                    // appearing to crash into the icons. Matches the
+                    // Claude.app / Apple Messages pattern — icons sit
+                    // in a clear "header zone" with their own surface,
+                    // chat fills the pane underneath.
                     headerActions
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .liquidGlass(cornerRadius: 14)
                         .padding(.top, 12)
                         .padding(.trailing, 14)
                 }
@@ -632,7 +642,12 @@ private struct ConversationView: View {
                         }
                     }
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 18)
+                    // Top inset = headerActions overlay height
+                    // (~32pt capsule + 12pt top padding ≈ 50pt) so a
+                    // fresh message bubble starts below the action
+                    // cluster rather than under it.
+                    .padding(.top, 56)
+                    .padding(.bottom, 18)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

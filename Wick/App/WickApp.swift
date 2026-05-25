@@ -6,6 +6,15 @@ struct WickApp: App {
     /// Process-wide live-data cache. Passed through the environment so
     /// every view can pull the freshest Yahoo series without prop drilling.
     @State private var dataStore = LiveDataStore()
+    /// Global chart-indicator config — same reference shared between
+    /// ContentView (per-ticker chart sheet) and Settings (Indicators
+    /// tab) so edits in one surface land in the other.
+    @State private var indicatorConfig = ChartIndicatorConfig()
+    /// FRED (St. Louis Fed) live-data cache for the Macro tab. Key is
+    /// adopted from `AgentSettings.fredKey` on launch + whenever the
+    /// user pastes a fresh one in Settings — same flow as the other
+    /// data-source keys.
+    @State private var fredStore = FredDataStore()
     /// BYO agent settings (LLM key in Keychain, model choices, agent knobs,
     /// appearance, chart layout — see AgentSettings). Shared via the
     /// environment so any view can read or bind.
@@ -34,9 +43,11 @@ struct WickApp: App {
             ContentView()
                 .frame(minWidth: 1180, minHeight: 760)
                 .environment(dataStore)
+                .environment(fredStore)
                 .environment(agentSettings)
                 .environment(reportHistory)
                 .environment(agentRuntime)
+                .environment(indicatorConfig)
                 // Apply on the root view of the WindowGroup — that's the
                 // only placement macOS extends into the window's title
                 // bar / toolbar / sidebar chrome. Applied below this point
@@ -46,6 +57,10 @@ struct WickApp: App {
                 .onAppear {
                     // Build the BYO data chain from current keys.
                     agentRuntime.reconfigure(with: agentSettings)
+                    // Hand the FRED cache the user's key so Macro
+                    // tab cards switch from synthetic to live within
+                    // ~1 s of first visit.
+                    fredStore.apiKey = agentSettings.fredKey
                 }
                 // Re-register the agent's MarketDataTool whenever a
                 // data-source key changes so the very next chat /
@@ -59,6 +74,7 @@ struct WickApp: App {
                 }
                 .onChange(of: agentSettings.fredKey) { _, _ in
                     agentRuntime.reconfigure(with: agentSettings)
+                    fredStore.apiKey = agentSettings.fredKey
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -75,9 +91,11 @@ struct WickApp: App {
         Settings {
             SettingsView(settings: agentSettings)
                 .environment(dataStore)
+                .environment(fredStore)
                 .environment(agentSettings)
                 .environment(reportHistory)
                 .environment(agentRuntime)
+                .environment(indicatorConfig)
         }
     }
 }

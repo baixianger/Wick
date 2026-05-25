@@ -144,9 +144,18 @@ struct SidebarView: View {
     /// hosts both the group picker and the `+` (new group) /
     /// destructive delete actions — colocated with the name they
     /// affect so users don't hunt for them under "Portfolio".
+    ///
+    /// Typography matches the macOS-native sidebar section header
+    /// (uppercase + tracked + tertiary tint, à la Apple's Finder /
+    /// Mail / Stocks). The trailing menu uses just an ellipsis (no
+    /// chevron) so it reads as a compact "more actions" affordance
+    /// rather than a primary picker button.
     private var watchlistSectionHeader: some View {
-        HStack(spacing: 6) {
-            Text(currentGroupTitle)
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(currentGroupTitle.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.secondary)
             Spacer()
             groupMenu
         }
@@ -250,16 +259,17 @@ struct SidebarView: View {
                 }
             }
         } label: {
-            HStack(spacing: 2) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 12, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .medium))
-            }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .contentShape(Rectangle())
+            // Single ellipsis matches macOS sidebar "more" affordance
+            // (Finder tags, Mail mailbox row, Stocks watchlist). A
+            // 18×18 frame gives the hit target enough breathing room
+            // without painting visible padding around the glyph; the
+            // `.borderlessButton` menu style already paints its own
+            // subtle hover state inside that frame.
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)

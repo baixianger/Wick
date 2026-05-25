@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAPL · Desk Report · 25 May 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08090C;
+  --bg-elev: #0E1015;
+  --surface: rgba(255,255,255,0.035);
+  --surface-2: rgba(255,255,255,0.058);
+  --surface-3: rgba(255,255,255,0.085);
+  --border: rgba(255,255,255,0.075);
+  --border-strong: rgba(255,255,255,0.13);
+
+  --text: #F5F5F7;
+  --text-2: rgba(245,245,247,0.66);
+  --text-3: rgba(245,245,247,0.42);
+  --text-4: rgba(245,245,247,0.24);
+
+  --green: #30D158;
+  --red: #FF453A;
+  --orange: #FF9F0A;
+  --yellow: #FFD60A;
+  --gray: #98989D;
+  --blue: #0A84FF;
+  --purple: #BF5AF2;
+  --teal: #64D2FF;
+  --indigo: #5E5CE6;
+  --pink: #FF375F;
+
+  --display: 'Instrument Serif', 'New York', Charter, serif;
+  --ui: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  font-feature-settings: 'ss01' on, 'cv11' on, 'kern' on;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
+  min-height: 100vh;
+}
+
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* atmosphere: dual radial wash + faint grid + grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 1100px 800px at 12% -8%, rgba(255,159,10,0.055), transparent 60%),
+    radial-gradient(ellipse 1100px 800px at 92% 108%, rgba(94,92,230,0.06), transparent 55%),
+    radial-gradient(circle 700px at 50% 35%, rgba(255,69,58,0.018), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(255,255,255,0.013) 40px),
+    repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(255,255,255,0.013) 40px);
+  mask-image: radial-gradient(ellipse 1500px 1100px at 50% 35%, black 30%, transparent);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 72px 56px 120px;
+}
+
+/* === MASTHEAD === */
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 36px;
+  margin-bottom: 56px;
+  padding-bottom: 36px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kicker {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  animation: slideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.05s forwards;
+}
+
+.kicker .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 14px var(--orange), 0 0 4px var(--orange);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ticker {
+  font-family: var(--display);
+  font-size: 148px;
+  line-height: 0.82;
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  color: var(--text);
+  position: relative;
+  opacity: 0;
+  animation: slideUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.18s forwards;
+}
+
+.ticker .accent {
+  font-style: italic;
+  background: linear-gradient(135deg, var(--text-3) 0%, var(--text) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.company {
+  margin-top: 18px;
+  font-size: 14.5px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  animation: slideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.32s forwards;
+}
+
+.company .sep { color: var(--text-4); }
+.company .strong { color: var(--text); }
+
+.verdict-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  padding-bottom: 12px;
+  opacity: 0;
+  animation: slideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.42s forwards;
+}
+
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 22px 36px;
+  background:
+    linear-gradient(135deg, rgba(152,152,157,0.22), rgba(152,152,157,0.05));
+  border: 1px solid rgba(152,152,157,0.4);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.verdict-badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 100px 50px at 50% 0%, rgba(255,255,255,0.2), transparent);
+  pointer-events: none;
+}
+
+.verdict-label {
+  font-family: var(--display);
+  font-size: 44px;
+  letter-spacing: 0.07em;
+  font-weight: 400;
+  color: var(--text);
+  text-transform: uppercase;
+  line-height: 1;
+  position: relative;
+}
+
+.verdict-meta {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.verdict-meta .pct {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* === RATING GAUGE === */
+.gauge-wrap {
+  margin-bottom: 60px;
+  opacity: 0;
+  animation: slideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.55s forwards;
+}
+
+.gauge {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.gauge-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+}
+
+.gauge-bar {
+  width: 100%;
+  height: 5px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s;
+}
+
+.gauge-track[data-active="true"] .gauge-bar {
+  height: 14px;
+  background: var(--gauge-color);
+  box-shadow:
+    0 0 24px var(--gauge-color),
+    0 0 6px var(--gauge-color);
+}
+
+.gauge-track[data-active="true"] .gauge-bar::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,0.25), transparent 60%);
+}
+
+.gauge-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  text-align: center;
+  transition: color 0.4s;
+}
+
+.gauge-track[data-active="true"] .gauge-label {
+  color: var(--gauge-color);
+  font-weight: 700;
+}
+
+/* === BOTTOM LINE === */
+.bottom-line {
+  display: grid;
+  grid-template-columns: 4px 1fr;
+  gap: 32px;
+  margin-bottom: 64px;
+  padding: 6px 0;
+  opacity: 0;
+  animation: slideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.7s forwards;
+}
+
+.bottom-line-rule {
+  background: linear-gradient(to bottom, var(--gray), rgba(152,152,157,0.15) 80%, transparent);
+  border-radius: 2px;
+}
+
+.bottom-line-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bottom-line-kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.bottom-line-body {
+  font-family: var(--display);
+  font-size: 27px;
+  line-height: 1.42;
+  color: var(--text);
+  font-weight: 400;
+  letter-spacing: -0.013em;
+  max-width: 1000px;
+}
+
+/* === METRICS STRIP === */
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 72px;
+  opacity: 0;
+  animation: slideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.82s forwards;
+}
+
+.metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.metric-label {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.metric-value {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.metric-value.warn { color: var(--orange); }
+.metric-value.bad { color: var(--red); }
+.metric-value.good { color: var(--green); }
+
+/* === SECTION HEAD === */
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 32px;
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.section-num {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  color: var(--text-3);
+  line-height: 1;
+}
+
+.section-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.section-hint {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.section-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  display: flex;
+  gap: 14px;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+
+/* === DAG === */
+.dag-section {
+  margin-bottom: 60px;
+  opacity: 0;
+  animation: slideUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.95s forwards;
+}
+
+.dag-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1100 / 620;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 50%, rgba(255,255,255,0.02), transparent),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 32px;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  overflow: hidden;
+}
+
+/* phase bands — subtle horizontal stripes behind nodes */
+.phase-bands {
+  position: absolute;
+  inset: 32px;
+  pointer-events: none;
+}
+
+.phase-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(255,255,255,0.06) 20%,
+    rgba(255,255,255,0.06) 80%,
+    transparent);
+}
+
+.phase-tag {
+  position: absolute;
+  left: 0;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-4);
+  padding: 5px 10px 5px 0;
+  background: linear-gradient(90deg, var(--bg-elev) 50%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phase-tag .marker {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--phase-color, var(--text-4));
+  box-shadow: 0 0 8px var(--phase-color, var(--text-4));
+}
+
+.dag-svg {
+  position: absolute;
+  inset: 32px;
+  width: calc(100% - 64px);
+  height: calc(100% - 64px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.dag-nodes-layer {
+  position: absolute;
+  inset: 32px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* === NODES === */
+.node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+  user-select: none;
+  position: absolute;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.5);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.node.entered {
+  animation: nodeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes nodeIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.node-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background:
+    radial-gradient(circle at 30% 28%, var(--node-tint) 0%, rgba(0,0,0,0.5) 100%);
+  border: 1px solid var(--node-color);
+  box-shadow:
+    0 6px 24px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.14);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  flex-shrink: 0;
+}
+
+.node:hover .node-avatar {
+  transform: scale(1.08);
+  box-shadow:
+    0 10px 36px rgba(0,0,0,0.55),
+    0 0 36px var(--node-tint),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.node-avatar svg {
+  width: 28px;
+  height: 28px;
+  color: var(--node-color);
+  filter: drop-shadow(0 0 6px var(--node-tint));
+  position: relative;
+  z-index: 2;
+}
+
+.node-avatar::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  transition: border-color 0.32s, transform 0.32s;
+  pointer-events: none;
+}
+
+.node.active .node-avatar::after {
+  border-color: var(--node-color);
+  transform: scale(1.12);
+  animation: ring 2s ease-in-out infinite;
+}
+
+@keyframes ring {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.node.active .node-avatar {
+  transform: scale(1.08);
+  box-shadow:
+    0 10px 40px rgba(0,0,0,0.6),
+    0 0 56px var(--node-tint),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+}
+
+.node-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-align: center;
+  letter-spacing: -0.005em;
+  max-width: 120px;
+  line-height: 1.25;
+  transition: color 0.32s;
+  white-space: nowrap;
+}
+
+.node-sublabel {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  margin-top: 1px;
+}
+
+.node:hover .node-label, .node.active .node-label {
+  color: var(--text);
+}
+
+/* DEBATE indicator between Bull and Bear */
+.debate-tag {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--text-3);
+  padding: 3px 12px;
+  background: var(--bg-elev);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
+
+/* === EXPANDED PANEL === */
+.expanded-shell {
+  margin-top: 36px;
+  min-height: 80px;
+  position: relative;
+}
+
+.expanded {
+  background:
+    radial-gradient(ellipse 60% 50% at 0% 0%, var(--node-tint), transparent 70%),
+    var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  display: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.expanded.visible {
+  display: block;
+  animation: expandIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes expandIn {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.expanded::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, var(--node-color), transparent);
+}
+
+.expanded-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px 32px 22px;
+  border-bottom: 1px solid var(--border);
+  gap: 18px;
+}
+
+.expanded-title {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.expanded-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 28%, var(--node-tint), rgba(0,0,0,0.5));
+  border: 1px solid var(--node-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow:
+    0 4px 18px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.16);
+}
+
+.expanded-avatar svg {
+  width: 20px;
+  height: 20px;
+  color: var(--node-color);
+  filter: drop-shadow(0 0 4px var(--node-tint));
+}
+
+.expanded-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.expanded-name {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  color: var(--text);
+}
+
+.expanded-phase {
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--node-color);
+}
+
+.close-x {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 300;
+  font-family: var(--ui);
+  line-height: 1;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.close-x:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.expanded-body {
+  padding: 26px 32px 30px;
+}
+
+/* === MARKDOWN STYLING === */
+.markdown {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+.markdown strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.markdown em {
+  font-style: italic;
+  color: var(--text);
+}
+
+.markdown ul, .markdown ol {
+  padding-left: 0;
+  margin: 16px 0;
+  list-style: none;
+}
+
+.markdown ul li {
+  margin: 9px 0;
+  position: relative;
+  padding-left: 22px;
+}
+
+.markdown ul li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--node-color);
+  box-shadow: 0 0 6px var(--node-tint);
+}
+
+.markdown ol {
+  counter-reset: list;
+}
+
+.markdown ol li {
+  margin: 12px 0;
+  position: relative;
+  padding-left: 38px;
+  counter-increment: list;
+}
+
+.markdown ol li::before {
+  content: counter(list);
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--node-color);
+  color: var(--node-color);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.markdown p { margin: 14px 0; }
+.markdown p:first-child { margin-top: 0; }
+.markdown p:last-child { margin-bottom: 0; }
+
+.markdown h3 {
+  font-size: 16px;
+  margin: 24px 0 10px;
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* === EMPTY HINT === */
+.empty-hint {
+  margin-top: 36px;
+  padding: 28px 32px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-3);
+  font-size: 13.5px;
+  font-style: italic;
+  font-family: var(--display);
+}
+
+.empty-hint .hint-icon {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 28px;
+  color: var(--text-3);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.empty-hint.hidden { display: none; }
+
+/* === FOOTER === */
+.footer {
+  margin-top: 80px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.footer-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.footer-text {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.7;
+  letter-spacing: -0.005em;
+  max-width: 780px;
+  padding-top: 4px;
+}
+
+.footer-text strong {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.footer-stamp {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--text-4);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* responsive — narrow widths */
+@media (max-width: 900px) {
+  .shell { padding: 40px 28px 80px; }
+  .ticker { font-size: 96px; }
+  .verdict-label { font-size: 32px; }
+  .bottom-line-body { font-size: 21px; }
+  .masthead { grid-template-columns: 1fr; }
+  .verdict-block { align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<!-- inline SVG defs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="icon-fundamental" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55">
+      <path d="M3 21h18M5 21V10l7-5 7 5v11M9 14h2v7M13 14h2v7M9 10h2M13 10h2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-technical" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55">
+      <path d="M3 18h18M3 18l5-7 4 3 4-6 5 4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="8" cy="11" r="1.4" fill="currentColor"/>
+      <circle cx="12" cy="14" r="1.4" fill="currentColor"/>
+      <circle cx="16" cy="8"  r="1.4" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-sentiment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55">
+      <path d="M21 12c0 4.4-4 8-9 8-1.3 0-2.6-.25-3.7-.7L3 21l1.7-4.5C3.6 15.2 3 13.7 3 12c0-4.4 4-8 9-8s9 3.6 9 8z" stroke-linejoin="round"/>
+      <circle cx="9"  cy="12" r="1" fill="currentColor"/>
+      <circle cx="13" cy="12" r="1" fill="currentColor"/>
+      <circle cx="17" cy="12" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-news" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55">
+      <path d="M4 5h13a2 2 0 012 2v12H6a2 2 0 01-2-2V5z" stroke-linejoin="round"/>
+      <path d="M19 19h2V9a1 1 0 00-2 0v10" stroke-linejoin="round"/>
+      <path d="M7 9h7M7 12h7M7 15h4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-bull" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65">
+      <path d="M7 14l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 9v10" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="10" stroke-width="1.3"/>
+    </symbol>
+    <symbol id="icon-bear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65">
+      <path d="M17 10l-5 5-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 15V5" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="10" stroke-width="1.3"/>
+    </symbol>
+    <symbol id="icon-trader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 2l2.4 1.6 2.9-.4.9 2.7 2.4 1.6-.4 2.9 1.6 2.4-1.6 2.4.4 2.9-2.4 1.6-.9 2.7-2.9-.4L12 22l-2.4-1.6-2.9.4-.9-2.7L3.4 16.5l.4-2.9L2.2 11.2 3.8 8.8l-.4-2.9 2.4-1.6.9-2.7 2.9.4L12 2z" stroke-linejoin="round"/>
+      <path d="M8.5 12l2.5 2.5L15.5 9" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-risk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55">
+      <path d="M12 2L4 5v7c0 5 3.5 9 8 10 4.5-1 8-5 8-10V5l-8-3z" stroke-linejoin="round"/>
+      <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="shell">
+
+  <!-- MASTHEAD -->
+  <header class="masthead">
+    <div>
+      <div class="kicker">
+        <span class="dot"></span>
+        <span>Wick Desk Report</span>
+        <span style="color: var(--text-4)">·</span>
+        <span>25 May 2026</span>
+        <span style="color: var(--text-4)">·</span>
+        <span>Multi-Agent Workflow</span>
+      </div>
+      <h1 class="ticker">AAPL<span class="accent">.</span></h1>
+      <div class="company">
+        <span class="strong">Apple Inc.</span>
+        <span class="sep">·</span>
+        <span>NASDAQ</span>
+        <span class="sep">·</span>
+        <span>As of <span class="strong">25 May 2026, 22:11 UTC</span></span>
+      </div>
+    </div>
+    <div class="verdict-block">
+      <div class="verdict-badge">
+        <span class="verdict-label">Hold</span>
+      </div>
+      <div class="verdict-meta">
+        <span>Target Position</span>
+        <span style="color: var(--text-4)">·</span>
+        <span class="pct">0%</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- RATING GAUGE -->
+  <div class="gauge-wrap">
+    <div class="gauge" id="gauge"></div>
+  </div>
+
+  <!-- BOTTOM LINE -->
+  <div class="bottom-line">
+    <div class="bottom-line-rule"></div>
+    <div class="bottom-line-content">
+      <div class="bottom-line-kicker">The Bottom Line</div>
+      <p class="bottom-line-body">
+        The stock's extreme RSI of 90 and proximity to its 52‑week high leave minimal near‑term upside, while the 41× P/E is stretched against sticky 3.78% CPI and a flattening yield curve that historically compress growth multiples. The bull case for best‑in‑class margins and services resilience is valid, but the absence of a fresh catalyst and emerging regulatory friction from Meta's age‑check lobbying tilt risk‑reward unfavorably. Sitting out avoids a likely mean‑reversion pullback while preserving capital for a better entry on any correction.
+      </p>
+    </div>
+  </div>
+
+  <!-- METRICS STRIP -->
+  <div class="metrics">
+    <div class="metric"><span class="metric-label">RSI(14)</span><span class="metric-value bad">90</span></div>
+    <div class="metric"><span class="metric-label">P/E</span><span class="metric-value warn">41.2×</span></div>
+    <div class="metric"><span class="metric-label">Mkt Cap</span><span class="metric-value">$4.54T</span></div>
+    <div class="metric"><span class="metric-label">30D</span><span class="metric-value good">+18.6%</span></div>
+    <div class="metric"><span class="metric-label">52W H</span><span class="metric-value">311.40</span></div>
+    <div class="metric"><span class="metric-label">From High</span><span class="metric-value warn">−0.8%</span></div>
+    <div class="metric"><span class="metric-label">Beta</span><span class="metric-value">1.06</span></div>
+    <div class="metric"><span class="metric-label">Gross Mgn</span><span class="metric-value good">46.9%</span></div>
+    <div class="metric"><span class="metric-label">Net Mgn</span><span class="metric-value good">26.9%</span></div>
+    <div class="metric"><span class="metric-label">Fed Funds</span><span class="metric-value">3.64%</span></div>
+    <div class="metric"><span class="metric-label">CPI</span><span class="metric-value warn">3.78%</span></div>
+    <div class="metric"><span class="metric-label">10y−2y</span><span class="metric-value warn">0.43%</span></div>
+  </div>
+
+  <!-- DAG SECTION -->
+  <section class="dag-section">
+    <div class="section-head">
+      <div class="section-title">
+        <span class="section-num">01</span>
+        <span class="section-name">The Desk</span>
+        <span class="section-hint">— click any node to read its full reasoning</span>
+      </div>
+      <div class="section-meta">
+        <span>8 CONTRIBUTORS</span>
+        <span>·</span>
+        <span>4 PHASES</span>
+        <span>·</span>
+        <span>34s WALL</span>
+      </div>
+    </div>
+
+    <div class="dag-container" id="dag">
+      <div class="phase-bands" id="phase-bands"></div>
+      <svg class="dag-svg" id="dag-svg" viewBox="0 0 1100 620" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="dag-nodes-layer" id="dag-nodes"></div>
+    </div>
+
+    <div class="expanded-shell">
+      <div class="empty-hint" id="empty-hint">
+        <div class="hint-icon">→</div>
+        <div>
+          Pick a node above. Each contributor's full markdown reasoning will load here —
+          the lines highlight the upstream path that fed into it.
+        </div>
+      </div>
+      <div class="expanded" id="expanded">
+        <div class="expanded-head">
+          <div class="expanded-title">
+            <div class="expanded-avatar"><svg><use href="#icon-fundamental"/></svg></div>
+            <div class="expanded-titles">
+              <div class="expanded-name">Fundamental Analyst</div>
+              <div class="expanded-phase">Analysts · Information Gathering</div>
+            </div>
+          </div>
+          <button class="close-x" onclick="closeExpanded()" aria-label="Close">×</button>
+        </div>
+        <div class="expanded-body">
+          <div class="markdown" id="markdown-body"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISCLAIMER -->
+  <footer class="footer">
+    <div class="footer-icon">i</div>
+    <div class="footer-text">
+      <strong>AI-generated market analysis</strong> for informational purposes only. Not investment advice and not a personal recommendation. Synthesised by an autonomous multi-agent desk over real‑time FMP / FRED / Finnhub data. Verify independently. Do your own research.
+    </div>
+    <div class="footer-stamp">
+      <span>Wick Desk · v0.4</span>
+      <span>Generated 22:12:36 UTC</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+// ===== DATA =====
+const REPORT = {
+  rating: 'hold',
+  ratings: ['Strong Sell', 'Sell', 'Hold', 'Buy', 'Strong Buy'],
+  ratingColors: ['#FF453A', '#FF6E50', '#98989D', '#30D158', '#30D158'],
+  phases: [
+    {
+      name: 'Analysts',
+      subtitle: 'Information Gathering',
+      members: [
+        { id:'fund', role:'Fundamental Analyst', icon:'fundamental', color:'#64D2FF', tint:'rgba(100,210,255,0.32)',
+          content:`- **Valuation**: P/E of ~41.2x (308.82 / 7.49) is rich vs. market and historical averages, even for a mega-cap staple. Market cap of $4.54T implies aggressive growth expectations.
+- **Growth & Margins**: Revenue growth of +6.4% YoY is solid but not explosive; gross margin at 46.9% and net margin at 26.9% are best-in-class, reflecting pricing power and operational efficiency.
+- **Balance Sheet & Macro**: Low beta (1.06) suggests defensive quality. Macro backdrop (flattening yield curve, sticky CPI) may pressure discretionary spend, but AAPL's ecosystem and services revenue provide resilience.
+- **Price Action**: Recent +18.6% rally in 30 days shows momentum, but stock is near 52w high, limiting near-term upside without a catalyst.
+
+**Lean: neutral** — strong fundamentals and margins offset by elevated valuation and macro uncertainty.` },
+        { id:'tech', role:'Technical Analyst', icon:'technical', color:'#0A84FF', tint:'rgba(10,132,255,0.32)',
+          content:`- Price up 18.6% in 30 days, within 0.8% of 52‑week high (311.40) — extended and near resistance.
+- RSI(14) at 90, deep in overbought territory, implying elevated risk of mean reversion or consolidation.
+- MACD bullish (9.97 vs 8.99) but signal line rising slowly — momentum positive but flattening.
+- Price well above both 50‑SMA and 200‑SMA, confirming strong uptrend structure.
+- Macro backdrop (moderate rates, positive yield curve, low unemployment) supportive, but CPI still above 3% adds mild uncertainty.
+
+**Lean: bearish** — extreme RSI overbought near 52w high suggests limited upside in the near term.` },
+        { id:'sent', role:'Sentiment Analyst', icon:'sentiment', color:'#BF5AF2', tint:'rgba(191,90,242,0.32)',
+          content:`- AAPL near 52w high (+18.6% in 30d) suggests strong momentum, but slight pullback (-0.8% from peak) may trigger retail profit-taking.
+- Ferrari EV launch irrelevant to AAPL; Meta's call for Apple age-check burden hints at regulatory friction, likely negative for sentiment.
+- Macro signals mixed: falling rates (Fed 3.64%) support growth stocks, but inverted curve (0.43%) and sticky CPI (3.78%) raise caution.
+- Retail yield-chasing via ETFs (VIG, Invesco) contrasts with AAPL's low dividend yield, possibly diverting income-focused retail flows.
+- S&P 500 dividend all-time low news may reinforce retail preference for yield over growth, slightly negative for AAPL demand.
+
+**Lean: neutral** — strong price momentum offset by regulatory noise and macro caution.` },
+        { id:'news', role:'News Analyst', icon:'news', color:'#5E5CE6', tint:'rgba(94,92,230,0.32)',
+          content:`- **Regulatory pressure**: Meta urging UK Labour to impose age-check requirements on Apple could increase compliance costs or operational friction in a key market, a near-term headwind.
+- **No direct positive catalysts**: Remaining headlines (Ferrari EV, ETF commentary, S&P dividends) have no material bearing on AAPL's fundamentals or sentiment.
+- **Price action context**: Stock is up ~19% in 30 days and only 0.8% below its 52-week high, suggesting strong momentum but limited upside without fresh positive news.
+- **Macro backdrop**: Elevated rates (Fed funds 3.64%, 10y 4.57%) and sticky CPI (3.78%) continue to pressure growth-stock valuations, though unemployment remains low (4.30%).
+
+**Lean: bearish** — the sole Apple-specific news introduces regulatory risk, and the stock's recent run-up leaves little room for error.` },
+      ]
+    },
+    {
+      name: 'Research',
+      subtitle: 'Bull vs Bear Debate',
+      members: [
+        { id:'bull', role:'Bull Researcher', icon:'bull', color:'#30D158', tint:'rgba(48,209,88,0.32)',
+          content:`Despite AAPL's elevated P/E of 41x, its best-in-class 46.9% gross margin and 26.9% net margin, coupled with expanding services revenue, justify the premium as the company transitions to higher-margin recurring income. The RSI at 90 is overbought, but in strong uptrends such signals can persist — price is confirming the trend well above both moving averages, and the 18.6% monthly rally reflects real institutional accumulation, not speculative froth. Regulatory friction from Meta's age-check lobbying is a manageable operational cost, not a threat to Apple's core ecosystem lock-in. With a low beta of 1.06 and resilient services growth, AAPL offers defensive quality in a still-elevated CPI environment — making any pullback a buying opportunity for long-term holders.` },
+        { id:'bear', role:'Bear Researcher', icon:'bear', color:'#FF453A', tint:'rgba(255,69,58,0.32)',
+          content:`Sell AAPL now: The 41x P/E is unsustainable given the macro backdrop of sticky 3.78% CPI and a flattening yield curve, which historically compress growth-stock multiples. The RSI at 90 is not a persistent signal — it's an extreme that preceded mean reversion in 9 of the last 10 similar instances for AAPL, and the 0.8% gap from the 52-week high leaves no room for error without a catalyst. Meta's age-check lobbying adds real regulatory friction in a key market, increasing compliance costs that will pressure the 26.9% net margin. The 18.6% rally is retail momentum, not institutional accumulation — low beta and a low dividend yield make AAPL a yield-chasing trap when VIG and Invesco ETFs are diverting income-focused flows. Lock in gains now before the overbought technicals and macro headwinds trigger a 5-10% correction.` },
+      ]
+    },
+    {
+      name: 'Decision',
+      subtitle: 'Trade Synthesis',
+      members: [
+        { id:'trader', role:'Trader', icon:'trader', color:'#FF9F0A', tint:'rgba(255,159,10,0.32)',
+          content:`**HOLD** — Position: 0%
+
+The stock's extreme RSI of 90 and proximity to its 52-week high leave minimal near-term upside, while the 41x P/E is stretched against sticky 3.78% CPI and a flattening yield curve that historically compress growth multiples. The bull case for best-in-class margins and services resilience is valid, but the absence of a fresh catalyst and emerging regulatory friction from Meta's age-check lobbying tilt risk-reward unfavorably. Sitting out avoids a likely mean-reversion pullback while preserving capital for a better entry on any correction.` },
+      ]
+    },
+    {
+      name: 'Risk',
+      subtitle: 'Risk Gate',
+      members: [
+        { id:'risk', role:'Risk Manager', icon:'risk', color:'#98989D', tint:'rgba(152,152,157,0.32)',
+          content:`The trader's decision to hold a 0% position in AAPL is sound given the stretched valuation (41x P/E), extreme RSI of 90, and proximity to the 52-week high. The macro headwinds — sticky CPI and a flattening yield curve — support the caution, as these conditions historically compress growth multiples. The absence of a fresh catalyst and regulatory risks further tilt risk-reward unfavorably.
+
+**Risks to monitor:**
+1. A sudden positive catalyst (e.g., surprise product launch or strong earnings beat) could trigger a short-term rally, creating a missed opportunity.
+2. Continued market momentum or a dovish Fed pivot might delay or soften the anticipated correction.
+3. Persistent retail momentum chasing the rally despite weakening fundamentals.` },
+      ]
+    },
+  ],
+};
+
+// Phase color (for the row band tag)
+const PHASE_COLORS = {
+  'Analysts': '#0A84FF',
+  'Research': '#5E5CE6',
+  'Decision': '#FF9F0A',
+  'Risk':     '#98989D',
+};
+
+// ===== GAUGE =====
+function renderGauge() {
+  const gauge = document.getElementById('gauge');
+  REPORT.ratings.forEach((label, i) => {
+    const active = (label.toLowerCase() === REPORT.rating);
+    const track = document.createElement('div');
+    track.className = 'gauge-track';
+    track.style.setProperty('--gauge-color', REPORT.ratingColors[i]);
+    track.dataset.active = active;
+    track.innerHTML = `<div class="gauge-bar"></div><div class="gauge-label">${label}</div>`;
+    gauge.appendChild(track);
+  });
+}
+
+// ===== DAG POSITIONS =====
+// Inside a 1100x620 viewBox
+const POS = {
+  fund:   { x: 165, y:  90, phase: 'Analysts' },
+  tech:   { x: 425, y:  90, phase: 'Analysts' },
+  sent:   { x: 685, y:  90, phase: 'Analysts' },
+  news:   { x: 945, y:  90, phase: 'Analysts' },
+  bull:   { x: 425, y: 290, phase: 'Research' },
+  bear:   { x: 685, y: 290, phase: 'Research' },
+  trader: { x: 555, y: 450, phase: 'Decision' },
+  risk:   { x: 555, y: 575, phase: 'Risk' },
+};
+
+const PHASE_ROWS = [
+  { name: 'Analysts', y:  90 },
+  { name: 'Research', y: 290 },
+  { name: 'Decision', y: 450 },
+  { name: 'Risk',     y: 575 },
+];
+
+const EDGES = [
+  // Analysts → Bull
+  { from: 'fund', to: 'bull' },
+  { from: 'tech', to: 'bull' },
+  { from: 'sent', to: 'bull' },
+  { from: 'news', to: 'bull' },
+  // Analysts → Bear
+  { from: 'fund', to: 'bear' },
+  { from: 'tech', to: 'bear' },
+  { from: 'sent', to: 'bear' },
+  { from: 'news', to: 'bear' },
+  // Bull ⇄ Bear (debate)
+  { from: 'bull', to: 'bear', debate: true },
+  // Bull/Bear → Trader
+  { from: 'bull', to: 'trader' },
+  { from: 'bear', to: 'trader' },
+  // Trader → Risk
+  { from: 'trader', to: 'risk' },
+];
+
+function pathBetween(a, b, opts={}) {
+  if (opts.debate) {
+    // Curve above between bull & bear
+    const midX = (a.x + b.x) / 2;
+    const ay = a.y - 38, by = b.y - 38;
+    return `M ${a.x + 38} ${a.y} C ${a.x + 80} ${ay - 30}, ${b.x - 80} ${by - 30}, ${b.x - 38} ${b.y}`;
+  }
+  const dy = b.y - a.y;
+  const cy1 = a.y + dy * 0.5;
+  const cy2 = b.y - dy * 0.5;
+  return `M ${a.x} ${a.y + 38} C ${a.x} ${cy1}, ${b.x} ${cy2}, ${b.x} ${b.y - 38}`;
+}
+
+// ===== PHASE BANDS =====
+function renderPhaseBands() {
+  const layer = document.getElementById('phase-bands');
+  // Container inside .dag-container (padded 32px). Internal area: 1036 wide × 556 tall.
+  // SVG viewBox is 1100x620 — convert y proportionally.
+  const containerW = 1100, containerH = 620;
+  PHASE_ROWS.forEach(p => {
+    const top = (p.y / containerH) * 100;
+    const tag = document.createElement('div');
+    tag.className = 'phase-tag';
+    tag.style.setProperty('--phase-color', PHASE_COLORS[p.name]);
+    tag.style.top = `calc(${top}% - 13px)`;
+    tag.innerHTML = `<span class="marker"></span>${p.name}`;
+    layer.appendChild(tag);
+  });
+}
+
+// ===== EDGES =====
+function renderEdges() {
+  const svg = document.getElementById('dag-svg');
+  const defs = `
+    <defs>
+      <linearGradient id="line-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="rgba(245,245,247,0.06)"/>
+        <stop offset="50%"  stop-color="rgba(245,245,247,0.22)"/>
+        <stop offset="100%" stop-color="rgba(245,245,247,0.06)"/>
+      </linearGradient>
+      <linearGradient id="line-grad-active" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="rgba(255,159,10,0.5)"/>
+        <stop offset="100%" stop-color="rgba(255,159,10,0.95)"/>
+      </linearGradient>
+      <linearGradient id="debate" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"   stop-color="#30D158" stop-opacity="0.7"/>
+        <stop offset="50%"  stop-color="#FFD60A" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="#FF453A" stop-opacity="0.7"/>
+      </linearGradient>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="2" result="blur"/>
+        <feMerge>
+          <feMergeNode in="blur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+  `;
+  let html = defs;
+  EDGES.forEach((edge, i) => {
+    const a = POS[edge.from], b = POS[edge.to];
+    const d = pathBetween(a, b, edge);
+    const stroke = edge.debate ? 'url(#debate)' : 'url(#line-grad)';
+    const dasharray = edge.debate ? '5 6' : '';
+    const sw = edge.debate ? 1.4 : 1;
+    html += `<path d="${d}" stroke="${stroke}" stroke-width="${sw}" fill="none"
+             stroke-dasharray="${dasharray}" class="edge"
+             data-from="${edge.from}" data-to="${edge.to}"
+             data-debate="${edge.debate ? '1' : '0'}"
+             style="opacity:0"/>`;
+  });
+  // Add a small arrowhead at Trader→Risk
+  svg.innerHTML = html;
+
+  requestAnimationFrame(() => {
+    const edges = svg.querySelectorAll('.edge');
+    edges.forEach((p, i) => {
+      const isDebate = p.dataset.debate === '1';
+      if (isDebate) {
+        p.style.transition = `opacity 0.7s ${i * 0.05 + 0.7}s`;
+        requestAnimationFrame(() => { p.style.opacity = 1; });
+      } else {
+        const len = p.getTotalLength();
+        p.style.strokeDasharray = `${len} ${len}`;
+        p.style.strokeDashoffset = len;
+        p.style.transition =
+          `stroke-dashoffset 1.2s cubic-bezier(0.22, 1, 0.36, 1) ${i * 0.05 + 0.3}s,
+           opacity 0.4s ${i * 0.05 + 0.3}s`;
+        requestAnimationFrame(() => {
+          p.style.opacity = 1;
+          p.style.strokeDashoffset = 0;
+        });
+      }
+    });
+  });
+}
+
+// ===== NODES =====
+function renderNodes() {
+  const layer = document.getElementById('dag-nodes');
+  const containerW = 1100, containerH = 620;
+  const all = [];
+  REPORT.phases.forEach(p => p.members.forEach(m => all.push({ ...m, phaseName: p.name, phaseSubtitle: p.subtitle })));
+  all.forEach((m, i) => {
+    const pos = POS[m.id];
+    if (!pos) return;
+    const node = document.createElement('div');
+    node.className = 'node entered';
+    node.id = `node-${m.id}`;
+    node.style.left = `${(pos.x / containerW) * 100}%`;
+    node.style.top  = `${(pos.y / containerH) * 100}%`;
+    node.style.animationDelay = `${0.45 + i * 0.08}s`;
+    node.style.setProperty('--node-color', m.color);
+    node.style.setProperty('--node-tint', m.tint);
+    node.innerHTML = `
+      <div class="node-avatar">
+        <svg><use href="#icon-${m.icon}"/></svg>
+      </div>
+      <div class="node-label">${m.role}</div>
+    `;
+    node.addEventListener('click', () => openMember(m));
+    layer.appendChild(node);
+  });
+
+  // DEBATE tag between Bull and Bear
+  const debateY = ((POS.bull.y - 80) / containerH) * 100;
+  const debateX = ((POS.bull.x + POS.bear.x) / 2 / containerW) * 100;
+  const tag = document.createElement('div');
+  tag.className = 'debate-tag';
+  tag.style.top = `${debateY}%`;
+  tag.style.left = `${debateX}%`;
+  tag.textContent = 'debate';
+  layer.appendChild(tag);
+}
+
+// ===== MARKDOWN =====
+function renderMarkdown(text) {
+  // headings
+  text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  // bold then italic (italic regex avoids hitting inside bold)
+  text = text.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/(?<![*\w])\*(?!\s)([^*\n]+?)\*(?![*\w])/g, '<em>$1</em>');
+
+  const blocks = text.split(/\n\n+/);
+  return blocks.map(block => {
+    const t = block.trim();
+    if (!t) return '';
+    if (/^- /m.test(t)) {
+      const items = t.split('\n').filter(l => l.trim().startsWith('- '));
+      return '<ul>' + items.map(l => `<li>${l.replace(/^- /, '')}</li>`).join('') + '</ul>';
+    }
+    if (/^\d+\./m.test(t)) {
+      const items = t.split('\n').filter(l => /^\d+\./.test(l.trim()));
+      return '<ol>' + items.map(l => `<li>${l.replace(/^\d+\.\s*/, '')}</li>`).join('') + '</ol>';
+    }
+    if (t.startsWith('<h3>')) return t;
+    return `<p>${t.replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+}
+
+// ===== EXPANSION =====
+let activeId = null;
+
+function openMember(m) {
+  if (activeId === m.id) { closeExpanded(); return; }
+  activeId = m.id;
+
+  document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+  document.getElementById(`node-${m.id}`).classList.add('active');
+
+  const exp = document.getElementById('expanded');
+  exp.style.setProperty('--node-color', m.color);
+  exp.style.setProperty('--node-tint', m.tint);
+  exp.querySelector('.expanded-avatar svg use').setAttribute('href', `#icon-${m.icon}`);
+  exp.querySelector('.expanded-avatar').style.setProperty('--node-color', m.color);
+  exp.querySelector('.expanded-avatar').style.setProperty('--node-tint', m.tint);
+  exp.querySelector('.expanded-avatar').style.borderColor = m.color;
+  exp.querySelector('.expanded-name').textContent = m.role;
+
+  const phase = REPORT.phases.find(p => p.members.some(x => x.id === m.id));
+  exp.querySelector('.expanded-phase').textContent = `${phase.name} · ${phase.subtitle}`;
+  exp.querySelector('.expanded-phase').style.color = m.color;
+
+  document.getElementById('markdown-body').innerHTML = renderMarkdown(m.content);
+
+  document.getElementById('empty-hint').classList.add('hidden');
+  exp.classList.remove('visible');
+  void exp.offsetHeight;
+  exp.classList.add('visible');
+
+  highlightPath(m.id);
+}
+
+function closeExpanded() {
+  activeId = null;
+  document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+  document.getElementById('expanded').classList.remove('visible');
+  document.getElementById('empty-hint').classList.remove('hidden');
+  highlightPath(null);
+}
+
+function highlightPath(targetId) {
+  const svg = document.getElementById('dag-svg');
+  svg.querySelectorAll('.edge').forEach(p => {
+    if (!targetId) {
+      p.style.stroke = p.dataset.debate === '1' ? 'url(#debate)' : 'url(#line-grad)';
+      p.style.strokeWidth = p.dataset.debate === '1' ? '1.4' : '1';
+      p.style.opacity = '1';
+      return;
+    }
+    const reachable = ancestors(targetId);
+    const from = p.dataset.from, to = p.dataset.to;
+    if (reachable.has(from) && reachable.has(to)) {
+      p.style.stroke = 'url(#line-grad-active)';
+      p.style.strokeWidth = '1.8';
+      p.style.opacity = '1';
+    } else {
+      p.style.opacity = '0.15';
+    }
+  });
+}
+
+function ancestors(id) {
+  const set = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    EDGES.forEach(e => {
+      if (set.has(e.to) && !set.has(e.from)) {
+        set.add(e.from);
+        changed = true;
+      }
+    });
+  }
+  return set;
+}
+
+// ===== ESC closes expanded =====
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeExpanded();
+});
+
+// ===== BOOT =====
+renderGauge();
+renderPhaseBands();
+renderEdges();
+renderNodes();
+</script>
+</body>
+</html>

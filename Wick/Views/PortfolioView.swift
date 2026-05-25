@@ -19,26 +19,40 @@ struct PortfolioView: View {
     @State private var tab: PortfolioTab = .heatmap
 
     var body: some View {
-        ScrollView {
+        VStack(alignment: .leading, spacing: 0) {
+            // Pinned chrome — header, summary, and tab picker stay
+            // anchored at top while only the active tab's content
+            // scrolls. Matches the pattern across MarketView /
+            // DetailView so navigation is consistent.
             VStack(alignment: .leading, spacing: 22) {
                 header
                 summary
                 FlatPicker(items: PortfolioTab.allCases,
                            selection: $tab,
                            layout: .compact)
-                Group {
-                    switch tab {
-                    case .heatmap:      heatmapSection
-                    case .positions:    positionsSection
-                    case .transactions: transactionsSection
-                    }
-                }
-                // Bottom safe area so the floating Wicker composer
-                // doesn't cover the last row.
-                Color.clear.frame(height: 72)
             }
             .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
+
+            Divider().opacity(0.4)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Group {
+                        switch tab {
+                        case .heatmap:      heatmapSection
+                        case .positions:    positionsSection
+                        case .transactions: transactionsSection
+                        }
+                    }
+                    // Bottom safe area so the floating Wicker composer
+                    // doesn't cover the last row.
+                    Color.clear.frame(height: 72)
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(appleBackground(for: colorScheme))
@@ -142,7 +156,8 @@ struct PortfolioView: View {
                 emptyState(
                     icon: "rectangle.3.group",
                     title: "No open positions",
-                    body: "Add a Buy transaction to see it on the heatmap."
+                    body: "Add a Buy transaction to see it on the heatmap, or load a sample portfolio to explore the page.",
+                    primaryAction: sampleAction
                 )
             } else {
                 TreemapView(tiles: heatmapTiles(positions: positions),
@@ -186,7 +201,8 @@ struct PortfolioView: View {
                 emptyState(
                     icon: "tray",
                     title: "No open positions",
-                    body: "Add a transaction with the button above."
+                    body: "Add a transaction with the button above, or load a sample portfolio.",
+                    primaryAction: sampleAction
                 )
             } else {
                 ForEach(positions) { p in
@@ -316,8 +332,26 @@ struct PortfolioView: View {
 
     // MARK: - Empty state
 
-    private func emptyState(icon: String, title: String, body: String) -> some View {
-        VStack(alignment: .center, spacing: 6) {
+    /// Optional CTA payload for `emptyState`. When present the empty state
+    /// renders a primary button under the body copy.
+    private struct EmptyAction {
+        let title: String
+        let icon: String
+        let handler: () -> Void
+    }
+
+    private var sampleAction: EmptyAction {
+        EmptyAction(title: "Load sample portfolio",
+                    icon: "sparkles") { store.loadSampleTransactions() }
+    }
+
+    @ViewBuilder
+    private func emptyState(icon: String,
+                            title: String,
+                            body: String,
+                            primaryAction: EmptyAction? = nil) -> some View
+    {
+        VStack(alignment: .center, spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 32))
                 .foregroundStyle(.tertiary)
@@ -327,6 +361,17 @@ struct PortfolioView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+            if let action = primaryAction {
+                Button {
+                    action.handler()
+                } label: {
+                    Label(action.title, systemImage: action.icon)
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(LiquidGlassButtonStyle(prominent: true))
+                .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 28)

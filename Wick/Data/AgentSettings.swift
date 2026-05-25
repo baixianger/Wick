@@ -293,5 +293,82 @@ final class AgentSettings {
             default:      return nil
             }
         }
+
+        // DEBUG-only: opportunistic auto-fill of BYO keys from process
+        // environment when Keychain is empty for that slot. Pattern is
+        // "scheme/launchd injects env, app prefers it for that one
+        // launch and persists to Keychain so the user sees the keys
+        // populated in Settings as usual." Release builds skip this
+        // entirely so production never picks up unexpected env state.
+        //
+        // Env var name = the exact name WickServer uses; same set of
+        // keys feeds both server and app.
+        #if DEBUG
+        adoptKeyFromEnvIfMissing()
+        #endif
     }
+
+    #if DEBUG
+    /// Dev convenience — populate empty Keychain slots from
+    /// `ProcessInfo` environment. Mirrors the WickServer launch
+    /// convention so a single `.env`-style export feeds both sides
+    /// of the stack. Adopting writes the key to Keychain so the
+    /// Settings UI shows it filled in (and the user can edit / clear
+    /// from there as normal). No-op for any slot that's already set.
+    private func adoptKeyFromEnvIfMissing() {
+        let env = ProcessInfo.processInfo.environment
+
+        // Data-source keys.
+        adopt(env["FRED_API_KEY"],    into: &fredKey)
+        adopt(env["FINNHUB_API_KEY"], into: &finnhubKey)
+        adopt(env["FMP_API_KEY"],     into: &fmpKey)
+
+        // Server auth — pick whichever the user wired locally.
+        adopt(env["WICK_SERVER_TOKEN"], into: &serverAuthToken)
+
+        // LLM keys — match the provider currently selected so the
+        // first BYO key the user might have exported lands in the
+        // right slot. Cross-provider env adoption would clobber on
+        // every relaunch, which is the opposite of helpful.
+        switch providerKind {
+        case .anthropic:
+            adopt(env["ANTHROPIC_API_KEY"], into: &currentAPIKey)
+        case .openrouter:
+            adopt(env["OPENROUTER_API_KEY"], into: &currentAPIKey)
+        case .openai:
+            adopt(env["OPENAI_API_KEY"], into: &currentAPIKey)
+        case .gemini:
+            adopt(env["GEMINI_API_KEY"] ?? env["GOOGLE_API_KEY"],
+                  into: &currentAPIKey)
+        case .deepseek:
+            adopt(env["DEEPSEEK_API_KEY"], into: &currentAPIKey)
+        case .xai:
+            adopt(env["XAI_API_KEY"], into: &currentAPIKey)
+        case .glm:
+            adopt(env["GLM_API_KEY"] ?? env["ZHIPU_API_KEY"], into: &currentAPIKey)
+        case .kimi:
+            adopt(env["KIMI_API_KEY"] ?? env["MOONSHOT_API_KEY"],
+                  into: &currentAPIKey)
+        case .minimax:
+            adopt(env["MINIMAX_API_KEY"], into: &currentAPIKey)
+        case .qwen:
+            adopt(env["QWEN_API_KEY"] ?? env["DASHSCOPE_API_KEY"],
+                  into: &currentAPIKey)
+        case .server, .custom, .ollama:
+            // Server/custom/ollama don't have a canonical env var name —
+            // the user sets baseURL by hand. Skip.
+            break
+        }
+    }
+
+    /// Set `slot = candidate` if-and-only-if `slot` is empty and
+    /// `candidate` is a non-empty string. Triggers the property's
+    /// `didSet`, which persists to Keychain.
+    private func adopt(_ candidate: String?, into slot: inout String) {
+        guard slot.isEmpty,
+              let v = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !v.isEmpty else { return }
+        slot = v
+    }
+    #endif
 }
