@@ -12,8 +12,6 @@ struct ContentView: View {
     /// Global indicator config — shared by every ticker. Survives the
     /// `.id(...)` rebuild on watchlist switches because it lives here.
     @State private var indicatorConfig = ChartIndicatorConfig()
-    /// Controls the indicator-manager sheet presented from the ⋯ menu.
-    @State private var indicatorSheetShown: Bool = false
     /// BYO agent + display knobs. Owns appearance + chart layout (formerly
     /// @State here) so the single Settings pane can drive them.
     @Environment(AgentSettings.self) private var agentSettings
@@ -108,28 +106,12 @@ struct ContentView: View {
                 if !Task.isCancelled { searchResults = [] }
             }
         }
-        .sheet(isPresented: $indicatorSheetShown) {
-            IndicatorManagerView(config: indicatorConfig)
-        }
-        .toolbar {
-            if case .ticker = route {
-                ToolbarItem(placement: .primaryAction) {
-                    tabPicker
-                }
-            }
-            // Indicators is chart-specific — keep its own button so users
-            // don't have to detour through Settings for a frequent action.
-            if case .ticker = route, tab == .chart {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        indicatorSheetShown = true
-                    } label: {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                    }
-                    .help("Indicators")
-                }
-            }
-        }
+        // Window toolbar deliberately empty — both the tab picker AND
+        // the indicators button live inside `DetailView.header` now,
+        // so with `.hiddenTitleBar` the chrome above the content
+        // collapses entirely (traffic lights overlay the content
+        // edge directly, no toolbar strip). This claws back the last
+        // ~38pt of vertical space.
         .onAppear {
             // Warm the cache with daily series for every watchlist ticker
             // so the sparklines + header prices switch to live within a
