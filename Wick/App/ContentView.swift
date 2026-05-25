@@ -62,6 +62,17 @@ struct ContentView: View {
             // itself (the workspace has its own in-place composer).
             // It's anchored bottom-trailing inside the detail pane,
             // so it doesn't get clipped by the sidebar.
+            //
+            // `.ignoresSafeArea(.container, edges: .top)` lets the
+            // detail content extend all the way up under the
+            // collapsed title bar zone — traffic lights then overlay
+            // the content (Music / Mail style). Without this, SwiftUI
+            // keeps a ~28pt safe-area inset for the (now-hidden)
+            // title bar even when `.hiddenTitleBar` is set, leaving
+            // an empty strip between traffic lights and the first
+            // visible content row. Each per-route view adds its own
+            // top padding so the page title doesn't crash into the
+            // top of the window edge.
             Group {
                 switch route {
                 case .portfolio:
@@ -79,6 +90,7 @@ struct ContentView: View {
                         .id(selectedTicker.id)
                 }
             }
+            .ignoresSafeArea(.container, edges: .top)
             .overlay(alignment: .bottomTrailing) {
                 if shouldShowFloatingComposer {
                     FloatingWickerComposer(
