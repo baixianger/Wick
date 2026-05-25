@@ -65,7 +65,6 @@ struct DetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
-
                 Group {
                     switch tab {
                     case .overview:
@@ -89,10 +88,15 @@ struct DetailView: View {
                         AITab(ticker: ticker, range: range)
                     }
                 }
-                .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .padding(.vertical, 14)
+            // Unified page padding — Portfolio is the reference
+            // (.horizontal 22, .vertical 18). Header had its own
+            // .padding(.horizontal, 16) before; consolidated into
+            // this single outer call so every page edges in by the
+            // same amount.
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
         }
         .background(appleBackground(for: colorScheme))
         .sheet(isPresented: $indicatorSheetShown) {
@@ -227,7 +231,9 @@ struct DetailView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        // No horizontal padding here — the outer body's
+        // .padding(.horizontal, 22) on the ScrollView VStack
+        // covers the inset for the whole page consistently.
     }
 
     /// One column of the Apple Stocks-style dual price header.

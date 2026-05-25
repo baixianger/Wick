@@ -129,7 +129,6 @@ private struct ProviderTab: View {
                 Section("Models") {
                     quickModelField
                     deepModelField
-                    liteModelField
                     HStack {
                         Button {
                             Task { await refreshModels() }
@@ -157,6 +156,41 @@ private struct ProviderTab: View {
         .padding(20)
         .frame(width: 540)
         .fixedSize(horizontal: false, vertical: true)
+        // Auto-fetch the provider's /models list whenever the user
+        // switches provider OR pastes a new key. Debounced ~700ms
+        // so we don't hammer the endpoint on every keystroke; the
+        // task is automatically cancelled and re-launched on the
+        // next id change. Result: the Quick / Deep / Lite pickers
+        // populate themselves without a manual "Refresh models"
+        // click, which is what the user actually wants.
+        .task(id: discoveryTaskKey) {
+            // No key (or keyless provider not yet given a URL) →
+            // nothing to fetch. Skip silently rather than spam an
+            // error.
+            guard providerReadyForDiscovery else { return }
+            try? await Task.sleep(for: .milliseconds(700))
+            if Task.isCancelled { return }
+            await refreshModels()
+        }
+    }
+
+    /// Re-fires the discovery task whenever the user changes
+    /// provider OR the API key. The compound id ensures cancellation
+    /// when EITHER input changes — base URL edits also re-fire
+    /// since the URL is downstream of the provider choice.
+    private var discoveryTaskKey: String {
+        "\(settings.providerKind.rawValue)|\(settings.byoBaseURL)|\(settings.currentAPIKey)"
+    }
+
+    /// Whether we have enough info to attempt discovery — a real
+    /// base URL plus, for providers that need it, a non-empty key.
+    private var providerReadyForDiscovery: Bool {
+        guard settings.providerKind != .server else { return false }
+        guard !settings.byoBaseURL.isEmpty else { return false }
+        if settings.providerKind.requiresAPIKey {
+            return !settings.currentAPIKey.isEmpty
+        }
+        return true
     }
 
     // MARK: - Sub-views
@@ -221,55 +255,48 @@ private struct ProviderTab: View {
         )
     }
 
-    @ViewBuilder
     private var quickModelField: some View {
-        if settings.availableModels.isEmpty {
-            TextField("Quick model:", text: $settings.quickModel)
-        } else {
-            Picker("Quick model:", selection: $settings.quickModel) {
-                ForEach(settings.availableModels) { m in
-                    Text(modelLabel(m)).tag(m.id)
-                }
-                if !settings.availableModels.contains(where: { $0.id == settings.quickModel }) {
-                    Text("\(settings.quickModel) (custom)").tag(settings.quickModel)
-                }
+        Picker("Quick model:", selection: $settings.quickModel) {
+            ForEach(modelOptions(currentValue: settings.quickModel)) { m in
+                Text(modelLabel(m)).tag(m.id)
             }
         }
     }
 
-    @ViewBuilder
     private var deepModelField: some View {
-        if settings.availableModels.isEmpty {
-            TextField("Deep model:", text: $settings.deepModel)
-        } else {
-            Picker("Deep model:", selection: $settings.deepModel) {
-                ForEach(settings.availableModels) { m in
-                    Text(modelLabel(m)).tag(m.id)
-                }
-                if !settings.availableModels.contains(where: { $0.id == settings.deepModel }) {
-                    Text("\(settings.deepModel) (custom)").tag(settings.deepModel)
-                }
+        Picker("Deep model:", selection: $settings.deepModel) {
+            ForEach(modelOptions(currentValue: settings.deepModel)) { m in
+                Text(modelLabel(m)).tag(m.id)
             }
         }
     }
 
-    /// "Lite" tier — picks the smallest / cheapest variant the
-    /// provider exposes. Used for throwaway calls like session
-    /// auto-naming; cost matters more than quality here.
-    @ViewBuilder
-    private var liteModelField: some View {
-        if settings.availableModels.isEmpty {
-            TextField("Lite model:", text: $settings.liteModel)
-        } else {
-            Picker("Lite model:", selection: $settings.liteModel) {
-                ForEach(settings.availableModels) { m in
-                    Text(modelLabel(m)).tag(m.id)
-                }
-                if !settings.availableModels.contains(where: { $0.id == settings.liteModel }) {
-                    Text("\(settings.liteModel) (custom)").tag(settings.liteModel)
-                }
+    /// Always-on dropdown options. If discovery has populated
+    /// `availableModels`, use the full live list (and append the
+    /// current selection as `(custom)` if it isn't in the list so
+    /// the picker can show what's actually selected). Pre-discovery
+    /// — Settings just opened, key not yet pasted — fall back to
+    /// the provider's three recommended defaults plus the current
+    /// value, so the field is always a real picker, never a raw
+    /// TextField.
+    private func modelOptions(currentValue: String) -> [ModelInfo] {
+        if !settings.availableModels.isEmpty {
+            var out = settings.availableModels
+            if !out.contains(where: { $0.id == currentValue }) && !currentValue.isEmpty {
+                out.append(ModelInfo(id: currentValue,
+                                      displayName: "\(currentValue) (custom)"))
             }
+            return out
         }
+        let kind = settings.providerKind
+        var ids: [String] = []
+        for id in [kind.defaultQuickModel,
+                   kind.defaultDeepModel,
+                   currentValue]
+        {
+            if !id.isEmpty && !ids.contains(id) { ids.append(id) }
+        }
+        return ids.map { ModelInfo(id: $0) }
     }
 
     /// "claude-opus-4-7 · $15/$75 · 200k" — show pricing + context

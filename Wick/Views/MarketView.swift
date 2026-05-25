@@ -17,8 +17,10 @@ struct MarketView: View {
                 header
                 placeholderCard
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+            // Match Portfolio's reference padding so every page
+            // edges in by the same amount.
+            .padding(.horizontal, 22)
+            .padding(.vertical, 18)
         }
         .background(appleBackground(for: colorScheme))
     }

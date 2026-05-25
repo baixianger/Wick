@@ -103,30 +103,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         }
     }
 
-    /// "Lite" model — the cheapest / smallest one the provider
-    /// ships. Used for throwaway calls: session naming, intent
-    /// classification, short summaries. We bias toward "small enough
-    /// to be free or near-free" rather than "strongest model that's
-    /// still cheap".
-    var defaultLiteModel: String {
-        switch self {
-        case .server:     return ""                                      // server chooses
-        case .anthropic:  return "claude-haiku-4-5-20251001"
-        case .openai:     return "gpt-5-nano"
-        case .openrouter: return "qwen/qwen-2.5-7b-instruct"
-        case .gemini:     return "gemini-2.5-flash-lite"
-        case .deepseek:   return "deepseek-chat"
-        case .xai:        return "grok-4-mini"
-        case .glm:        return "glm-4.5-flash"
-        case .kimi:       return "moonshot-v1-8k"
-        case .minimax:    return "abab6.5-chat"
-        case .qwen:       return "qwen-turbo"
-        case .custom:     return ""
-        case .ollama:     return "llama3.2:1b"
-        }
-    }
-
-    /// Recommended "deep" model — stronger reasoning for the debate /
+/// Recommended "deep" model — stronger reasoning for the debate /
     /// trader / risk passes and for the Wicker chat. Same names act as
     /// `WickerLLM.model(for:)` defaults until discovery overrides.
     var defaultDeepModel: String {

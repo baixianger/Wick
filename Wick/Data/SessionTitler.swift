@@ -30,16 +30,19 @@ enum SessionTitler {
                           settings: AgentSettings) async -> String?
     {
         // Build the same `LLMProvider` Wicker chat uses (Anthropic /
-        // OpenAI-compatible umbrella / server), but with the lite
-        // model instead of deep. Server mode delegates to the
-        // server's own choice — no client-side model name
-        // hard-coding.
+        // OpenAI-compatible umbrella / server), but with the quick
+        // model instead of deep. Quick is the cheap "data
+        // gathering" tier per [[tradingfloor-agent-design]] —
+        // titling a few-word output fits the same cost profile. We
+        // collapsed the originally-separate "lite" tier into quick
+        // because the only consumer was this titler; one less
+        // settings field for the user to think about.
         guard let provider = liteProvider(for: settings) else {
             return nil
         }
-        let model = settings.liteModel.isEmpty
-            ? settings.providerKind.defaultLiteModel
-            : settings.liteModel
+        let model = settings.quickModel.isEmpty
+            ? settings.providerKind.defaultQuickModel
+            : settings.quickModel
         let request = LLMRequest(
             model: model,
             system: systemPrompt,

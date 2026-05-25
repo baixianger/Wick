@@ -27,42 +27,53 @@ struct FloatingWickerComposer: View {
 
     @Environment(AgentSettings.self) private var settings
     @State private var draft: String = ""
-    @State private var expanded: Bool = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 10) {
             TextField(placeholder, text: $draft, axis: .vertical)
-                .lineLimit(1...5)
+                // Sticky 2-line state: grows to 2 lines on focus AND
+                // stays there as long as there's draft content
+                // (`!draft.isEmpty`). Only an empty + unfocused
+                // composer collapses back to 1 line — typing
+                // anything keeps the taller surface.
+                .lineLimit(twoLineMode ? 2...6 : 1...1)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .frame(maxWidth: expanded ? 480 : 280)
+                .frame(maxWidth: 320)
                 .liquidGlass(cornerRadius: 14)
                 .intelligenceGlow(
-                    // Always-on + constant intensity per the user's
-                    // UX call ("我希望他能一致都保持现在的特效").
-                    // The floating composer reads as "Wicker is alive
-                    // and listening" from across the room regardless
-                    // of whether the field is focused — no dimming
-                    // when idle, no brightening when active.
+                    // Always-on + constant intensity. The floating
+                    // composer reads as "Wicker is alive and
+                    // listening" regardless of focus.
                     active: true,
                     cornerRadius: 14,
                     intensity: 0.85
                 )
                 .focused($inputFocused)
-                .onChange(of: inputFocused) { _, focused in
-                    withAnimation(.snappy(duration: 0.22)) { expanded = focused }
-                }
+                .animation(.smooth(duration: 0.25), value: twoLineMode)
                 .onSubmit { submit() }
 
+            // Send button matches the 1-line text-field height (36pt)
+            // and bottom-aligns with the field so on a 2-line
+            // composer it sits in the lower right corner — visually
+            // attached to the input rather than floating above its
+            // bottom edge.
             Button {
                 submit()
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 26))
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(canSubmit ? Color.accentColor : Color.secondary)
+                    .frame(width: 36, height: 36)
+                    .liquidGlass(cornerRadius: 18)
+                    .intelligenceGlow(
+                        active: true,
+                        cornerRadius: 18,
+                        intensity: 0.85
+                    )
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.return, modifiers: .command)
@@ -70,6 +81,14 @@ struct FloatingWickerComposer: View {
             .help("Ask Wicker (⌘⏎)")
         }
         .padding(10)
+    }
+
+    /// Whether to render the 2-line textarea. True when the user
+    /// has focus OR there's any draft content sitting in the
+    /// composer — so typing something then clicking elsewhere
+    /// doesn't collapse the editor back to a 1-line bar mid-edit.
+    private var twoLineMode: Bool {
+        inputFocused || !draft.isEmpty
     }
 
     private var placeholder: String {
