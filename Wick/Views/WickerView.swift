@@ -471,6 +471,9 @@ private struct ConversationView: View {
                                  to: sessionID)
                     pending = false
                     pendingLabel = nil
+                    titleSessionIfNeeded(userText: text,
+                                          assistantText: reply,
+                                          sessionID: sessionID)
                 }
             } catch {
                 await MainActor.run {
@@ -478,6 +481,38 @@ private struct ConversationView: View {
                     pendingLabel = nil
                     lastError = describe(error)
                 }
+            }
+        }
+    }
+
+    /// Fire `SessionTitler` in the background once the first
+    /// complete turn (1 user + 1 assistant) lands. Cheap lite-model
+    /// call; failure silently leaves the heuristic-truncated title
+    /// in place. Skipped if the user has manually renamed.
+    private func titleSessionIfNeeded(userText: String,
+                                       assistantText: String,
+                                       sessionID: UUID)
+    {
+        guard let s = store.session(for: sessionID) else { return }
+        let userTurns = s.messages.filter { $0.role == .user }.count
+        let assistantTurns = s.messages.filter { $0.role == .assistant }.count
+        guard userTurns == 1, assistantTurns == 1 else { return }
+        let autoHeuristic = String(
+            (userText.split(whereSeparator: \.isNewline).first
+                .map(String.init) ?? userText)
+                .trimmingCharacters(in: .whitespaces)
+                .prefix(40)
+        )
+        // Skip if the user (or some other path) has already
+        // overridden the auto-title — preserve user intent.
+        guard s.title == autoHeuristic || s.title == "New chat" else { return }
+        Task { @MainActor in
+            if let title = await SessionTitler.makeTitle(
+                userText: userText,
+                assistantText: assistantText,
+                settings: settings)
+            {
+                store.rename(id: sessionID, to: title)
             }
         }
     }
@@ -667,9 +702,15 @@ private struct ConversationView: View {
                     .padding(.vertical, vPad)
                     .liquidGlass(cornerRadius: corner)
                     .intelligenceGlow(
-                        active: inputFocused || pending,
+                        // Always-on glow — Wicker is "ambiently alive".
+                        // Intensity varies with state so a focused
+                        // or thinking composer still feels louder
+                        // than an idle one, without the effect ever
+                        // turning off completely.
+                        active: true,
                         cornerRadius: corner,
-                        intensity: pending ? 1.0 : 0.65
+                        intensity: pending ? 1.0
+                            : (inputFocused ? 0.85 : 0.55)
                     )
                     .focused($inputFocused)
                     .onSubmit { submit() }
@@ -784,6 +825,9 @@ private struct ConversationView: View {
                                  to: sessionID)
                     pending = false
                     pendingLabel = nil
+                    titleSessionIfNeeded(userText: text,
+                                          assistantText: reply,
+                                          sessionID: sessionID)
                 }
             } catch {
                 await MainActor.run {

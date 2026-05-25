@@ -48,6 +48,9 @@ final class AgentSettings {
             if deepModel.isEmpty || oldValue != providerKind {
                 deepModel = providerKind.defaultDeepModel
             }
+            if liteModel.isEmpty || oldValue != providerKind {
+                liteModel = providerKind.defaultLiteModel
+            }
         }
     }
 
@@ -80,6 +83,14 @@ final class AgentSettings {
     /// Strong model for debate / trade / risk reasoning + Wicker chat.
     var deepModel: String {
         didSet { UserDefaults.standard.set(deepModel, forKey: "tf.byo.\(providerKind.rawValue).deepModel") }
+    }
+
+    /// Lite model — used for throwaway calls like LLM-generated
+    /// session titles. Should be the cheapest / smallest the
+    /// provider exposes; cost matters more than quality here since
+    /// the output is at most a few words.
+    var liteModel: String {
+        didSet { UserDefaults.standard.set(liteModel, forKey: "tf.byo.\(providerKind.rawValue).liteModel") }
     }
 
     /// Cached list of models discovered from this provider's `/models`
@@ -255,6 +266,7 @@ final class AgentSettings {
         self.byoBaseURL    = ud.string(forKey: "tf.byo.\(kind.rawValue).baseURL")    ?? kind.defaultBaseURL
         self.quickModel    = ud.string(forKey: "tf.byo.\(kind.rawValue).quickModel") ?? kind.defaultQuickModel
         self.deepModel     = ud.string(forKey: "tf.byo.\(kind.rawValue).deepModel")  ?? kind.defaultDeepModel
+        self.liteModel     = ud.string(forKey: "tf.byo.\(kind.rawValue).liteModel")  ?? kind.defaultLiteModel
         if let data = ud.data(forKey: "tf.byo.\(kind.rawValue).availableModels"),
            let decoded = try? JSONDecoder().decode([ModelInfo].self, from: data)
         {

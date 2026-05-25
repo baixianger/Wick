@@ -127,7 +127,7 @@ struct SidebarView: View {
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("My Portfolio")
+                Text("Portfolio")
                     .font(.system(size: 14, weight: .semibold))
                 Text("Holdings · P&L heatmap")
                     .font(.system(size: 11))

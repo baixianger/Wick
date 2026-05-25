@@ -41,9 +41,15 @@ struct FloatingWickerComposer: View {
                 .frame(maxWidth: expanded ? 480 : 280)
                 .liquidGlass(cornerRadius: 14)
                 .intelligenceGlow(
-                    active: inputFocused,
+                    // Always-on + constant intensity per the user's
+                    // UX call ("我希望他能一致都保持现在的特效").
+                    // The floating composer reads as "Wicker is alive
+                    // and listening" from across the room regardless
+                    // of whether the field is focused — no dimming
+                    // when idle, no brightening when active.
+                    active: true,
                     cornerRadius: 14,
-                    intensity: 0.75
+                    intensity: 0.85
                 )
                 .focused($inputFocused)
                 .onChange(of: inputFocused) { _, focused in

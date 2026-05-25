@@ -129,6 +129,7 @@ private struct ProviderTab: View {
                 Section("Models") {
                     quickModelField
                     deepModelField
+                    liteModelField
                     HStack {
                         Button {
                             Task { await refreshModels() }
@@ -247,6 +248,25 @@ private struct ProviderTab: View {
                 }
                 if !settings.availableModels.contains(where: { $0.id == settings.deepModel }) {
                     Text("\(settings.deepModel) (custom)").tag(settings.deepModel)
+                }
+            }
+        }
+    }
+
+    /// "Lite" tier — picks the smallest / cheapest variant the
+    /// provider exposes. Used for throwaway calls like session
+    /// auto-naming; cost matters more than quality here.
+    @ViewBuilder
+    private var liteModelField: some View {
+        if settings.availableModels.isEmpty {
+            TextField("Lite model:", text: $settings.liteModel)
+        } else {
+            Picker("Lite model:", selection: $settings.liteModel) {
+                ForEach(settings.availableModels) { m in
+                    Text(modelLabel(m)).tag(m.id)
+                }
+                if !settings.availableModels.contains(where: { $0.id == settings.liteModel }) {
+                    Text("\(settings.liteModel) (custom)").tag(settings.liteModel)
                 }
             }
         }
