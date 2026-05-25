@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreCharts
 import TradingFloor
 
 /// Wicker — the global chat / analysis agent. Layout cribs from the new
@@ -27,14 +28,27 @@ struct WickerView: View {
     /// alert state.
     @State private var renamingSessionID: UUID?
     @State private var renameDraft: String = ""
+    /// History drawer is closed by default — the workspace centres on
+    /// the current conversation, à la Claude.app's recent macOS
+    /// redesign. User toggles via the `sidebar.trailing` icon in the
+    /// top-right of the conversation pane or ⌘⇧H.
+    @State private var showHistoryDrawer: Bool = false
 
     var body: some View {
         HStack(spacing: 0) {
-            sessionColumn
-                .frame(width: 300)
-            Divider()
             conversationPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .topTrailing) {
+                    headerActions
+                        .padding(.top, 12)
+                        .padding(.trailing, 14)
+                }
+            if showHistoryDrawer {
+                Divider()
+                sessionDrawer
+                    .frame(width: 280)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
         .background(appleBackground(for: colorScheme))
         .onAppear { ensureSession() }
@@ -48,6 +62,67 @@ struct WickerView: View {
             TextField("Title", text: $renameDraft)
             Button("Cancel", role: .cancel) { renamingSessionID = nil }
             Button("Rename") { commitRename() }
+        }
+    }
+
+    /// Two-icon control cluster in the top-right of the conversation
+    /// pane: new chat + drawer toggle. Kept tiny + iconic to match
+    /// the "right pane is just chat" rule — no labels, no chrome
+    /// around the chat content itself.
+    private var headerActions: some View {
+        HStack(spacing: 14) {
+            Button {
+                store.newSession()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("n", modifiers: .command)
+            .help("New chat (⌘N)")
+
+            Button {
+                withAnimation(.snappy(duration: 0.22)) {
+                    showHistoryDrawer.toggle()
+                }
+            } label: {
+                Image(systemName: showHistoryDrawer
+                      ? "sidebar.trailing"
+                      : "sidebar.trailing")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(showHistoryDrawer ? .accent : .secondary)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("h", modifiers: [.command, .shift])
+            .help(showHistoryDrawer ? "Hide history (⌘⇧H)" : "Show history (⌘⇧H)")
+        }
+    }
+
+    /// Right-side history drawer. Reuses the existing `sessionList`
+    /// (now standalone, no longer wrapped in a "column" with its own
+    /// header — the headerActions on the conversation pane carry the
+    /// new-chat button instead).
+    private var sessionDrawer: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text("History")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Text("\(store.sessions.count)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+            if store.sessions.isEmpty {
+                emptyColumn
+            } else {
+                sessionList
+            }
         }
     }
 
@@ -70,45 +145,10 @@ struct WickerView: View {
         renamingSessionID = nil
     }
 
-    // MARK: - Session column (Mail's message-list position)
-
-    /// The left rail. `ensureSession()` guarantees the list is never
-    /// empty in normal flow, so a fall-through to `emptyColumn` only
-    /// happens for the brief instant before `onAppear` fires.
-    private var sessionColumn: some View {
-        VStack(spacing: 0) {
-            sessionColumnHeader
-            if store.sessions.isEmpty {
-                emptyColumn
-            } else {
-                sessionList
-            }
-        }
-    }
-
-    private var sessionColumnHeader: some View {
-        HStack(spacing: 6) {
-            Text("Sessions")
-                .font(.system(size: 13, weight: .semibold))
-            Text("\(store.sessions.count)")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 1)
-                .background(Color.secondary.opacity(0.12), in: Capsule())
-            Spacer()
-            Button {
-                store.newSession()
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .help("New chat")
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-    }
+    // MARK: - History drawer rendering (legacy section column gone)
+    // The session list view itself is unchanged — it's now hosted
+    // inside `sessionDrawer` above rather than a permanently-visible
+    // column.
 
     /// Safety fallback — almost never rendered (ensureSession auto-
     /// creates the first session on appear). The right pane's hero
@@ -359,12 +399,85 @@ private struct ConversationView: View {
         //   - NORMAL : transcript above, composer pinned at bottom.
         // Same `submit()` powers both — only the spatial framing
         // around the composer differs.
-        if showHero {
-            heroLayout
-        } else {
-            VStack(spacing: 0) {
-                transcript
-                composer
+        Group {
+            if showHero {
+                heroLayout
+            } else {
+                VStack(spacing: 0) {
+                    transcript
+                    composer
+                }
+            }
+        }
+        // Auto-continue: if the session opens with an unanswered user
+        // turn (typical when the FloatingWickerComposer kicked off a
+        // chat from outside Wicker), dispatch the agent loop on
+        // appear. Also runs after a session swap, so resuming a chat
+        // that ended on the user's side just continues. Guarded by
+        // `pending` so a re-render mid-dispatch doesn't double-fire.
+        .onAppear { autoContinueIfNeeded() }
+        .onChange(of: session.id) { _, _ in autoContinueIfNeeded() }
+    }
+
+    /// Look at the live session's tail: if the last message is a
+    /// user turn (no assistant reply after it) and we're not already
+    /// processing, kick off `submit()` on that text. This is the
+    /// hand-off path from the floating composer.
+    private func autoContinueIfNeeded() {
+        guard !pending, lastError == nil else { return }
+        let msgs = live.messages
+        guard let last = msgs.last, last.role == .user else { return }
+        // Lift the user's text into `draft` so `submit()` (which
+        // reads from `draft`) picks it up, but DON'T re-append the
+        // user turn — `submit()` would otherwise duplicate it.
+        // Easiest way: temporarily set draft, clear it, then run
+        // the dispatch path directly so the user message stays the
+        // one ChatStore already has.
+        dispatchExistingUserTurn(text: last.text)
+    }
+
+    /// Same body as `submit()` minus the user-message append + draft
+    /// reset. Used by `autoContinueIfNeeded` to drive the LLM call
+    /// against a user message that's already in the store.
+    private func dispatchExistingUserTurn(text: String) {
+        lastError = nil
+        pending = true
+        pendingLabel = "thinking…"
+        let prior = Array(live.messages.dropLast())
+        let history: [LLMMessage] = prior.map {
+            LLMMessage(role: $0.role == .assistant ? .assistant : .user,
+                       content: $0.text)
+        }
+        guard let provider = WickerLLM.provider(for: settings) else {
+            pending = false
+            pendingLabel = nil
+            lastError = "No provider configured."
+            return
+        }
+        let config: TradingFloorConfig = settings.workflowConfig()
+        let agent = runtime.makeChatAgent(llm: provider, config: config)
+        let sessionID = session.id
+        Task {
+            var conversation = history
+            do {
+                let reply = try await agent.respond(
+                    to: text,
+                    conversation: &conversation,
+                    onEvent: { event in
+                        Task { @MainActor in handleAgentEvent(event) }
+                    })
+                await MainActor.run {
+                    store.append(ChatMessage(role: .assistant, text: reply),
+                                 to: sessionID)
+                    pending = false
+                    pendingLabel = nil
+                }
+            } catch {
+                await MainActor.run {
+                    pending = false
+                    pendingLabel = nil
+                    lastError = describe(error)
+                }
             }
         }
     }
@@ -469,7 +582,8 @@ private struct ConversationView: View {
                                     message: msg,
                                     glowing: pending
                                         && msg.id == live.messages.last?.id
-                                        && msg.role == .assistant
+                                        && msg.role == .assistant,
+                                    mentionedTickers: mentionedTickers(in: msg)
                                 ).id(msg.id)
                             }
                         }
@@ -703,6 +817,47 @@ private struct ConversationView: View {
         }
         return error.localizedDescription
     }
+
+    // MARK: - Ticker mention detection
+
+    /// Symbols Wicker mentioned in this message that match a ticker we
+    /// know about. Bounded set so we don't try to chart "AI", "OK",
+    /// "USA", etc. — only show chips for things actually in the
+    /// user's sample / custom watchlist.
+    private static let knownSymbols: Set<String> = Set(
+        Ticker.samples.map(\.symbol)
+    )
+
+    /// Cheap regex pass: 1-5 char uppercase words (the standard
+    /// ticker shape). Filter against `knownSymbols`. Deduplicate
+    /// while preserving order so the chip row matches the order of
+    /// first mention.
+    private func mentionedTickers(in message: ChatMessage) -> [String] {
+        guard message.role == .assistant else { return [] }
+        let text = message.text
+        var seen = Set<String>()
+        var ordered: [String] = []
+        // `\$?[A-Z][A-Z.]{0,4}\b` — optional leading $, then 1-5
+        // uppercase letters or dots (BRK.B style). The leading word
+        // boundary catches "AAPL stock" but also matches mid-sentence
+        // tickers without missing them.
+        let pattern = #"\$?[A-Z][A-Z.]{0,4}\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return []
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        regex.enumerateMatches(in: text, range: range) { match, _, _ in
+            guard let m = match,
+                  let r = Range(m.range, in: text) else { return }
+            var sym = String(text[r])
+            if sym.hasPrefix("$") { sym.removeFirst() }
+            if Self.knownSymbols.contains(sym), !seen.contains(sym) {
+                seen.insert(sym)
+                ordered.append(sym)
+            }
+        }
+        return ordered
+    }
 }
 
 // MARK: - Bubbles + typing indicator
@@ -710,6 +865,33 @@ private struct ConversationView: View {
 private struct MessageBubble: View {
     let message: ChatMessage
     var glowing: Bool = false
+    /// Symbols the message mentions that we recognise. Detected by
+    /// `ConversationView` before construction (it has access to the
+    /// known-tickers set) and passed in so the bubble doesn't need
+    /// to know about the watchlist itself.
+    var mentionedTickers: [String] = []
+
+    /// Parse the assistant's body as Markdown so **bold**, *italic*,
+    /// `code`, bullet lists, and links render. User + system messages
+    /// stay as plain text — markdown in a user message rarely makes
+    /// sense and parsing every turn would just cost cycles.
+    ///
+    /// `interpretedSyntax: .full` lets the parser see block-level
+    /// constructs (lists, headers) instead of the inline-only
+    /// default. Failure falls back to the raw string — Foundation's
+    /// parser tolerates a lot, but defensive default beats a blank
+    /// bubble on edge-case input.
+    private var renderedBody: AttributedString {
+        guard message.role == .assistant else {
+            return AttributedString(message.text)
+        }
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .full,
+            failurePolicy: .returnPartiallyParsedIfPossible)
+        return (try? AttributedString(markdown: message.text,
+                                       options: options))
+            ?? AttributedString(message.text)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -721,7 +903,7 @@ private struct MessageBubble: View {
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(.tertiary)
-                Text(message.text)
+                Text(renderedBody)
                     .font(.system(size: 13))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -747,6 +929,20 @@ private struct MessageBubble: View {
                         cornerRadius: 12,
                         intensity: 0.7
                     )
+                if !mentionedTickers.isEmpty,
+                   message.role == .assistant
+                {
+                    // Tiny inline sparklines for tickers Wicker brought
+                    // up. Visual short-hand for "here's what those
+                    // names actually look like" without making the
+                    // user click out.
+                    HStack(spacing: 6) {
+                        ForEach(mentionedTickers, id: \.self) { symbol in
+                            TickerMentionChip(symbol: symbol)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
             }
             if message.role != .user { Spacer(minLength: 60) }
         }
@@ -768,6 +964,46 @@ private struct MessageBubble: View {
 /// Pending indicator with optional inline label ("calling
 /// get_market_data…", etc). Default dots fill in when `label` is nil
 /// or empty — preserves the existing "I'm processing" affordance.
+// MARK: - Ticker mention chip
+
+/// Tiny "the assistant mentioned $XYZ" chip — symbol + a 22-bar
+/// SparklineView from CandleKit, pulled live off `LiveDataStore`.
+/// Tapping the chip should ideally jump to that ticker's detail
+/// (TODO once we have a clean way to plumb the route binding down).
+private struct TickerMentionChip: View {
+    let symbol: String
+    @Environment(LiveDataStore.self) private var store
+
+    var body: some View {
+        // Empty fallback if cache miss — the chip just shows the
+        // symbol without a sparkline until a background fetch lands.
+        let fallback = CandleSeries(symbol: symbol, interval: .d1, candles: [])
+        let series = store.series(for: symbol, interval: .d1, fallback: fallback)
+        let closes = series.candles.suffix(22).map(\.close)
+        let baseline = closes.first
+        let last = closes.last ?? baseline ?? 0
+        let isUp = (last >= (baseline ?? last))
+        let tint: Color = isUp ? .green : .red
+
+        HStack(spacing: 6) {
+            Text(symbol)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+            if !closes.isEmpty {
+                SparklineView(closes: Array(closes),
+                              baseline: baseline,
+                              style: .area,
+                              tint: tint,
+                              lineWidth: 1.2)
+                    .frame(width: 36, height: 14)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(.regularMaterial,
+                    in: Capsule())
+    }
+}
+
 private struct TypingIndicator: View {
     let label: String?
     @State private var phase: Int = 0

@@ -23,7 +23,14 @@ struct WickApp: App {
     @State private var agentRuntime = AgentRuntime()
 
     var body: some Scene {
-        WindowGroup("Wick") {
+        // No window title — the app is already called "Wick" (visible
+        // in the menu bar + Dock), so a redundant "Wick" header inside
+        // the window costs ~30 pt of vertical space for zero info.
+        // `.hiddenTitleBar` collapses the title bar entirely; traffic
+        // lights inset into the content area like Music / Mail / Notes,
+        // and the toolbar (segmented tab picker, etc.) lifts into the
+        // freed strip. This is the macOS 26 modern-app norm.
+        WindowGroup {
             ContentView()
                 .frame(minWidth: 1180, minHeight: 760)
                 .environment(dataStore)
@@ -54,7 +61,7 @@ struct WickApp: App {
                     agentRuntime.reconfigure(with: agentSettings)
                 }
         }
-        .windowStyle(.automatic)
+        .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
 
         // Native macOS Settings scene — reachable via ⌘, and the
