@@ -405,9 +405,11 @@ private struct ConversationView: View {
         }
     }
 
-    /// Tap a chip to one-shot the question — drops it straight into
-    /// `draft` and dispatches the same `submit()` path as the
-    /// composer's Send button.
+    /// Tap a hint to one-shot the question. Rendered as plain
+    /// minimal text — glass-capsule chips here read as too much UI
+    /// chrome ("用力过猛") on an otherwise quiet hero. Dot
+    /// separators give the row visual rhythm without locking it
+    /// into containers.
     private var heroSuggestions: some View {
         let prompts = [
             "How is NVDA doing today?",
@@ -415,20 +417,23 @@ private struct ConversationView: View {
             "Screen S&P 500 for P/E < 15",
             "What's the macro setup for tech?",
         ]
-        return HStack(spacing: 8) {
-            ForEach(prompts, id: \.self) { p in
+        return HStack(spacing: 14) {
+            ForEach(Array(prompts.enumerated()), id: \.offset) { idx, p in
+                if idx > 0 {
+                    Text("·")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
                 Button {
                     draft = p
                     submit()
                 } label: {
                     Text(p)
                         .font(.system(size: 11))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 18))
+                .buttonStyle(.plain)
                 .disabled(!settings.canRun || pending)
             }
         }
@@ -831,16 +836,28 @@ enum WickerLLM {
     static func provider(for settings: AgentSettings) -> (any LLMProvider)? {
         switch settings.providerKind {
         case .server:
-            // SaaS-tier chat (server-side `/chat`) is a future endpoint —
-            // for v1, server mode only powers the workflow agent. Chat
-            // shows the "no provider" hint until that lands.
-            return nil
+            // SaaS tier: WickServer brokers chat via its OpenRouter key
+            // through an OpenAI-compatible `/v1/chat/completions`
+            // endpoint. Wicker just points the existing OAI-compat
+            // client at <serverBaseURL>/v1 — no custom client needed.
+            // Subscription auth (Bearer serverAuthToken) is plumbed
+            // through; empty token = anon (fine for dev).
+            guard let base = URL(string: settings.serverBaseURL) else {
+                return nil
+            }
+            let url = base.appendingPathComponent("v1")
+            let token: String? = settings.serverAuthToken.isEmpty
+                ? nil
+                : settings.serverAuthToken
+            return OpenAICompatibleProvider(baseURL: url, apiKey: token)
+
         case .anthropic:
             guard !settings.currentAPIKey.isEmpty else { return nil }
             let baseURL = URL(string: settings.byoBaseURL)
                 ?? URL(string: ProviderKind.anthropic.defaultBaseURL)!
             return AnthropicProvider(apiKey: settings.currentAPIKey,
                                       baseURL: baseURL)
+
         default:
             // OpenAI-compatible umbrella: 9 hosted clouds + Custom +
             // Ollama. Ollama and self-hosted proxies skip auth.

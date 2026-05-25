@@ -163,87 +163,107 @@ private struct IntelligenceGlow: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius,
                                       style: .continuous)
 
+        // border-beam composites THREE stroke layers, not one. Without
+        // all three the effect collapses into a "rainbow frame" instead
+        // of "the rounded rect is glowing":
+        //
+        //   1. Outer BLOOM — fattest stroke + heavy blur. Bleeds well
+        //      outside the rect's outline; this is the dominant visual
+        //      element on the demo site (bloomOpacity is the highest
+        //      of the three — 0.8 dark / 0.54 light per `sizeThemePresets`).
+        //   2. Inner GLOW — medium stroke + light blur. Carries colour
+        //      onto the inner edge of the rect.
+        //   3. Crisp STROKE — thin stroke + the rotating conic sweep.
+        //      The actual hard edge with the travelling highlight.
+        //
+        // All three reuse the same 9-spike canvas; only stroke width,
+        // blur radius, and opacity differ.
         ZStack {
-            // ── Layer 1: the 9 colour spikes ──
-            // Each radial gradient is anchored at a normalised
-            // (x%, y%) point and fades to transparent across an
-            // ellipse with half-extents (rx, ry). Drawing them
-            // straight into a Canvas (vs. a stack of positioned
-            // `Ellipse`s) avoids layout overhead and respects the
-            // CSS semantics that allow negative positions.
-            GeometryReader { geo in
-                Canvas(opaque: false) { ctx, size in
-                    // Scale spike radii with the bounds so wide / tall
-                    // containers (hero composer, banners) keep the
-                    // whole perimeter painted. `max(1, …)` preserves
-                    // the original styles.ts feel for small targets.
-                    let sx = max(1.0, size.width  / Self.referenceWidth)
-                    let sy = max(1.0, size.height / Self.referenceHeight)
-                    for spike in Self.spikes {
-                        let rx = spike.rx * sx
-                        let ry = spike.ry * sy
-                        let center = CGPoint(x: size.width * spike.x,
-                                             y: size.height * spike.y)
-                        let rect = CGRect(x: center.x - rx,
-                                          y: center.y - ry,
-                                          width: rx * 2,
-                                          height: ry * 2)
-                        let gradient = Gradient(colors: [
-                            spike.color, spike.color.opacity(0.0)
-                        ])
-                        ctx.fill(
-                            Path(ellipseIn: rect),
-                            with: .radialGradient(
-                                gradient,
-                                center: center,
-                                startRadius: 0,
-                                endRadius: max(rx, ry)))
-                    }
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-            }
+            spikesCanvas
+                .mask { shape.stroke(lineWidth: theme.bloomStrokeWidth) }
+                .blur(radius: theme.bloomBlur)
+                .opacity(theme.bloomOpacity * intensity)
 
-            // ── Layer 2: rotating conic sweep ──
-            // Brings the "highlight travelling round the perimeter".
-            // Light theme peaks at 0.55 alpha, dark at 0.75 — straight
-            // from border-beam's per-theme conic colour stops
-            // (styles.ts:929-953). Default blendMode (alpha
-            // compose) — `.multiply` on light mode created a hard
-            // dark slash; CSS does plain alpha layering here.
-            AngularGradient(
-                stops: theme.sweepStops(color: sweepColor),
-                center: .center,
-                angle: .degrees(sweepAngle))
+            spikesCanvas
+                .mask { shape.stroke(lineWidth: theme.innerStrokeWidth) }
+                .blur(radius: theme.innerBlur)
+                .opacity(theme.innerOpacity * intensity)
+
+            ZStack {
+                spikesCanvas
+                AngularGradient(
+                    stops: theme.sweepStops(color: sweepColor),
+                    center: .center,
+                    angle: .degrees(sweepAngle))
+            }
+            .mask { shape.stroke(lineWidth: theme.crispStrokeWidth) }
+            .opacity(theme.strokeOpacity * intensity)
         }
-        // Confine everything to the border ring of the shape — only
-        // a 6-point band hugging the corner-radius outline shows.
-        .mask {
-            shape.stroke(lineWidth: 6.0)
-        }
-        // Per-theme polish — strokeOpacity straight from
-        // `sizeThemePresets.md` (0.48 dark / 0.33 light); saturation
-        // pushed below the styles.ts default for light mode because
-        // saturated RGB primaries on a white surface still read as
-        // harsh at 0.96 — 0.75 lands much closer to the demo site's
-        // softer feel.
-        .opacity(theme.strokeOpacity * intensity)
         .saturation(theme.saturation)
         .hueRotation(.degrees(hueDegrees))
+    }
+
+    /// The 9 radial-gradient ellipses, painted into a Canvas. Reused
+    /// by all three stroke layers (bloom / inner / crisp); only the
+    /// mask + blur + opacity downstream differ.
+    private var spikesCanvas: some View {
+        GeometryReader { geo in
+            Canvas(opaque: false) { ctx, size in
+                // Scale spike radii with the bounds so wide / tall
+                // containers (hero composer, banners) keep the whole
+                // perimeter painted. `max(1, …)` preserves the
+                // original styles.ts feel for small targets.
+                let sx = max(1.0, size.width  / Self.referenceWidth)
+                let sy = max(1.0, size.height / Self.referenceHeight)
+                for spike in Self.spikes {
+                    let rx = spike.rx * sx
+                    let ry = spike.ry * sy
+                    let center = CGPoint(x: size.width * spike.x,
+                                         y: size.height * spike.y)
+                    let rect = CGRect(x: center.x - rx,
+                                      y: center.y - ry,
+                                      width: rx * 2,
+                                      height: ry * 2)
+                    let gradient = Gradient(colors: [
+                        spike.color, spike.color.opacity(0.0)
+                    ])
+                    ctx.fill(
+                        Path(ellipseIn: rect),
+                        with: .radialGradient(
+                            gradient,
+                            center: center,
+                            startRadius: 0,
+                            endRadius: max(rx, ry)))
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
     }
 
     // MARK: - Themes
 
     private struct Theme {
+        // Stroke widths per layer. Bloom is fat → extends well outside
+        // the rect outline once blurred; inner is medium; crisp is a
+        // thin hairline.
+        let bloomStrokeWidth: CGFloat
+        let innerStrokeWidth: CGFloat
+        let crispStrokeWidth: CGFloat
+        // Per-layer blur (only bloom + inner get blurred; crisp stays
+        // pixel-sharp so the edge has a real visible line).
+        let bloomBlur: CGFloat
+        let innerBlur: CGFloat
+        // Opacities verbatim from border-beam's `sizeThemePresets.md`.
+        let bloomOpacity: Double
+        let innerOpacity: Double
         let strokeOpacity: Double
+        // Saturation + sweep peak alpha — tuned per mode.
         let saturation: Double
-        /// Peak alpha at the centre of the rotating sweep arc.
-        /// border-beam ships 0.75 dark, 0.55 light.
         let sweepPeak: Double
 
-        /// Conic-sweep stops matching `styles.ts:929-953`. Scaled
-        /// down from `sweepPeak` proportionally so the per-theme
-        /// difference is just a global scale on alpha, not a
-        /// re-shaping of the curve.
+        /// Conic-sweep stops matching `styles.ts:929-953`. Scaled by
+        /// `sweepPeak` so per-theme tone is a global alpha multiplier,
+        /// not a re-shaping of the falloff curve.
         func sweepStops(color: Color) -> [Gradient.Stop] {
             let p = sweepPeak
             return [
@@ -262,17 +282,42 @@ private struct IntelligenceGlow: View {
         }
     }
 
-    /// Dark mode is what the user signed off on — leave as is. Light
-    /// mode comes way down on every dial that contributed to the
-    /// previously-harsh look.
+    /// Dark = vibrant; light = pre-darkened/desaturated.
+    ///
+    /// **Critical correction (round 5):** all three rings are now
+    /// HAIRLINES. border-beam ships `borderWidth: 1px` — every layer's
+    /// pre-blur ring is one pixel wide. The visible glow is almost
+    /// entirely the BLUR output of those hairlines (the bloom layer's
+    /// `filter: blur(8px)` spreads a 1-px painted line into a ~16-pt
+    /// soft halo). Earlier iterations stroked thick rings (22pt) and
+    /// blurred them lightly — which produced a "rainbow frame" with
+    /// visibly offset inner / outer corner curvatures, exactly the
+    /// "the corners are wrong" the user flagged. Thin strokes mean the
+    /// inner and outer edges of the visible band are effectively the
+    /// same path → corners follow the rounded-rect's curvature
+    /// exactly.
     private static let darkTheme = Theme(
-        strokeOpacity: 1.0,
+        bloomStrokeWidth: 2,       // tiny ring → blur does the work
+        innerStrokeWidth: 1.5,
+        crispStrokeWidth: 1,       // hairline edge line
+        bloomBlur: 12,             // wide halo
+        innerBlur: 4,
+        bloomOpacity: 0.8,
+        innerOpacity: 0.7,
+        strokeOpacity: 0.48,
         saturation: 1.2,
         sweepPeak: 0.75)
     private static let lightTheme = Theme(
-        strokeOpacity: 0.45,       // was 0.75 — bring closer to styles.ts 0.33
-        saturation: 0.70,          // was 0.96 — saturated primaries on white = harsh
-        sweepPeak: 0.40)           // was 0.75 (same as dark) — black sweep needs to be softer
+        bloomStrokeWidth: 2,
+        innerStrokeWidth: 1.5,
+        crispStrokeWidth: 1,
+        bloomBlur: 10,
+        innerBlur: 3.5,
+        bloomOpacity: 0.54,
+        innerOpacity: 0.46,
+        strokeOpacity: 0.33,
+        saturation: 0.70,
+        sweepPeak: 0.40)
 }
 
 // MARK: - Helpers

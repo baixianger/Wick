@@ -25,6 +25,9 @@ struct SettingsView: View {
             ProviderTab(settings: settings)
                 .tabItem { Label("Provider", systemImage: "key.fill") }
 
+            DataSourcesTab(settings: settings)
+                .tabItem { Label("Data", systemImage: "chart.line.uptrend.xyaxis") }
+
             WorkflowTab(settings: settings)
                 .tabItem { Label("Workflow", systemImage: "list.bullet.indent") }
 
@@ -37,6 +40,48 @@ struct SettingsView: View {
             AppearanceTab(settings: settings)
                 .tabItem { Label("Display", systemImage: "paintpalette") }
         }
+    }
+}
+
+// MARK: - Data sources tab
+
+/// BYO data keys: FMP / Finnhub / FRED. Mirrors the decorator chain
+/// WickServer assembles for the server tier — see
+/// `AgentRuntime.makeMarketDataProvider`. Hidden information when
+/// providerKind == .server because the server has its own keys.
+private struct DataSourcesTab: View {
+    @Bindable var settings: AgentSettings
+
+    var body: some View {
+        Form {
+            if settings.providerKind == .server {
+                Section {
+                    Text("In Wick Server mode, FMP / Finnhub / FRED are provided by our backend — you don't need to supply data keys. Switch to a BYO provider on the Provider tab to manage your own data sources.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section("Fundamentals & price (FMP)") {
+                    SecureField("FMP API key:", text: $settings.fmpKey)
+                    Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("News & sentiment (Finnhub)") {
+                    SecureField("Finnhub API key:", text: $settings.finnhubKey)
+                    Text("[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \"no data\".")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Macro backdrop (FRED)") {
+                    SecureField("FRED API key:", text: $settings.fredKey)
+                    Text("[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · Fed funds, 10y, 10y-2y spread, unemployment, CPI YoY. Free; commercial-OK with attribution. Empty = no macro context in reports.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.columns)
+        .padding(20)
+        .frame(width: 560)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

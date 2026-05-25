@@ -19,11 +19,6 @@ final class DeskRunner {
 
     private(set) var phase: Phase = .idle
 
-    /// Shared on-disk cache wrapping the Yahoo provider — conserves the
-    /// user's quota and survives across runs/launches.
-    private let data: any MarketDataProvider =
-        CachingMarketDataProvider(wrapping: WickMarketDataProvider(), ttl: 900)
-
     /// Optional sink for completed reports. The AI tab passes its
     /// `ReportHistoryStore` so every successful run is preserved across
     /// app launches — that's what makes the "history-first" AI tab
@@ -38,7 +33,8 @@ final class DeskRunner {
             runDirect(ticker: ticker,
                        llm: anthropicProvider(settings: settings),
                        config: settings.workflowConfig(),
-                       providerName: settings.providerKind.displayName)
+                       providerName: settings.providerKind.displayName,
+                       data: makeMarketData(settings: settings))
         default:
             // OpenAI-compatible umbrella (OpenAI / OpenRouter / Gemini /
             // DeepSeek / xAI / GLM / Kimi / MiniMax / Qwen / Custom /
@@ -78,6 +74,14 @@ final class DeskRunner {
         return AnthropicProvider(apiKey: settings.currentAPIKey, baseURL: baseURL)
     }
 
+    /// Build the data chain from BYO data keys (FMP / Finnhub / FRED).
+    /// Same shape as `AgentRuntime.buildMarketData` and
+    /// `WickServer.main` — so all three (chat / workflow / server)
+    /// see identical snapshots given the same keys.
+    private func makeMarketData(settings: AgentSettings) -> any MarketDataProvider {
+        AgentRuntime.buildMarketData(from: settings)
+    }
+
     private func runOpenAICompatible(ticker: String, settings: AgentSettings) {
         guard let url = URL(string: settings.byoBaseURL) else {
             phase = .failed("Invalid endpoint URL for \(settings.providerKind.displayName).")
@@ -98,13 +102,15 @@ final class DeskRunner {
         runDirect(ticker: ticker,
                   llm: llm,
                   config: config,
-                  providerName: settings.providerKind.displayName)
+                  providerName: settings.providerKind.displayName,
+                  data: makeMarketData(settings: settings))
     }
 
     private func runDirect(ticker: String,
                             llm: (any LLMProvider)?,
                             config: TradingFloorConfig,
-                            providerName: String)
+                            providerName: String,
+                            data: any MarketDataProvider)
     {
         guard let llm else {
             phase = .failed("Add your \(providerName) API key first.")

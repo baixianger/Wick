@@ -96,6 +96,37 @@ final class AgentSettings {
         }
     }
 
+    // MARK: - Data-source keys (BYO tier only — server tier uses our
+    // env-var keys on the server side)
+    //
+    // Per [[wick-business-model]] the BYO promise is "users supply
+    // ALL data API keys + LLM key". These three drive the same
+    // FMP → Finnhub → FRED decorator chain WickServer assembles
+    // for the server tier; each key is independently optional and
+    // each gets its own Keychain account so a partial setup (e.g.
+    // FRED but no FMP) is fine.
+    var fmpKey: String {
+        didSet {
+            let account = "ai.omika.wick.fmp-key"
+            if fmpKey.isEmpty { Keychain.delete(account: account) }
+            else { Keychain.save(fmpKey, account: account) }
+        }
+    }
+    var finnhubKey: String {
+        didSet {
+            let account = "ai.omika.wick.finnhub-key"
+            if finnhubKey.isEmpty { Keychain.delete(account: account) }
+            else { Keychain.save(finnhubKey, account: account) }
+        }
+    }
+    var fredKey: String {
+        didSet {
+            let account = "ai.omika.wick.fred-key"
+            if fredKey.isEmpty { Keychain.delete(account: account) }
+            else { Keychain.save(fredKey, account: account) }
+        }
+    }
+
     // MARK: - Server / SaaS config (active when providerKind == .server)
 
     var serverBaseURL: String {
@@ -231,6 +262,11 @@ final class AgentSettings {
         } else {
             self.availableModels = []
         }
+
+        // Data-source keys (BYO tier).
+        self.fmpKey     = Keychain.load(account: "ai.omika.wick.fmp-key")     ?? ""
+        self.finnhubKey = Keychain.load(account: "ai.omika.wick.finnhub-key") ?? ""
+        self.fredKey    = Keychain.load(account: "ai.omika.wick.fred-key")    ?? ""
 
         // Server config — independent of provider selection.
         self.serverBaseURL   = ud.string(forKey: "tf.serverBaseURL") ?? "http://localhost:8771"
