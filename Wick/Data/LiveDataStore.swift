@@ -101,49 +101,10 @@ final class LiveDataStore {
 
     // MARK: - Yahoo quirks
 
-    /// Yahoo's two-faced symbol convention:
-    /// • US class-share separator is `-`, not `.` — `BRK.B` ⇢ `BRK-B`.
-    /// • Non-US listings carry an exchange suffix delimited by `.` that
-    ///   must be preserved verbatim — `600519.SS` (Shanghai), `0700.HK`
-    ///   (Hong Kong), `7203.T` (Tokyo), `RIO.L` (London), `BMW.DE`
-    ///   (Frankfurt), and so on. Naively replacing every `.` with `-`
-    ///   (the previous behaviour) silently broke every A-share, H-share,
-    ///   and ADR-equivalent symbol — the request URL came back 404 and
-    ///   the chart fell through to the synthetic GBM fallback forever.
-    ///
-    /// Resolution: only substitute the `.` when the trailing token is
-    /// *not* one of Yahoo's documented exchange suffixes.
-    private func ySymbol(_ id: String) -> String {
-        if let dotIdx = id.lastIndex(of: ".") {
-            let suffix = String(id[id.index(after: dotIdx)...]).uppercased()
-            if Self.exchangeSuffixes.contains(suffix) { return id }
-        }
-        return id.replacingOccurrences(of: ".", with: "-")
-    }
-
-    /// Yahoo exchange suffixes seen in the wild (subset that matters
-    /// most for retail tickers). Expand as needed.
-    private static let exchangeSuffixes: Set<String> = [
-        "SS", "SZ",        // Shanghai / Shenzhen (China A-shares)
-        "HK",              // Hong Kong
-        "T",               // Tokyo
-        "L",               // London
-        "TO", "V",         // Toronto, TSX-V
-        "PA", "DE", "F",   // Paris, Xetra, Frankfurt
-        "AS", "BR", "MI",  // Amsterdam, Brussels, Milan
-        "MC", "LS",        // Madrid, Lisbon
-        "ST", "HE", "OL",  // Stockholm, Helsinki, Oslo
-        "CO",              // Copenhagen
-        "VI", "WA", "PR",  // Vienna, Warsaw, Prague
-        "BK", "JK",        // Bangkok, Jakarta
-        "TW", "TWO",       // Taipei
-        "SI",              // Singapore
-        "KS", "KQ",        // KOSPI / KOSDAQ
-        "AX",              // Sydney
-        "NS", "BO",        // NSE / BSE India
-        "SA", "MX",        // São Paulo, Mexico
-        "JO",              // Johannesburg
-    ]
+    /// Map symbol via the shared `YahooSymbol` helper (used by both
+    /// this store and `WickMarketDataProvider` so chart streaming and
+    /// agent snapshots agree on the URL they send Yahoo).
+    private func ySymbol(_ id: String) -> String { YahooSymbol.map(id) }
 
     private func mapInterval(_ bi: BarInterval) -> Interval? {
         switch bi {

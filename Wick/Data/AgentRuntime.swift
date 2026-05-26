@@ -68,10 +68,19 @@ final class AgentRuntime {
     /// outermost layer.
     static func buildMarketData(from settings: AgentSettings) -> any MarketDataProvider {
         // Base layer: FMP if key set, otherwise Yahoo (no-key
-        // baseline).
-        var data: any MarketDataProvider = settings.fmpKey.isEmpty
-            ? WickMarketDataProvider()
-            : FMPMarketDataProvider(apiKey: settings.fmpKey)
+        // baseline). FMP is US-centric — tickers with an exchange
+        // suffix (`.HK`, `.SS`, `.T`, etc.) are routed to Yahoo
+        // even when an FMP key is configured, since FMP returns
+        // empty data for them and feeding the agent an empty
+        // snapshot makes it hallucinate.
+        var data: any MarketDataProvider
+        if settings.fmpKey.isEmpty {
+            data = WickMarketDataProvider()
+        } else {
+            data = InternationalRouter(
+                us: FMPMarketDataProvider(apiKey: settings.fmpKey),
+                intl: WickMarketDataProvider())
+        }
         // Finnhub news decorator.
         if !settings.finnhubKey.isEmpty {
             data = FinnhubNewsProvider(
@@ -113,5 +122,33 @@ final class AgentRuntime {
             .appendingPathComponent("Skills", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+}
+
+// MARK: - International router
+
+/// Dispatches per-snapshot between a US provider (FMP) and an
+/// international one (Yahoo via `WickMarketDataProvider`). FMP only
+/// covers US-listed equities, so a HK / Shanghai / Tokyo / LSE
+/// ticker fetched via FMP comes back empty — feeding the agent an
+/// empty snapshot produces fabricated reports. Anything with a
+/// recognized Yahoo exchange suffix goes straight to the intl
+/// provider; everything else (plain symbols and `BRK.B`-style class
+/// shares) goes to FMP.
+struct InternationalRouter: MarketDataProvider {
+    let us: any MarketDataProvider
+    let intl: any MarketDataProvider
+
+    func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot {
+        if hasExchangeSuffix(symbol) {
+            return try await intl.snapshot(symbol: symbol, asOf: asOf)
+        }
+        return try await us.snapshot(symbol: symbol, asOf: asOf)
+    }
+
+    private func hasExchangeSuffix(_ id: String) -> Bool {
+        guard let dotIdx = id.lastIndex(of: ".") else { return false }
+        let suffix = String(id[id.index(after: dotIdx)...]).uppercased()
+        return YahooSymbol.exchangeSuffixes.contains(suffix)
     }
 }

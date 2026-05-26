@@ -17,7 +17,22 @@ final class DeskRunner {
         case failed(String)
     }
 
-    private(set) var phase: Phase = .idle
+    private(set) var phase: Phase = .idle {
+        didSet {
+            // Persist the last-seen stage label so the workflow
+            // stepper can still show which node failed after the
+            // runner transitions to `.failed` (which drops the stage
+            // from its associated value).
+            if case .running(let stage) = phase {
+                lastStage = stage
+            }
+        }
+    }
+
+    /// Last stage string observed in a `.running` transition. Persists
+    /// across the `.running → .failed` flip so the stepper can mark the
+    /// failed phase. Reset to nil only on `reset()`.
+    private(set) var lastStage: String?
 
     /// Optional sink for completed reports. The AI tab passes its
     /// `ReportHistoryStore` so every successful run is preserved across
@@ -131,5 +146,8 @@ final class DeskRunner {
         }
     }
 
-    func reset() { phase = .idle }
+    func reset() {
+        phase = .idle
+        lastStage = nil
+    }
 }

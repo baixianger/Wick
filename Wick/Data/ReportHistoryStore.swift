@@ -20,9 +20,38 @@ final class ReportHistoryStore {
     /// wholesale on save / load — small data, simple invariants.
     private(set) var reports: [Report]
 
+    /// Per-symbol `DeskRunner` cache. Kept on the history store so a
+    /// run started on AAPL survives the user navigating to NVDA and
+    /// back — the AITab view is `.id(ticker.id)`-rebuilt, so a runner
+    /// stored as `@State` inside the view would be discarded mid-run
+    /// and its `onCompleted` callback would lose the history binding.
+    /// Lazily created on first access per symbol.
+    private var runners: [String: DeskRunner] = [:]
+
     init() {
         let loaded = Self.loadFromDisk()
         self.reports = loaded.sorted { $0.generatedAt > $1.generatedAt }
+    }
+
+    // MARK: - Runner factory
+
+    /// Resolve (or create) the desk runner for `symbol`. Idempotent —
+    /// subsequent calls return the same instance, so SwiftUI's
+    /// `@Observable` tracking on the runner's `phase` continues to
+    /// drive view updates across AITab remounts.
+    ///
+    /// The returned runner's `onCompleted` is wired to `save(_:)` so
+    /// completions land in history even when no AITab is mounted for
+    /// that ticker at the moment the run finishes.
+    func runner(for symbol: String) -> DeskRunner {
+        let key = symbol.uppercased()
+        if let existing = runners[key] { return existing }
+        let runner = DeskRunner()
+        runner.onCompleted = { [weak self] report in
+            self?.save(report)
+        }
+        runners[key] = runner
+        return runner
     }
 
     // MARK: - Queries

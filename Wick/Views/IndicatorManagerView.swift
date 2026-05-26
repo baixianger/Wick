@@ -2,53 +2,66 @@ import SwiftUI
 import CoreCharts
 import IndicatorKit
 
-// MARK: - Indicator manager (used as sheet AND inside Settings)
+// MARK: - Indicator manager (sheet on the chart's "Indicators" button)
 
-/// Redesigned to match the Wick design language — Liquid Glass cards,
-/// section-grouped list, prominent add-from-catalogue popover, and
-/// inline-tag parameter editors instead of the cramped per-row
-/// Stepper/Slider stack the old sheet shipped with.
+/// Cleaner pass on the indicator config sheet. Reads bottom-up like an
+/// Apple system pane:
 ///
-/// The view is presentation-agnostic: the chart's "Indicators" button
-/// pops it as a sheet, and `SettingsView`'s new "Indicators" tab
-/// embeds it inline. Both surfaces edit the same shared
-/// `ChartIndicatorConfig`, so what you change in one shows up in the
-/// other immediately.
+///   ┌── Indicators ──────────────────────────  [Add]  [×] ┐
+///   │  2 active · drag to reorder                          │
+///   ├──────────────────────────────────────────────────────┤
+///   │  On price                                            │
+///   │   ▸  ● SMA(20)              period 20      🗑        │
+///   │   ▾  ● EMA(50)              period 50      🗑        │
+///   │        [period   −  50  +]                           │
+///   │                                                      │
+///   │  Below the chart                                     │
+///   │   ▸  ● MACD(12,26,9)                       🗑        │
+///   └──────────────────────────────────────────────────────┘
+///
+/// Visual changes vs. the prior design:
+/// - All sizing via system semantic fonts (Dynamic Type flows through).
+/// - Rows are flat surfaces, not nested glass cards. The drill-in
+///   chevron expands inline parameter editors only when the user
+///   asks for them — avoids the previous "every param pill always
+///   on screen" wall of micro-typography.
+/// - One label per row (`displayName(args)`) instead of name + raw
+///   identifier double-labeling.
+/// - Bigger tap targets on +/− (28pt) and trash (28pt).
 struct IndicatorManagerView: View {
 
     @Bindable var config: ChartIndicatorConfig
 
-    /// `true` when hosted as a modal sheet — adds a "Done" close
-    /// button. `false` when embedded inside Settings (no Done — close
-    /// the window red dot dismisses).
+    /// True when hosted as a modal sheet — renders a close button. The
+    /// chart-header "Indicators" button always presents as a sheet
+    /// (the embedded-in-Settings surface was removed).
     var presentedAsSheet: Bool = true
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @State private var showAddPopover: Bool = false
+    @State private var expandedRows: Set<UUID> = []
 
-    /// Group indicators by where they render so the user can reason
-    /// about pane real-estate at a glance. Main-pane (price overlay)
-    /// vs sub-pane (separate row below).
+    /// Group indicators by where they render so pane real-estate reads
+    /// at a glance.
     private var groupedInstances: [(label: String, items: [IndicatorInstance])] {
-        let main = config.instances.filter { $0.paneID == .main }
+        let main   = config.instances.filter { $0.paneID == .main }
         let volume = config.instances.filter {
             if case .volume = $0.paneID { return true } else { return false }
         }
-        let subs = config.instances.filter {
+        let subs   = config.instances.filter {
             if case .sub = $0.paneID { return true } else { return false }
         }
         var out: [(String, [IndicatorInstance])] = []
-        if !main.isEmpty   { out.append(("ON PRICE",       main)) }
-        if !volume.isEmpty { out.append(("ON VOLUME",      volume)) }
-        if !subs.isEmpty   { out.append(("BELOW THE CHART", subs)) }
+        if !main.isEmpty   { out.append(("On price", main)) }
+        if !volume.isEmpty { out.append(("On volume", volume)) }
+        if !subs.isEmpty   { out.append(("Below the chart", subs)) }
         return out
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.4)
+            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     if config.instances.isEmpty {
@@ -61,22 +74,22 @@ struct IndicatorManagerView: View {
                     }
                 }
                 .padding(.horizontal, 22)
-                .padding(.vertical, 18)
+                .padding(.vertical, 20)
             }
         }
-        .frame(minWidth: 520, minHeight: 560)
-        .background(appleBackground(for: colorScheme))
+        .frame(minWidth: 520, minHeight: 540)
+        .background(.regularMaterial)
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .firstTextBaseline, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Indicators")
-                    .font(.system(size: 20, weight: .bold))
-                Text("\(config.instances.count) active  ·  drag to reorder")
-                    .font(.system(size: 11))
+                    .font(.title2.weight(.semibold))
+                Text(headerSubtitle)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -84,58 +97,80 @@ struct IndicatorManagerView: View {
             if presentedAsSheet {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
+                        .font(.title3)
+                        .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
+                .accessibilityLabel("Close")
+                .accessibilityIdentifier("IndicatorManagerClose")
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, presentedAsSheet ? 18 : 4)
+        .padding(.top, presentedAsSheet ? 18 : 6)
         .padding(.bottom, 14)
     }
 
-    // MARK: - Add catalogue popover
+    private var headerSubtitle: String {
+        let n = config.instances.count
+        switch n {
+        case 0: return "Nothing pinned yet"
+        case 1: return "1 active"
+        default: return "\(n) active"
+        }
+    }
 
-    /// Replaces the toolbar Menu with a richer popover — categories
-    /// rendered as Liquid Glass cards, descriptions visible so the
-    /// user picks by intent not just by name.
+    // MARK: - Add catalogue
+
     private var addButton: some View {
         Button {
             showAddPopover.toggle()
         } label: {
             Label("Add", systemImage: "plus")
                 .labelStyle(.titleAndIcon)
+                .font(.callout.weight(.semibold))
         }
-        .buttonStyle(LiquidGlassButtonStyle(prominent: true))
+        .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
         .popover(isPresented: $showAddPopover, arrowEdge: .bottom) {
             addCatalogue
-                .frame(width: 360, height: 420)
+                .frame(width: 380, height: 440)
         }
+        .accessibilityIdentifier("IndicatorAddButton")
     }
 
     private var addCatalogue: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                ForEach(IndicatorCategory.allCases, id: \.self) { cat in
-                    let items = IndicatorRegistry.shared.indicators(category: cat)
-                    if !items.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(cat.label.uppercased())
-                                .font(.system(size: 10, weight: .heavy))
-                                .tracking(0.8)
-                                .foregroundStyle(.tertiary)
-                            VStack(spacing: 6) {
-                                ForEach(items, id: \.identifier) { meta in
-                                    catalogueRow(meta)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Indicator catalogue")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(IndicatorCategory.allCases, id: \.self) { cat in
+                        let items = IndicatorRegistry.shared.indicators(category: cat)
+                        if !items.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(cat.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                VStack(spacing: 4) {
+                                    ForEach(items, id: \.identifier) { meta in
+                                        catalogueRow(meta)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                .padding(18)
             }
-            .padding(18)
         }
     }
 
@@ -144,23 +179,18 @@ struct IndicatorManagerView: View {
             config.add(meta.identifier)
             showAddPopover = false
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 13))
                     .foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(meta.displayName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text(meta.identifier)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
+                    .symbolRenderingMode(.hierarchical)
+                Text(meta.displayName)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.primary)
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .background(
@@ -174,157 +204,245 @@ struct IndicatorManagerView: View {
     private func section(label: String,
                           items: [IndicatorInstance]) -> some View
     {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(label)
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(0.8)
-                .foregroundStyle(.tertiary)
-            VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(label)
+                    .font(.headline)
+                Text("\(items.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
+            .padding(.bottom, 2)
+            VStack(spacing: 1) {
                 ForEach(items) { inst in
-                    IndicatorCard(instance: inst, config: config)
+                    IndicatorRow(
+                        instance: inst,
+                        config: config,
+                        expanded: Binding(
+                            get: { expandedRows.contains(inst.id) },
+                            set: { isOn in
+                                if isOn { expandedRows.insert(inst.id) }
+                                else    { expandedRows.remove(inst.id) }
+                            }))
                 }
             }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.secondary.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
+            )
         }
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(alignment: .center, spacing: 14) {
+        VStack(spacing: 14) {
             Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 38))
+                .font(.system(size: 44))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.tertiary)
+                .padding(.bottom, 4)
             Text("No indicators yet")
-                .font(.system(size: 15, weight: .semibold))
-            Text("Add SMA, EMA, MACD, RSI, Bollinger Bands, KDJ — anything from the indicator catalogue. Per-chart settings are global, so what you set up here applies to every ticker.")
-                .font(.system(size: 12))
+                .font(.title3.weight(.semibold))
+            Text("Add an indicator from the catalogue — SMA, EMA, MACD, RSI, Bollinger Bands, KDJ, and more. Your selection applies to every ticker's chart.")
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 380)
+                .frame(maxWidth: 400)
             Button { showAddPopover = true } label: {
                 Label("Pick from catalogue", systemImage: "plus")
             }
-            .buttonStyle(LiquidGlassButtonStyle(prominent: true))
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 36)
     }
 }
 
-// MARK: - Indicator card
+// MARK: - Row
 
-/// One Liquid Glass card per indicator instance. Top row = identity
-/// (color chip + name + delete). Bottom row = parameter tags rendered
-/// as inline pills.
-private struct IndicatorCard: View {
+/// One indicator entry. Collapsed: drag chevron, color disc, name +
+/// param summary, trash. Expanded: inline parameter editors below.
+private struct IndicatorRow: View {
 
     let instance: IndicatorInstance
     @Bindable var config: ChartIndicatorConfig
+    @Binding var expanded: Bool
+
     @Environment(\.chartTheme) private var theme
 
     private var meta: AnyIndicatorMeta? {
         IndicatorRegistry.shared.find(instance.identifier)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                colorChip
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(meta?.displayName ?? instance.identifier)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text(instance.identifier)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer()
-                Button {
-                    config.remove(id: instance.id)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Remove indicator")
-            }
-            if let meta, !meta.parameters.isEmpty {
-                paramTags(meta: meta)
-            }
-        }
-        .padding(14)
-        .liquidGlass(cornerRadius: 12,
-                     tint: theme.indicatorColor(instance.paletteSlot)
-                            .opacity(0.05))
+    /// "SMA(20)" / "MACD(12,26,9)" — one-line view of the instance's
+    /// current param values. Identifier is hidden — the display name
+    /// is enough.
+    private var headerTitle: String {
+        let base = meta?.displayName ?? instance.identifier
+        let summary = paramSummary
+        return summary.isEmpty ? base : "\(base) (\(summary))"
     }
 
-    /// Cycles through the eight indicator palette slots. The popover
-    /// shows all eight as a row so the user picks visually rather
-    /// than clicking-to-discover.
+    private var paramSummary: String {
+        guard let meta else { return "" }
+        return meta.parameters.compactMap { p -> String? in
+            switch p {
+            case .int(let ip):
+                let v: Int
+                if case .int(let stored) = instance.arguments[ip.name] {
+                    v = stored
+                } else { v = ip.default }
+                return "\(v)"
+            case .double(let dp):
+                let v: Double
+                if case .double(let stored) = instance.arguments[dp.name] {
+                    v = stored
+                } else if case .int(let stored) = instance.arguments[dp.name] {
+                    v = Double(stored)
+                } else { v = dp.default }
+                return String(format: "%.1f", v)
+            case .bool, .color:
+                return nil
+            }
+        }.joined(separator: ", ")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            row
+            if expanded, let meta, !meta.parameters.isEmpty {
+                Divider().opacity(0.4)
+                parameterEditors(meta: meta)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: expanded)
+    }
+
+    @ViewBuilder
+    private var row: some View {
+        HStack(spacing: 12) {
+            Button {
+                expanded.toggle()
+            } label: {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 14, height: 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(meta?.parameters.isEmpty ?? true)
+            .opacity((meta?.parameters.isEmpty ?? true) ? 0.0 : 1.0)
+            .accessibilityHidden(true)
+
+            colorChip
+
+            Text(headerTitle)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .onTapGesture { expanded.toggle() }
+
+            Spacer()
+
+            Button {
+                config.remove(id: instance.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Remove indicator")
+            .accessibilityLabel("Remove indicator")
+            .accessibilityIdentifier("IndicatorRemove-\(instance.id)")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: Color picker
+
     @State private var showColorPopover: Bool = false
+
     private var colorChip: some View {
         Button {
             showColorPopover.toggle()
         } label: {
             Circle()
                 .fill(theme.indicatorColor(instance.paletteSlot))
-                .frame(width: 18, height: 18)
+                .frame(width: 14, height: 14)
                 .overlay(
                     Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(0.12),
+                                       lineWidth: 0.8)
                 )
-                .shadow(color: theme.indicatorColor(instance.paletteSlot)
-                                .opacity(0.5),
-                        radius: 4)
         }
         .buttonStyle(.plain)
+        .help("Change colour")
+        .accessibilityLabel("Indicator colour")
         .popover(isPresented: $showColorPopover, arrowEdge: .bottom) {
-            HStack(spacing: 8) {
-                ForEach(0..<theme.indicatorPalette.count, id: \.self) { slot in
-                    Button {
-                        config.updatePaletteSlot(id: instance.id, slot: slot)
-                        showColorPopover = false
-                    } label: {
-                        Circle()
-                            .fill(theme.indicatorColor(slot))
-                            .frame(width: 22, height: 22)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(
-                                        slot == instance.paletteSlot
-                                        ? Color.white.opacity(0.9)
-                                        : Color.white.opacity(0.18),
-                                        lineWidth: slot == instance.paletteSlot
-                                                   ? 2 : 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(12)
+            colorPalette
+                .padding(14)
         }
     }
 
-    // MARK: Parameter tags
+    private var colorPalette: some View {
+        HStack(spacing: 10) {
+            ForEach(0..<theme.indicatorPalette.count, id: \.self) { slot in
+                Button {
+                    config.updatePaletteSlot(id: instance.id, slot: slot)
+                    showColorPopover = false
+                } label: {
+                    Circle()
+                        .fill(theme.indicatorColor(slot))
+                        .frame(width: 22, height: 22)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(
+                                    slot == instance.paletteSlot
+                                    ? Color.primary
+                                    : Color.primary.opacity(0.12),
+                                    lineWidth: slot == instance.paletteSlot ? 2 : 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Colour slot \(slot + 1)")
+            }
+        }
+    }
 
-    private func paramTags(meta: AnyIndicatorMeta) -> some View {
-        FlowLayout(spacing: 8) {
+    // MARK: Parameter editors
+
+    @ViewBuilder
+    private func parameterEditors(meta: AnyIndicatorMeta) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(meta.parameters, id: \.name) { p in
-                parameterTag(for: p)
+                parameterRow(for: p)
             }
         }
     }
 
     @ViewBuilder
-    private func parameterTag(for p: IndicatorParameter) -> some View {
+    private func parameterRow(for p: IndicatorParameter) -> some View {
         switch p {
         case .int(let ip):
-            ParamTag(
+            ParameterStepper(
                 label: ip.name.capitalized,
                 value: "\(currentInt(name: ip.name, fallback: ip.default))",
                 onMinus: {
@@ -336,36 +454,33 @@ private struct IndicatorCard: View {
                     let v = currentInt(name: ip.name, fallback: ip.default)
                     setInt(name: ip.name,
                            value: min(ip.max, v + step(ip.min, ip.max)))
-                }
-            )
+                },
+                minDisabled: currentInt(name: ip.name, fallback: ip.default) <= ip.min,
+                maxDisabled: currentInt(name: ip.name, fallback: ip.default) >= ip.max)
 
         case .double(let dp):
-            ParamTag(
+            ParameterStepper(
                 label: dp.name.capitalized,
                 value: String(format: "%.2f",
-                              currentDouble(name: dp.name,
-                                             fallback: dp.default)),
+                              currentDouble(name: dp.name, fallback: dp.default)),
                 onMinus: {
-                    let v = currentDouble(name: dp.name,
-                                           fallback: dp.default)
-                    setDouble(name: dp.name,
-                              value: max(dp.min, v - 0.1))
+                    let v = currentDouble(name: dp.name, fallback: dp.default)
+                    setDouble(name: dp.name, value: max(dp.min, v - 0.1))
                 },
                 onPlus: {
-                    let v = currentDouble(name: dp.name,
-                                           fallback: dp.default)
-                    setDouble(name: dp.name,
-                              value: min(dp.max, v + 0.1))
-                }
-            )
+                    let v = currentDouble(name: dp.name, fallback: dp.default)
+                    setDouble(name: dp.name, value: min(dp.max, v + 0.1))
+                },
+                minDisabled: currentDouble(name: dp.name, fallback: dp.default) <= dp.min,
+                maxDisabled: currentDouble(name: dp.name, fallback: dp.default) >= dp.max)
 
         case .bool, .color:
             EmptyView()
         }
     }
 
-    // Use a step proportional to the int range so big-ranged
-    // parameters (e.g. 1...500 period) aren't tediously +1/-1.
+    /// Bigger step for parameters with wider ranges so the user isn't
+    /// stuck +1/-1 through 500.
     private func step(_ lo: Int, _ hi: Int) -> Int {
         let span = hi - lo
         if span <= 30   { return 1 }
@@ -391,114 +506,59 @@ private struct IndicatorCard: View {
     }
 }
 
-// MARK: - Param tag (label · value · ± stepper)
+// MARK: - Parameter stepper row
 
-private struct ParamTag: View {
+/// Clean label + value + −/+ row. Symbols are full-sized control
+/// targets (28pt), value reads in monospaced digits for stability.
+private struct ParameterStepper: View {
     let label: String
     let value: String
     let onMinus: () -> Void
     let onPlus:  () -> Void
+    var minDisabled: Bool = false
+    var maxDisabled: Bool = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(0.5)
-                .foregroundStyle(.tertiary)
-            Text(value)
-                .font(.system(size: 12, weight: .semibold,
-                              design: .monospaced))
-                .foregroundStyle(.primary)
-            HStack(spacing: 1) {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 80, alignment: .leading)
+            Spacer(minLength: 0)
+            HStack(spacing: 0) {
                 Button(action: onMinus) {
                     Image(systemName: "minus")
-                        .font(.system(size: 8, weight: .semibold))
-                        .frame(width: 18, height: 18)
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 28, height: 26)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(minDisabled)
+                .accessibilityLabel("Decrease \(label)")
+                Text(value)
+                    .font(.callout.weight(.medium))
+                    .monospacedDigit()
+                    .frame(minWidth: 56)
                 Button(action: onPlus) {
                     Image(systemName: "plus")
-                        .font(.system(size: 8, weight: .semibold))
-                        .frame(width: 18, height: 18)
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 28, height: 26)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(maxDisabled)
+                .accessibilityLabel("Increase \(label)")
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.primary)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.secondary.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 0.5)
+            )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule().fill(Color.secondary.opacity(0.10))
-        )
-        .overlay(
-            Capsule().strokeBorder(Color.secondary.opacity(0.18),
-                                   lineWidth: 0.5)
-        )
-    }
-}
-
-// MARK: - Flow layout (wraps tags to next line)
-
-/// Minimal flow layout — left-to-right, top-to-bottom, wraps when
-/// the next item won't fit on the current row. Avoids pulling in
-/// `swift-algorithms` / a third-party flow layout package for one
-/// caller.
-private struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize,
-                      subviews: Subviews,
-                      cache: inout Void) -> CGSize
-    {
-        let width = proposal.width ?? .infinity
-        let rows = rowsFor(subviews: subviews, width: width)
-        let height = rows.reduce(0) { $0 + $1.height + spacing } - spacing
-        return CGSize(width: width, height: max(0, height))
-    }
-
-    func placeSubviews(in bounds: CGRect,
-                       proposal: ProposedViewSize,
-                       subviews: Subviews,
-                       cache: inout Void)
-    {
-        let width = bounds.width
-        let rows = rowsFor(subviews: subviews, width: width)
-        var y = bounds.minY
-        for row in rows {
-            var x = bounds.minX
-            for idx in row.indices {
-                let sv = subviews[idx]
-                let size = sv.sizeThatFits(.unspecified)
-                sv.place(at: CGPoint(x: x, y: y), proposal: .unspecified)
-                x += size.width + spacing
-            }
-            y += row.height + spacing
-        }
-    }
-
-    private struct Row {
-        var indices: [Int] = []
-        var height: CGFloat = 0
-    }
-
-    private func rowsFor(subviews: Subviews, width: CGFloat) -> [Row] {
-        var rows: [Row] = [Row()]
-        var x: CGFloat = 0
-        for (i, sv) in subviews.enumerated() {
-            let size = sv.sizeThatFits(.unspecified)
-            let needed = x == 0 ? size.width : x + spacing + size.width
-            if needed > width, !rows[rows.count - 1].indices.isEmpty {
-                rows.append(Row())
-                x = 0
-            }
-            rows[rows.count - 1].indices.append(i)
-            rows[rows.count - 1].height = max(rows[rows.count - 1].height,
-                                              size.height)
-            x = (x == 0) ? size.width : x + spacing + size.width
-        }
-        return rows
     }
 }
 

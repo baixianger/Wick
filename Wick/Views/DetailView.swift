@@ -42,6 +42,17 @@ struct DetailView: View {
     /// with `.hiddenTitleBar`, an empty toolbar collapses the
     /// chrome strip completely, recovering ~38pt of vertical space.
     @State private var indicatorSheetShown: Bool = false
+    /// AI-tab analysis-history inspector state. Lifted up here (not
+    /// inside `AITab`) because macOS `.inspector(isPresented:)` is a
+    /// scene-level side column — when nested inside the outer
+    /// ScrollView it broke vertical sizing of long reports. Attaching
+    /// to the outer VStack (outside the ScrollView) is the only place
+    /// where the inspector lays out correctly.
+    @State private var historyOpen: Bool = false
+    /// Selected historical report (by `generatedAt`). Lives at this
+    /// level so the inspector content and `AITab`'s active-report
+    /// rendering share one source of truth.
+    @State private var historyExpanded: Date? = nil
 
     // Long-lived chart state for the Chart tab. `.id(ticker.id)` higher
     // up forces a fresh DetailView when the watchlist selection changes.
@@ -96,7 +107,10 @@ struct DetailView: View {
                         case .news:
                             NewsTab(ticker: ticker)
                         case .ai:
-                            AITab(ticker: ticker, range: range)
+                            AITab(ticker: ticker,
+                                  range: range,
+                                  expanded: $historyExpanded,
+                                  historyOpen: $historyOpen)
                         }
                     }
                     .padding(.bottom, 24)
@@ -109,59 +123,28 @@ struct DetailView: View {
         .sheet(isPresented: $indicatorSheetShown) {
             IndicatorManagerView(config: indicators)
         }
-        .onAppear {
-            ChartTabState.configure(coordinator: coordinator,
-                                     engine: engine,
-                                     ticker: ticker,
-                                     scale: chartScale,
-                                     store: store,
-                                     indicators: indicators,
-                                     holdings: holdings)
-            ChartTabState.configure(coordinator: coordinator2,
-                                     engine: engine2,
-                                     ticker: ticker,
-                                     scale: chartScale2,
-                                     store: store,
-                                     indicators: indicators,
-                                     holdings: holdings)
+        // Scene-level right column. Renders only when the user is on
+        // the AI tab — switching away auto-closes it so the column
+        // doesn't reappear empty on Overview/Chart/News.
+        .inspector(isPresented: $historyOpen) {
+            AnalysisHistoryInspector(symbol: ticker.symbol,
+                                     expanded: $historyExpanded,
+                                     historyOpen: $historyOpen)
         }
-        .onChange(of: indicators.instances) { _, _ in
-            ChartTabState.syncIndicators(coordinator: coordinator, config: indicators)
-            ChartTabState.syncIndicators(coordinator: coordinator2, config: indicators)
-            engine.invalidateAll()
-            engine2.invalidateAll()
+        .onChange(of: tab) { _, new in
+            if new != .ai { historyOpen = false }
         }
-        .onChange(of: chartScale) { _, new in
-            ChartTabState.apply(coordinator: coordinator, engine: engine,
-                                ticker: ticker, scale: new, store: store,
-                                holdings: holdings)
-        }
-        .onChange(of: chartScale2) { _, new in
-            ChartTabState.apply(coordinator: coordinator2, engine: engine2,
-                                ticker: ticker, scale: new, store: store,
-                                holdings: holdings)
-        }
-        // Re-attach when Yahoo data lands for either pane's interval.
-        .onChange(of: store.source(for: ticker.symbol,
-                                    interval: chartScale.underlyingInterval)) { _, _ in
-            ChartTabState.apply(coordinator: coordinator, engine: engine,
-                                ticker: ticker, scale: chartScale, store: store,
-                                holdings: holdings)
-        }
-        .onChange(of: store.source(for: ticker.symbol,
-                                    interval: chartScale2.underlyingInterval)) { _, _ in
-            ChartTabState.apply(coordinator: coordinator2, engine: engine2,
-                                ticker: ticker, scale: chartScale2, store: store,
-                                holdings: holdings)
-        }
-        .onChange(of: holdings.holdings) { _, _ in
-            ChartTabState.syncTransactionMarkers(coordinator: coordinator,
-                                                  symbol: ticker.symbol,
-                                                  holdings: holdings)
-            ChartTabState.syncTransactionMarkers(coordinator: coordinator2,
-                                                  symbol: ticker.symbol,
-                                                  holdings: holdings)
-        }
+        .modifier(ChartStateBindings(
+            ticker: ticker,
+            indicators: indicators,
+            holdings: holdings,
+            coordinator: coordinator,
+            coordinator2: coordinator2,
+            engine: engine,
+            engine2: engine2,
+            chartScale: chartScale,
+            chartScale2: chartScale2,
+            store: store))
     }
 
     // MARK: - Header bits
@@ -205,6 +188,8 @@ struct DetailView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Indicators")
+                    .accessibilityLabel("Indicators")
+                    .accessibilityIdentifier("ChartIndicatorsButton")
                 }
                 Picker("Tab", selection: $tab) {
                     ForEach(DetailTab.allCases) { item in
@@ -298,6 +283,79 @@ struct DetailView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .glassEffect(.regular.tint(accent.opacity(0.18)), in: .capsule)
+    }
+}
+
+// MARK: - Chart state bindings
+
+/// Splits the per-chart `onAppear`/`onChange` cluster off `DetailView.body`
+/// so the type-checker doesn't choke on the modifier chain.
+private struct ChartStateBindings: ViewModifier {
+    let ticker: Ticker
+    let indicators: ChartIndicatorConfig
+    let holdings: HoldingsStore
+    let coordinator: ChartCoordinator
+    let coordinator2: ChartCoordinator
+    let engine: IndicatorEngine
+    let engine2: IndicatorEngine
+    let chartScale: ChartScale
+    let chartScale2: ChartScale
+    let store: LiveDataStore
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                ChartTabState.configure(coordinator: coordinator,
+                                         engine: engine,
+                                         ticker: ticker,
+                                         scale: chartScale,
+                                         store: store,
+                                         indicators: indicators,
+                                         holdings: holdings)
+                ChartTabState.configure(coordinator: coordinator2,
+                                         engine: engine2,
+                                         ticker: ticker,
+                                         scale: chartScale2,
+                                         store: store,
+                                         indicators: indicators,
+                                         holdings: holdings)
+            }
+            .onChange(of: indicators.instances) { _, _ in
+                ChartTabState.syncIndicators(coordinator: coordinator, config: indicators)
+                ChartTabState.syncIndicators(coordinator: coordinator2, config: indicators)
+                engine.invalidateAll()
+                engine2.invalidateAll()
+            }
+            .onChange(of: chartScale) { _, new in
+                ChartTabState.apply(coordinator: coordinator, engine: engine,
+                                    ticker: ticker, scale: new, store: store,
+                                    holdings: holdings)
+            }
+            .onChange(of: chartScale2) { _, new in
+                ChartTabState.apply(coordinator: coordinator2, engine: engine2,
+                                    ticker: ticker, scale: new, store: store,
+                                    holdings: holdings)
+            }
+            .onChange(of: store.source(for: ticker.symbol,
+                                        interval: chartScale.underlyingInterval)) { _, _ in
+                ChartTabState.apply(coordinator: coordinator, engine: engine,
+                                    ticker: ticker, scale: chartScale, store: store,
+                                    holdings: holdings)
+            }
+            .onChange(of: store.source(for: ticker.symbol,
+                                        interval: chartScale2.underlyingInterval)) { _, _ in
+                ChartTabState.apply(coordinator: coordinator2, engine: engine2,
+                                    ticker: ticker, scale: chartScale2, store: store,
+                                    holdings: holdings)
+            }
+            .onChange(of: holdings.holdings) { _, _ in
+                ChartTabState.syncTransactionMarkers(coordinator: coordinator,
+                                                      symbol: ticker.symbol,
+                                                      holdings: holdings)
+                ChartTabState.syncTransactionMarkers(coordinator: coordinator2,
+                                                      symbol: ticker.symbol,
+                                                      holdings: holdings)
+            }
     }
 }
 

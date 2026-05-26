@@ -1,6 +1,6 @@
 name: Wick
 options:
-  bundleIdPrefix: ai.omika.wick
+  bundleIdPrefix: me.impai.wick
   deploymentTarget:
     macOS: "26.0"
   developmentLanguage: en
@@ -28,10 +28,18 @@ settings:
     # `Image(.appIcon)` / `Color(.accent)` instead of stringly-typed.
     ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: YES
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+    # Xcode 26 "Update to recommended settings" additions. xcodegen
+    # regenerates the .pbxproj from this file, so changes made via
+    # Xcode's recommended-settings popup would be wiped — keys live
+    # here instead.
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    GCC_WARN_SHADOW: YES
 
 packages:
   CandleKit:
-    path: ../CandleKit
+    url: https://github.com/baixianger/CandleKit.git
+    from: 0.7.0
   TradingFloor:
     path: TradingFloor
 
@@ -68,11 +76,15 @@ targets:
         # ITSAppUsesNonExemptEncryption, …). We hand-manage
         # Info.plist; xcodegen only needs INFOPLIST_FILE + the
         # GENERATE_INFOPLIST_FILE=NO opt-out. Matches pd3's pattern.
-        PRODUCT_BUNDLE_IDENTIFIER: ai.omika.wick
+        PRODUCT_BUNDLE_IDENTIFIER: me.impai.wick
         PRODUCT_NAME: Wick
         INFOPLIST_FILE: Wick/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # No per-app accent override — inherit macOS system accent
+        # (Graphite/Multicolor/Blue/etc.) so selections in the sidebar
+        # and pickers match the user's system-wide preference. Rating
+        # chips and other semantic colors are still set explicitly via
+        # `ratingColor(_:)` and friends, not the accent.
         ENABLE_PREVIEWS: YES
         CODE_SIGN_ENTITLEMENTS: Wick/Resources/Wick.entitlements

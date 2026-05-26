@@ -90,6 +90,8 @@ struct SidebarView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+                .accessibilityIdentifier("SidebarSearchClear")
             }
         }
         .padding(.horizontal, 10)
@@ -275,6 +277,8 @@ struct SidebarView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Switch watchlist group · \(currentGroupTitle)")
+        .accessibilityLabel("Watchlist group actions")
+        .accessibilityIdentifier("SidebarGroupMenu")
     }
 
     private var currentGroupTitle: String {

@@ -309,6 +309,8 @@ struct PortfolioView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Edit holding \(h.symbol)")
+                .accessibilityIdentifier("HoldingEdit-\(h.id)")
                 Button {
                     store.remove(id: h.id)
                 } label: {
@@ -317,6 +319,8 @@ struct PortfolioView: View {
                         .foregroundStyle(.red)
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Delete holding \(h.symbol)")
+                .accessibilityIdentifier("HoldingDelete-\(h.id)")
             }
             .padding(.leading, 6)
         }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Accessibility
 import CoreCharts
 import IndicatorKit
 import TradingFloor
@@ -464,6 +465,108 @@ struct NewsRow: View {
     }
 }
 
+// MARK: - Agent workflow phase
+
+/// The four logical phases of the multi-agent desk workflow.
+/// Order here is rendering order (and roughly chronological:
+/// information → debate → synthesis → gatekeep).
+///
+/// Lifted to file scope so the workflow stepper and lean consensus
+/// strip (separate files) can reference it without going through the
+/// AITab namespace.
+enum AgentPhase: String, CaseIterable, Identifiable, Hashable {
+    case analysts  = "Analysts"
+    case research  = "Research"
+    case decision  = "Decision"
+    case gatekeep  = "Risk"
+
+    var id: String { rawValue }
+    var title: String { rawValue }
+
+    /// One-liner under the phase header to remind the user what
+    /// happens at this stage. Same vocabulary the engine uses.
+    var subtitle: String {
+        switch self {
+        case .analysts: return "Information gathering"
+        case .research: return "Bull vs Bear debate"
+        case .decision: return "Trade synthesis"
+        case .gatekeep: return "Risk gate"
+        }
+    }
+
+    /// SF Symbol per phase — used by the workflow stepper as the
+    /// node glyph so the four steps are recognisable without reading
+    /// the label first.
+    var symbol: String {
+        switch self {
+        case .analysts: return "magnifyingglass"
+        case .research: return "bubble.left.and.bubble.right"
+        case .decision: return "checkmark.seal"
+        case .gatekeep: return "shield.lefthalf.filled"
+        }
+    }
+
+    /// Phase accent — all phases share the system accent so the
+    /// workflow stepper reads as one unified control (Apple HIG
+    /// "let semantic colors carry meaning; phase identity is
+    /// already conveyed by symbol + label"). State (running /
+    /// complete / warning) does the visual heavy lifting, not
+    /// phase identity.
+    var color: Color { Color.accentColor }
+
+    static func from(role: String) -> AgentPhase {
+        switch role {
+        case "Fundamental Analyst", "Technical Analyst",
+             "Sentiment Analyst",   "News Analyst":
+            return .analysts
+        case "Bull Researcher", "Bear Researcher":
+            return .research
+        case "Trader":
+            return .decision
+        case "Risk Manager":
+            return .gatekeep
+        default:
+            return .analysts
+        }
+    }
+
+    /// Map a runner stage string (as emitted by `TradingFloor.analyze`
+    /// or `WickServer`'s SSE stream) to the workflow phase the user
+    /// is currently in. Used by the stepper to highlight the active
+    /// node during a live run. Returns `nil` when the stage doesn't
+    /// belong to a known phase (e.g. "Gathering market data" is
+    /// pre-workflow setup).
+    static func fromStage(_ stage: String) -> AgentPhase? {
+        let lower = stage.lowercased()
+        if lower.contains("analyst") { return .analysts }
+        if lower.contains("debate") || lower.contains("bull")
+            || lower.contains("bear") || lower.contains("research") {
+            return .research
+        }
+        if lower.contains("trader") || lower.contains("decision")
+            || lower.contains("trade ") {
+            return .decision
+        }
+        if lower.contains("risk") || lower.contains("gate") {
+            return .gatekeep
+        }
+        return nil
+    }
+
+    /// Group a flat transcript by phase, preserving each phase's
+    /// internal order. Returns a dictionary so callers can iterate
+    /// `AgentPhase.allCases` and ask for the bucket they want.
+    static func partition(_ messages: [AgentMessage])
+        -> [AgentPhase: [AgentMessage]]
+    {
+        var out: [AgentPhase: [AgentMessage]] = [:]
+        for msg in messages {
+            out[from(role: msg.role), default: []].append(msg)
+        }
+        return out
+    }
+}
+
 // MARK: - AI tab
 
 /// History-first surface for the multi-agent desk. The user lands on
@@ -486,16 +589,41 @@ struct AITab: View {
     let range: OverviewRange
     @Environment(ReportHistoryStore.self) private var history
     @Environment(AgentSettings.self) private var settings
-    @State private var runner = DeskRunner()
-    /// Which historical report's full transcript is expanded inline.
-    /// `nil` = list-only view. Keyed by `generatedAt` since `Report`
-    /// has no id and timestamps are unique per (ticker, run).
-    @State private var expanded: Date?
-    /// History timeline visibility. Hidden by default — the most
-    /// recent report renders inline; clicking the History icon next
-    /// to "AI Desk" pops the alternating-vertical timeline above the
-    /// report so the user can pick an older entry.
-    @State private var historyOpen: Bool = false
+
+    /// The desk runner for this ticker — lives on the history store
+    /// rather than as `@State` here so a run survives the user
+    /// navigating to another ticker and back (the AITab view is
+    /// `.id(ticker.id)`-rebuilt by DetailView; an `@State` runner
+    /// would be discarded mid-run).
+    private var runner: DeskRunner {
+        history.runner(for: ticker.symbol)
+    }
+    /// Which historical report's full transcript is shown. `nil` =
+    /// list-only view. Keyed by `generatedAt` since `Report` has no
+    /// id and timestamps are unique per (ticker, run). Lifted to
+    /// `DetailView` so the right-side inspector and this pane share
+    /// one source of truth.
+    @Binding var expanded: Date?
+    /// History inspector visibility. Toggled by the header pill;
+    /// owned by `DetailView` so `.inspector(isPresented:)` can sit
+    /// outside the outer ScrollView (the only attachment point that
+    /// lays out correctly on macOS).
+    @Binding var historyOpen: Bool
+
+    /// Which analyst cards are currently expanded inline. Default is
+    /// "all collapsed" — the consensus strip + headlines already
+    /// communicate each stance, so the full markdown is on-demand.
+    @State private var expandedAnalysts: Set<UUID> = []
+
+    /// Which debate turns the user has explicitly collapsed. Debate
+    /// is expanded by default (it's the whole point), so the set
+    /// tracks the inversion — empty means "everything open".
+    @State private var collapsedDebate: Set<UUID> = []
+
+    /// Respect the system "Reduce motion" accessibility toggle.
+    /// Animations across the tab gate on this so users with
+    /// vestibular sensitivities don't get the slide/spring shows.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var historyForTicker: [Report] {
         history.reports(for: ticker.symbol)
@@ -503,36 +631,56 @@ struct AITab: View {
 
     var body: some View {
         let items = historyForTicker
-        return VStack(alignment: .leading, spacing: 14) {
-            header(historyCount: items.count)
-            runStatusStrip
-            if items.isEmpty {
-                emptyState
-            } else {
-                if historyOpen {
-                    historyTimeline(items)
-                        .transition(.opacity.combined(
-                            with: .move(edge: .top)))
-                }
-                if let target = activeReport(in: items) {
+        let activeReport = activeReport(in: items)
+        return ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 14) {
+                header(historyCount: items.count,
+                        activeReport: activeReport,
+                        proxy: proxy)
+                if items.isEmpty {
+                    emptyState
+                } else if let target = activeReport {
                     reportView(target)
                         .id(target.generatedAt) // re-mount per report switch
                 }
+                // Inline error strip — kept here for the failed-run case;
+                // the stepper alone can't communicate the error message.
+                if case .failed(let message) = runner.phase {
+                    failedRunStrip(message)
+                }
             }
         }
+        // Announce live workflow stage transitions to VoiceOver. The
+        // visual stepper highlights the active node, but blind users
+        // need a spoken cue when the desk moves from "Analysts at
+        // work" → "Bull/bear debate, round 1" → "Risk review", etc.
+        .onChange(of: currentRunStage) { _, stage in
+            guard let stage else { return }
+            var announcement = AttributedString("Workflow: \(stage)")
+            announcement.accessibilitySpeechAnnouncementPriority = .default
+            AccessibilityNotification.Announcement(announcement).post()
+        }
         .onAppear {
-            // Bridge runner → history so a completed run lands in the
-            // archive automatically (same behaviour as the workflow
-            // when triggered from Wicker chat).
-            runner.onCompleted = { report in
-                history.save(report)
-                expanded = report.generatedAt
-                historyOpen = false
-            }
             // Default-expand the most recent report when entering the
             // tab so the page never opens blank if there's history.
+            // The runner's `onCompleted` hook is wired by the history
+            // store (see `ReportHistoryStore.runner(for:)`), so a run
+            // that finishes while AITab is offscreen still lands in
+            // the archive; the next time the user opens this tab the
+            // default-latest line below picks it up.
             if expanded == nil, let latest = historyForTicker.first {
                 expanded = latest.generatedAt
+            }
+        }
+        // When a run started elsewhere completes for this ticker, jump
+        // the selection to it so the user lands on the fresh report.
+        .onChange(of: history.reports(for: ticker.symbol).first?.generatedAt) {
+            _, latest in
+            if let latest, expanded != latest {
+                expanded = latest
+                // Don't auto-close the inspector here — user may be
+                // mid-browse comparing older reports. They explicitly
+                // toggle the history pill when they're done.
             }
         }
     }
@@ -550,7 +698,10 @@ struct AITab: View {
 
     // MARK: - Header
 
-    private func header(historyCount: Int) -> some View {
+    private func header(historyCount: Int,
+                         activeReport: Report?,
+                         proxy: ScrollViewProxy) -> some View
+    {
         let running: Bool = {
             if case .running = runner.phase { return true }
             return false
@@ -569,9 +720,28 @@ struct AITab: View {
                 .intelligenceGlow(active: true,
                                   cornerRadius: 14,
                                   intensity: running ? 1.0 : 0.55)
-            Text("AI Desk")
-                .font(.system(size: 14, weight: .semibold))
-            Spacer()
+            Text("AI Analysis")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            // Inline compact workflow stepper — sits between the
+            // title and the Run button so the user sees the desk's
+            // process *in the same row* as the trigger that drives it.
+            // Tap a node to scroll to the corresponding report section.
+            WorkflowStepper(
+                phases: AgentPhase.allCases,
+                statusFor: { phase in
+                    stepperStatus(for: phase, report: activeReport)
+                },
+                onTap: { phase in
+                    withAnimation(reduceMotion ? nil : .snappy) {
+                        proxy.scrollTo(scrollAnchor(for: phase),
+                                        anchor: .top)
+                    }
+                },
+                compact: true)
+                .layoutPriority(1)
+                .padding(.horizontal, 6)
+            Spacer(minLength: 0)
             runButton
             if historyCount > 0 {
                 historyToggleButton(count: historyCount)
@@ -585,7 +755,7 @@ struct AITab: View {
     /// they're in "browse history" mode.
     private func historyToggleButton(count: Int) -> some View {
         Button {
-            withAnimation(.spring(duration: 0.32)) {
+            withAnimation(reduceMotion ? nil : .spring(duration: 0.32)) {
                 historyOpen.toggle()
             }
         } label: {
@@ -649,205 +819,113 @@ struct AITab: View {
               : "Kick off the full desk (fundamental / technical / sentiment / news → bull-bear → trade → risk)")
     }
 
-    /// Beneath the header — surfaces what the runner is doing now.
-    /// Idle: hidden. Running: stage label. Failed: red row with the
-    /// reason. Done: nothing here, the appended report is visible in
-    /// the list below.
+    /// Map runner state + active report into a per-phase status for
+    /// the workflow stepper. Order of precedence: live run > prior
+    /// report > pending. The Risk node flips to `.warning` when the
+    /// risk manager overrode the trader's call on the prior run.
+    ///
+    /// On `.failed`, we use `runner.lastStage` (captured by the
+    /// runner's didSet on every `.running` transition) to mark the
+    /// failed phase and leave earlier phases complete.
+    private func stepperStatus(for phase: AgentPhase,
+                                report: Report?) -> WorkflowStepper.Status
+    {
+        if case .running(let stage) = runner.phase {
+            let active = AgentPhase.fromStage(stage)
+            if active == phase { return .running }
+            if let active, phaseIndex(phase) < phaseIndex(active) {
+                return .complete
+            }
+            return .pending
+        }
+        if case .failed = runner.phase {
+            if let stage = runner.lastStage,
+               let failed = AgentPhase.fromStage(stage)
+            {
+                if phase == failed { return .failed }
+                if phaseIndex(phase) < phaseIndex(failed) { return .complete }
+                return .pending
+            }
+            return .pending
+        }
+        guard let report else { return .pending }
+        return statusFromReport(report, phase: phase)
+    }
+
+    private func phaseIndex(_ phase: AgentPhase) -> Int {
+        AgentPhase.allCases.firstIndex(of: phase) ?? 0
+    }
+
+    /// Active stage string when the runner is mid-flight; nil
+    /// otherwise. Used by `.onChange` to drive the VoiceOver
+    /// announcement.
+    private var currentRunStage: String? {
+        if case .running(let stage) = runner.phase { return stage }
+        return nil
+    }
+
+    /// Stable scroll-anchor id per phase. The stepper's onTap calls
+    /// `proxy.scrollTo(scrollAnchor(for: phase), anchor: .top)` and
+    /// the matching section inside `reportView` carries the same
+    /// `.id(...)`.
+    private func scrollAnchor(for phase: AgentPhase) -> String {
+        "AITab.section.\(phase.rawValue)"
+    }
+
+    /// Derive status from a completed report. Every phase represented
+    /// in the transcript reads as complete; Risk flips to warning
+    /// when the risk manager overrode the trader's call.
+    private func statusFromReport(_ report: Report,
+                                   phase: AgentPhase) -> WorkflowStepper.Status
+    {
+        let buckets = AgentPhase.partition(report.transcript)
+        let hasMessages = !(buckets[phase] ?? []).isEmpty
+        if phase == .gatekeep, hasMessages, riskOverrode(report) {
+            return .warning(label: "risk override")
+        }
+        return hasMessages ? .complete : .pending
+    }
+
+    /// True iff the risk manager explicitly disagreed with the trader.
+    /// `nil` means the field wasn't emitted — treat as agreement.
+    private func riskOverrode(_ report: Report) -> Bool {
+        guard let risk = report.transcript.first(where: { $0.role == "Risk Manager" })
+        else { return false }
+        return risk.agreesWithTrader == false
+    }
+
+    /// Inline failure strip beneath the stepper. The stepper itself
+    /// shows the failed node visually; this row supplies the message
+    /// and the retry affordance.
     @ViewBuilder
-    private var runStatusStrip: some View {
-        switch runner.phase {
-        case .idle, .done:
-            EmptyView()
-        case .running(let stage):
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text(stage)
-                    .font(.system(size: 12, weight: .medium))
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .liquidGlass(cornerRadius: 10)
-        case .failed(let message):
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                Text(message)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                Spacer()
-                Button("Retry") {
-                    runner.run(ticker: ticker.symbol, settings: settings)
-                }
-                .buttonStyle(.link)
-                .font(.system(size: 11))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .liquidGlass(cornerRadius: 10,
-                         tint: Color.orange.opacity(0.18))
-        }
-    }
-
-    // MARK: - History timeline (vertical, alternating)
-
-    /// Vertical alternating timeline of every saved report for this
-    /// ticker. Newest first (matches `ReportHistoryStore.reports`).
-    /// Click any entry to swap the report shown below. Visible only
-    /// when the History pill in the header is toggled on.
-    private func historyTimeline(_ items: [Report]) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                Text("RATING HISTORY · \(items.count) RUNS")
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.8)
-                    .foregroundStyle(.tertiary)
-                Spacer()
-            }
-            .padding(.bottom, 14)
-
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.generatedAt) { idx, report in
-                    timelineRow(report,
-                                 index: idx,
-                                 isFirst: idx == 0,
-                                 isLast: idx == items.count - 1)
-                }
-            }
-        }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial.opacity(0.35))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.15),
-                              lineWidth: 1)
-        )
-    }
-
-    /// One timeline entry. Alternates side: even index → left chip,
-    /// odd index → right chip. The center spine threads through a
-    /// dot for each row; the dot for the active selection scales up
-    /// and glows in its rating tint.
-    private func timelineRow(_ report: Report,
-                              index: Int,
-                              isFirst: Bool,
-                              isLast: Bool) -> some View
-    {
-        let isLeft = index.isMultiple(of: 2)
-        let tint = ratingColor(report.rating)
-        let isActive = (expanded == report.generatedAt)
-            || (expanded == nil && isFirst)
-        return HStack(alignment: .center, spacing: 0) {
-            // LEFT side
-            if isLeft {
-                timelineChip(report, tint: tint,
-                             active: isActive, alignRight: true)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 14)
-            } else {
-                Color.clear.frame(maxWidth: .infinity)
-            }
-
-            // Center spine
-            ZStack {
-                VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(isFirst ? 0 : 0.28))
-                        .frame(width: 1.2)
-                    Rectangle()
-                        .fill(Color.secondary.opacity(isLast ? 0 : 0.28))
-                        .frame(width: 1.2)
-                }
-                Circle()
-                    .fill(tint)
-                    .frame(width: isActive ? 14 : 10,
-                           height: isActive ? 14 : 10)
-                    .overlay(
-                        Circle()
-                            .strokeBorder(Color.white.opacity(0.3),
-                                          lineWidth: 1.2)
-                    )
-                    .shadow(color: isActive ? tint : .clear,
-                            radius: isActive ? 8 : 0)
-                    .animation(.spring(duration: 0.3), value: isActive)
-            }
-            .frame(width: 40)
-
-            // RIGHT side
-            if !isLeft {
-                timelineChip(report, tint: tint,
-                             active: isActive, alignRight: false)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 14)
-            } else {
-                Color.clear.frame(maxWidth: .infinity)
-            }
-        }
-        .frame(minHeight: 78)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(duration: 0.32)) {
-                expanded = report.generatedAt
-                historyOpen = false  // collapse timeline after pick
-            }
-        }
-    }
-
-    private func timelineChip(_ report: Report,
-                               tint: Color,
-                               active: Bool,
-                               alignRight: Bool) -> some View
-    {
-        let summary = report.summary
-            .components(separatedBy: "\n")
-            .first ?? report.summary
-        return VStack(alignment: alignRight ? .trailing : .leading,
-                       spacing: 6) {
-            HStack(spacing: 8) {
-                if alignRight { Spacer(minLength: 0) }
-                Text(report.rating.label.uppercased())
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(0.5)
-                    .padding(.horizontal, 9).padding(.vertical, 3)
-                    .background(tint.gradient, in: Capsule())
-                    .foregroundStyle(.white)
-                Text(report.generatedAt.formatted(
-                        date: .abbreviated, time: .shortened))
-                    .font(.system(size: 10, weight: .medium,
-                                  design: .monospaced))
-                    .foregroundStyle(.secondary)
-                if !alignRight { Spacer(minLength: 0) }
-            }
-            Text(summary)
-                .font(.system(size: 12))
+    private func failedRunStrip(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.callout)
                 .foregroundStyle(.primary)
                 .lineLimit(2)
-                .multilineTextAlignment(alignRight ? .trailing : .leading)
-                .frame(maxWidth: .infinity,
-                       alignment: alignRight ? .trailing : .leading)
+            Spacer()
+            Button("Retry") {
+                runner.run(ticker: ticker.symbol, settings: settings)
+            }
+            .buttonStyle(.link)
+            .font(.callout)
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(active
-                      ? tint.opacity(0.14)
-                      : Color.secondary.opacity(0.06))
+                .fill(Color.orange.opacity(0.10))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(active
-                              ? tint.opacity(0.55)
-                              : Color.secondary.opacity(0.18),
-                              lineWidth: 1)
+                .strokeBorder(Color.orange.opacity(0.32), lineWidth: 1)
         )
-        .frame(maxWidth: 360)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Run failed: \(message)")
     }
 
     private var emptyState: some View {
@@ -868,53 +946,59 @@ struct AITab: View {
 
     // MARK: - Report view (active selection)
 
-    /// Three-layer information architecture:
-    ///   1. Verdict band — rating, optional position, editorial summary
-    ///   2. Debate row — Bull vs Bear, side-by-side cards
-    ///   3. Evidence grid — four analysts in a 2×2 grid
-    ///   4. Risk review — risk manager's confirmation/override
-    ///   5. Disclaimer
+    /// Six-block information architecture mapped to the workflow:
+    ///   1. Verdict capsule — rating (with override diff if any),
+    ///      position bar, trader headline + body
+    ///   2. Lean consensus strip — 4-cell analyst stance row
+    ///   3. Debate thread — interleaved Bull/Bear turns by round
+    ///   4. Analyst evidence — drill-in cards (collapsed by default)
+    ///   5. Risk gate — promoted into capsule on override; tiny
+    ///      "passed" pill when the manager agreed
+    ///   6. Disclaimer
     ///
-    /// Each agent's body is rendered as-is markdown (LLM-free-form).
-    /// The only structural extraction the client does is a best-effort
-    /// `Lean: bullish|bearish|neutral` chip — when not present, no chip
-    /// is shown (never a fallback). All future-typed fields (stance,
-    /// headline) should be added to `AgentMessage` server-side, not
-    /// regexed here.
+    /// Each agent body renders as-is markdown (LLM-free-form). Typed
+    /// envelope fields (`lean`, `headline`, `rating`, `positionPercent`,
+    /// `agreesWithTrader`, `proposedRating`) drive every structural
+    /// decision — no substring guessing.
     private func reportView(_ report: Report) -> some View {
         let buckets = AgentPhase.partition(report.transcript)
-        let analysts = (buckets[.analysts] ?? []).sorted { sortKey($0.role) < sortKey($1.role) }
+        let analysts = (buckets[.analysts] ?? [])
+            .sorted { sortKey($0.role) < sortKey($1.role) }
         let researchers = buckets[.research] ?? []
-        let bull = researchers.first { $0.role == "Bull Researcher" }
-        let bear = researchers.first { $0.role == "Bear Researcher" }
+        let trader = report.transcript.first { $0.role == "Trader" }
         let risk = (buckets[.gatekeep] ?? []).first
 
-        return VStack(alignment: .leading, spacing: 28) {
-            verdictBand(report)
-            if bull != nil || bear != nil {
-                section("Debate", subtitle: "Bull vs bear — argued in pairs") {
-                    HStack(alignment: .top, spacing: 16) {
-                        debateColumn(bull, side: .bull)
-                        debateColumn(bear, side: .bear)
-                    }
+        return VStack(alignment: .leading, spacing: 24) {
+            // Decision (trader) anchors at the verdict capsule —
+            // it's the trader's call materialised. Stepper's
+            // Decision tap scrolls here.
+            verdictBand(report, trader: trader, risk: risk)
+                .id(scrollAnchor(for: .decision))
+            if !researchers.isEmpty {
+                section("Debate", subtitle: "Bull vs Bear, argued in rounds") {
+                    debateThread(researchers)
                 }
+                .id(scrollAnchor(for: .research))
             }
             if !analysts.isEmpty {
-                section("Evidence", subtitle: "What each analyst found") {
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 16),
-                        GridItem(.flexible(), spacing: 16)
-                    ], spacing: 16) {
-                        ForEach(analysts) { msg in
-                            agentCard(msg, compact: true)
-                        }
-                    }
+                // Evidence section also serves as the "Analysts"
+                // anchor — the section subtitle carries the lean
+                // distribution summary (which the old standalone
+                // strip used to surface). Each card header still
+                // shows its lean chip, so the 4-cell consensus
+                // strip would have been redundant.
+                section("Evidence",
+                         subtitle: analystConsensusSubtitle(analysts: analysts)) {
+                    analystEvidence(analysts)
                 }
+                .id(scrollAnchor(for: .analysts))
             }
-            if let risk {
-                section("Risk review", subtitle: "Final gate before publishing") {
-                    agentCard(risk, compact: false)
-                }
+            // Risk gate is promoted into the verdict capsule on
+            // override. On agreement we surface a tiny passed pill
+            // here so the user still sees the gate happened.
+            if let risk, !riskOverrode(report) {
+                riskGatePassed(risk)
+                    .id(scrollAnchor(for: .gatekeep))
             }
             disclaimerRow(report)
         }
@@ -933,105 +1017,241 @@ struct AITab: View {
         }
     }
 
-    // MARK: Layer 1 — Verdict band
+    // MARK: Layer 1 — Verdict capsule
 
-    /// Single hero block combining what used to be three stacked
-    /// sections (verdict card + bottom line + rating gauge) into one
-    /// scannable unit. Uses `.regularMaterial` instead of Liquid
-    /// Glass — HIG reserves Liquid Glass for chrome/navigation, not
-    /// content surfaces.
-    private func verdictBand(_ report: Report) -> some View {
+    /// Single hero block. Top row: ticker + as-of. Middle row: rating
+    /// chip (or override diff), position pill + allocation bar. Body:
+    /// trader's headline + paragraph. Surface is `.regularMaterial`
+    /// per HIG (content layer, not chrome).
+    ///
+    /// Risk override is promoted INTO the capsule: when the risk
+    /// manager disagreed with the trader, the rating chip becomes a
+    /// before/after diff (trader's rating struck through, risk's
+    /// proposed rating active) and an amber ribbon sits along the
+    /// top edge. This is the single most consequential fact on the
+    /// page, so it gets prime real estate.
+    private func verdictBand(_ report: Report,
+                              trader: AgentMessage?,
+                              risk: AgentMessage?) -> some View
+    {
         let tint = ratingColor(report.rating)
-        // Prefer the trader's typed headline + body (v2 envelope). If the
-        // trader emitted neither (older models, parse miss), fall back to
-        // the legacy "strip `HOLD\nPosition: 0%` prefix" routine on the
-        // raw `report.summary` text.
-        let trader = report.transcript.first { $0.role == "Trader" }
         let headline = trader?.headline
         let body: String = {
             if let b = trader?.body, !b.isEmpty { return b }
             return strippedSummary(report.summary)
         }()
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(report.ticker)
-                    .font(.system(.title, weight: .bold))
-                Text("· As of " + report.asOf.formatted(
-                        date: .abbreviated, time: .omitted))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
+        let override = riskOverrideInfo(trader: trader, risk: risk,
+                                         reportRating: report.rating)
+        let activeRating = override?.finalRating ?? report.rating
+        let activeTint = ratingColor(activeRating)
 
-            HStack(alignment: .center, spacing: 14) {
-                Text(report.rating.label.uppercased())
-                    .font(.system(.subheadline, weight: .heavy))
-                    .tracking(0.8)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(tint.gradient, in: Capsule())
-                    .foregroundStyle(.white)
-                if let pos = report.position {
-                    let pct = Int((pos.targetWeight * 100).rounded())
-                    HStack(spacing: 5) {
-                        Text("Position")
-                            .foregroundStyle(.secondary)
-                        Text("\(pct)%")
-                            .fontWeight(.semibold)
-                            .monospacedDigit()
-                    }
-                    .font(.callout)
+        return VStack(alignment: .leading, spacing: 0) {
+            if let override {
+                overrideRibbon(override)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                // Ticker / as-of header
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(report.ticker)
+                        .font(.system(.title, weight: .bold))
+                    Text("· As of " + report.asOf.formatted(
+                            date: .abbreviated, time: .omitted))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                Spacer()
-                inlineRatingDots(report.rating)
-            }
 
-            if let headline, !headline.isEmpty {
-                Text(headline)
-                    .font(.system(.title3, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 760, alignment: .leading)
+                // Rating chip + position bar
+                HStack(alignment: .center, spacing: 14) {
+                    if let override {
+                        ratingDiffChip(from: override.traderRating,
+                                        to: override.finalRating)
+                    } else {
+                        Text(report.rating.label.uppercased())
+                            .font(.system(.subheadline, weight: .heavy))
+                            .tracking(0.8)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(tint, in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    if let pos = report.position {
+                        positionBar(weight: pos.targetWeight, tint: activeTint)
+                            .frame(maxWidth: 240)
+                    }
+                    Spacer()
+                }
+
+                if let headline, !headline.isEmpty {
+                    Text(headline)
+                        .font(.system(.title3, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 760, alignment: .leading)
+                }
+                if !body.isEmpty {
+                    Text(body)
+                        .font(.body)
+                        .foregroundStyle(headline == nil ? .primary : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineSpacing(3)
+                        .frame(maxWidth: 760, alignment: .leading)
+                }
             }
-            if !body.isEmpty {
-                Text(body)
-                    .font(.body)
-                    .foregroundStyle(headline == nil ? .primary : .secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(3)
-                    .frame(maxWidth: 760, alignment: .leading)
-            }
+            .padding(20)
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.regularMaterial)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(tint.opacity(0.30), lineWidth: 1)
-        )
-        // Group the whole hero so VoiceOver reads it as one unit:
-        // "AAPL verdict, Hold, no position committed, …". Children are
-        // combined rather than ignored so the editorial summary text
-        // is still in the announced label.
+        // Apple-Intelligence glow on the hero capsule — same effect
+        // used on the AI Desk header icon. Signals "this surface is
+        // the agent's verdict" rather than just another card. Always
+        // active when a verdict exists; reduce-motion users still get
+        // the static halo since `IntelligenceGlow` honors the env.
+        .intelligenceGlow(active: true, cornerRadius: 14, intensity: 0.85)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(verdictBandAccessibilityLabel(for: report,
-                                                          headline: headline))
+        .accessibilityLabel(verdictBandAccessibilityLabel(
+            for: report, headline: headline, override: override))
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Captures the trader→risk rating delta when the risk manager
+    /// overrode. Nil when risk agreed or didn't emit a typed verdict.
+    private struct RiskOverrideInfo {
+        let traderRating: Rating
+        let finalRating: Rating
+        let riskHeadline: String?
+    }
+
+    private func riskOverrideInfo(trader: AgentMessage?,
+                                   risk: AgentMessage?,
+                                   reportRating: Rating) -> RiskOverrideInfo?
+    {
+        guard let risk,
+              risk.agreesWithTrader == false,
+              let proposed = risk.proposedRating
+        else { return nil }
+        // Prefer the trader's typed rating; fall back to the rating
+        // already stored on the Report (which `TradingFloor.analyze`
+        // computed via the same envelope-first + parse-fallback flow,
+        // so this is consistent regardless of which fallback fired).
+        let traderRating = trader?.rating ?? reportRating
+        return RiskOverrideInfo(traderRating: traderRating,
+                                 finalRating: proposed,
+                                 riskHeadline: risk.headline)
+    }
+
+    /// Subtle override notice along the top of the verdict capsule.
+    /// Apple "alert tag" pattern: SF Symbol + bold text in semantic
+    /// color, plain background. No filled colored strip, no border
+    /// ribbon — the chip's `BUY → HOLD` diff already carries most of
+    /// the visual weight; this line just names the event and the
+    /// reason.
+    private func overrideRibbon(_ override: RiskOverrideInfo) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "shield.lefthalf.filled")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text("Risk override")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+            if let why = override.riskHeadline, !why.isEmpty {
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                Text(why)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 0)
+    }
+
+    /// Before/after rating chip. Trader's rating reads as a strike-
+    /// through ghost; the risk-proposed rating is active. Designed to
+    /// be read as "BUY → HOLD" by both sighted and VO users (the
+    /// `.combine` on the parent capsule already labels the diff).
+    private func ratingDiffChip(from old: Rating, to new: Rating) -> some View {
+        let oldTint = ratingColor(old)
+        let newTint = ratingColor(new)
+        return HStack(spacing: 8) {
+            Text(old.label.uppercased())
+                .font(.system(.caption, weight: .semibold))
+                .tracking(0.6)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(
+                    Capsule().fill(oldTint.opacity(0.12))
+                )
+                .foregroundStyle(oldTint.opacity(0.7))
+                .strikethrough(true, color: oldTint.opacity(0.7))
+            Image(systemName: "arrow.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text(new.label.uppercased())
+                .font(.system(.subheadline, weight: .heavy))
+                .tracking(0.8)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(newTint, in: Capsule())
+                .foregroundStyle(.white)
+        }
+    }
+
+    /// Slim allocation bar: filled portion = target weight, empty =
+    /// remaining cash. Labelled with "20% · 80% cash" so the user
+    /// reads both halves at a glance.
+    private func positionBar(weight: Double, tint: Color) -> some View {
+        let pct = Int((weight * 100).rounded())
+        let cashPct = max(0, 100 - pct)
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Text("Position")
+                    .font(.caption2.weight(.semibold))
+                    .tracking(0.4)
+                    .foregroundStyle(.secondary)
+                Text("\(pct)%")
+                    .font(.callout.weight(.semibold))
+                    .monospacedDigit()
+                Text("· \(cashPct)% cash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.18))
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: geo.size.width * CGFloat(weight))
+                }
+            }
+            .frame(height: 6)
+        }
     }
 
     /// Build the spoken summary for the verdict band. Stays compact so
     /// VoiceOver doesn't read for 20 seconds. Position is omitted when
     /// the trader declined to commit a number — matches the visual
-    /// behaviour (no "0%" fallback).
+    /// behaviour (no "0%" fallback). When risk overrode, the spoken
+    /// summary leads with the override fact.
     private func verdictBandAccessibilityLabel(for report: Report,
-                                                headline: String?) -> String
+                                                headline: String?,
+                                                override: RiskOverrideInfo?) -> String
     {
-        var parts: [String] = [
-            "\(report.ticker) verdict",
-            report.rating.label,
-        ]
+        var parts: [String] = []
+        if let override {
+            parts.append(
+                "Risk override, \(override.traderRating.label) changed to \(override.finalRating.label)")
+        } else {
+            parts.append("\(report.ticker) verdict")
+            parts.append(report.rating.label)
+        }
         if let pos = report.position {
             let pct = Int((pos.targetWeight * 100).rounded())
             parts.append("Position \(pct) percent")
@@ -1068,10 +1288,98 @@ struct AITab: View {
         .accessibilityAddTraits(.isImage)
     }
 
-    // MARK: Layer 2 — Debate
+    // MARK: Layer 2 — Analyst consensus subtitle
+
+    /// One-line subtitle for the Evidence section that summarises the
+    /// lean distribution across the analysts. Example results:
+    ///   "3 of 4 bullish · 1 bearish"
+    ///   "Split: 2 bullish · 2 bearish"
+    ///   "What each analyst found"   (when no typed leans available)
+    ///
+    /// Surfaces the macro signal the deleted `LeanConsensusStrip` used
+    /// to provide, without re-rendering 4 cells whose role+lean are
+    /// already in the card headers below.
+    private func analystConsensusSubtitle(analysts: [AgentMessage]) -> String {
+        var counts: [Lean: Int] = [:]
+        for msg in analysts {
+            if let l = extractedLean(from: msg) {
+                counts[l, default: 0] += 1
+            }
+        }
+        let bull = counts[.bullish] ?? 0
+        let bear = counts[.bearish] ?? 0
+        let neut = counts[.neutral] ?? 0
+        let known = bull + bear + neut
+        let total = analysts.count
+        guard known > 0 else { return "What each analyst found" }
+
+        var parts: [String] = []
+        if bull > 0 { parts.append("\(bull) bullish") }
+        if bear > 0 { parts.append("\(bear) bearish") }
+        if neut > 0 { parts.append("\(neut) neutral") }
+        // Lead with the dominant stance when there's a clear edge.
+        if bull > bear, bull > neut {
+            return "\(bull) of \(total) bullish · \(parts.dropFirst().joined(separator: " · "))"
+                .trimmingCharacters(in: CharacterSet(charactersIn: "· "))
+        }
+        if bear > bull, bear > neut {
+            return "\(bear) of \(total) bearish · \(parts.filter { !$0.hasSuffix("bearish") }.joined(separator: " · "))"
+                .trimmingCharacters(in: CharacterSet(charactersIn: "· "))
+        }
+        // Split — no dominant side. Lead with "Split".
+        return "Split: " + parts.joined(separator: " · ")
+    }
+
+    // MARK: Layer 3 — Debate thread
+
+    /// Group bull and bear turns into rounds. The runner appends them
+    /// strictly alternating (Bull, Bear, Bull, Bear, …) per
+    /// `TradingFloor.analyze`, so we walk the array and pair them.
+    /// Stragglers (e.g. a missing Bear in round N) render as a half
+    /// round so the user still sees what was produced.
+    private struct DebateRound: Identifiable {
+        let id = UUID()
+        let number: Int
+        let bull: AgentMessage?
+        let bear: AgentMessage?
+    }
+
+    private func roundsFromTranscript(_ msgs: [AgentMessage]) -> [DebateRound] {
+        let bulls = msgs.filter { $0.role == "Bull Researcher" }
+        let bears = msgs.filter { $0.role == "Bear Researcher" }
+        let count = max(bulls.count, bears.count)
+        return (0..<count).map { i in
+            DebateRound(number: i + 1,
+                         bull: i < bulls.count ? bulls[i] : nil,
+                         bear: i < bears.count ? bears[i] : nil)
+        }
+    }
+
+    /// Threaded debate view. Each round is a divider + Bull turn
+    /// (green leading bar) + Bear turn (red leading bar). After the
+    /// last round, the trader's body (when present) renders as a
+    /// "Weighing" block so the decisive factor stays in the same
+    /// reading thread as the arguments that led to it.
+    @ViewBuilder
+    private func debateThread(_ researchers: [AgentMessage]) -> some View {
+        let rounds = roundsFromTranscript(researchers)
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(rounds) { round in
+                roundHeader(round.number, of: rounds.count)
+                if let bull = round.bull {
+                    debateTurn(bull, side: .bull)
+                }
+                if let bear = round.bear {
+                    debateTurn(bear, side: .bear)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Debate transcript, \(rounds.count) rounds")
+    }
 
     private enum DebateSide { case bull, bear
-        var label: String { self == .bull ? "Bull case" : "Bear case" }
+        var label: String { self == .bull ? "Bull" : "Bear" }
         var tint: Color { self == .bull ? .green : .red }
         var symbol: String {
             self == .bull ? "arrow.up.forward.circle.fill"
@@ -1079,95 +1387,210 @@ struct AITab: View {
         }
     }
 
-    /// One half of the debate. Rendered as a tinted card so Bull / Bear
-    /// read as a matched pair, but uses standard material (not Liquid
-    /// Glass) per HIG content-layer rules. Empty placeholder when the
-    /// debate didn't run / one side is missing.
-    @ViewBuilder
-    private func debateColumn(_ msg: AgentMessage?, side: DebateSide) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: side.symbol)
-                    .font(.title3)
-                    .foregroundStyle(side.tint)
-                Text(side.label)
-                    .font(.system(.headline, weight: .semibold))
-                Spacer()
-                if let msg, let lean = extractedLean(from: msg) {
-                    leanChip(lean)
-                }
-            }
-            if let msg {
-                WickMarkdown(text: displayBody(msg),
-                             accent: side.tint)
-            } else {
-                Text("No \(side.label.lowercased()) recorded for this run.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-            }
+    private func roundHeader(_ n: Int, of total: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("Round \(n)")
+                .font(.caption.weight(.heavy))
+                .tracking(0.6)
+                .foregroundStyle(.secondary)
+            Rectangle()
+                .fill(Color.secondary.opacity(0.18))
+                .frame(height: 1)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(side.tint.opacity(0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(side.tint.opacity(0.28), lineWidth: 1)
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(side.label) research column")
+        .padding(.top, n == 1 ? 0 : 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Round \(n) of \(total)")
+        .accessibilityAddTraits(.isHeader)
     }
 
-    // MARK: Layer 3 — Agent card (analyst grid + risk row)
-
-    /// One agent's contribution as a card. Used by the 4-analyst grid
-    /// (compact: true) and the Risk row (compact: false). The header
-    /// has the role icon + name + (optional) lean chip; the body is
-    /// the LLM's free-form markdown rendered by `WickMarkdown` —
-    /// **no client-side parsing of bullets, no key-value extraction**.
-    private func agentCard(_ msg: AgentMessage, compact: Bool) -> some View {
-        let style = roleStyle(msg.role)
-        let phase = AgentPhase.from(role: msg.role)
-        let lean = extractedLean(from: msg)
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: style.symbol)
-                    .font(.system(.callout, weight: .semibold))
-                    .foregroundStyle(style.color)
-                    .symbolRenderingMode(.hierarchical)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle().fill(style.color.opacity(0.14))
-                    )
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(msg.role)
-                        .font(.system(compact ? .subheadline : .body,
-                                      weight: .semibold))
-                    Text(phase.title)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if let lean { leanChip(lean) }
-            }
-            WickMarkdown(text: displayBody(msg),
-                         accent: style.color)
+    /// One turn in the debate, rendered as a news-style card so the
+    /// Debate and Evidence sections share the same visual grammar.
+    /// Bull/Bear identity reads off the accent border + the small
+    /// tinted dot in the source row. Default-expanded (debate is the
+    /// whole point); tap header collapses.
+    @ViewBuilder
+    private func debateTurn(_ msg: AgentMessage, side: DebateSide) -> some View {
+        let isCollapsed = collapsedDebate.contains(msg.id)
+        Button {
+            toggleDebate(msg.id)
+        } label: {
+            aiNewsCard(
+                accent: side.tint,
+                source: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(side.tint)
+                            .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
+                        Text(side.label.uppercased())
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(0.6)
+                            .foregroundStyle(side.tint)
+                    }
+                },
+                headline: msg.headline,
+                isExpanded: !isCollapsed,
+                body: { WickMarkdown(text: displayBody(msg),
+                                      accent: Color.secondary) }
+            )
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(side.label) turn, \(msg.headline ?? "")")
+        .accessibilityValue(isCollapsed ? "collapsed" : "expanded")
+        .accessibilityAddTraits(.isButton)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22),
+                   value: isCollapsed)
+    }
+
+    private func toggleDebate(_ id: UUID) {
+        if collapsedDebate.contains(id) {
+            collapsedDebate.remove(id)
+        } else {
+            collapsedDebate.insert(id)
+        }
+    }
+
+    // MARK: Layer 4 — Analyst evidence (drill-in grid)
+
+    /// 2×2 grid of analyst cards. Each card collapsed by default to
+    /// header + headline; tap to expand the full markdown body. The
+    /// drill-in pattern keeps the page short on first read and lets
+    /// the user dive into a specific stance.
+    @ViewBuilder
+    private func analystEvidence(_ analysts: [AgentMessage]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(analysts) { msg in
+                analystCard(msg)
+            }
+        }
+    }
+
+    /// One analyst card — same news-style chrome as `NewsRow`. Source
+    /// row (icon + role + optional lean chip) sits on top; headline
+    /// renders large; body markdown is shown only when expanded. The
+    /// expand/collapse state lives in `expandedAnalysts` (Set<UUID>).
+    @ViewBuilder
+    private func analystCard(_ msg: AgentMessage) -> some View {
+        let style = roleStyle(msg.role)
+        let lean = extractedLean(from: msg)
+        let isExpanded = expandedAnalysts.contains(msg.id)
+        Button {
+            toggleAnalyst(msg.id)
+        } label: {
+            aiNewsCard(
+                accent: style.color,
+                source: {
+                    HStack(spacing: 6) {
+                        Image(systemName: style.symbol)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(style.color)
+                            .symbolRenderingMode(.hierarchical)
+                            .accessibilityHidden(true)
+                        Text(msg.role.uppercased())
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(0.6)
+                            .foregroundStyle(.secondary)
+                        if let lean {
+                            Text("·")
+                                .foregroundStyle(.tertiary)
+                            leanChip(lean)
+                        }
+                    }
+                },
+                headline: msg.headline,
+                isExpanded: isExpanded,
+                body: { WickMarkdown(text: displayBody(msg), accent: style.color) }
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(msg.role), \(msg.headline ?? "")")
+        .accessibilityValue(isExpanded ? "expanded" : "collapsed")
+        .accessibilityAddTraits(.isButton)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22),
+                   value: isExpanded)
+    }
+
+    /// Shared news-style card chrome used by both Evidence and
+    /// Debate. Mirrors `NewsRow`'s "source label / headline / body"
+    /// vertical layout but adds an accent-tinted hairline border so
+    /// bull/bear/analyst identity reads off the surround at a glance.
+    private func aiNewsCard<Source: View, Body: View>(
+        accent: Color,
+        @ViewBuilder source: () -> Source,
+        headline: String?,
+        isExpanded: Bool,
+        @ViewBuilder body: () -> Body
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            source()
+            if let h = headline, !h.isEmpty {
+                Text(h)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(isExpanded ? nil : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if isExpanded {
+                body()
+                    .padding(.top, 4)
+                    .transition(.opacity)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.secondary.opacity(0.05))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(style.color.opacity(0.18), lineWidth: 1)
+                .strokeBorder(accent.opacity(0.20), lineWidth: 1)
         )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(msg.role) card, \(phase.title) phase")
+        .contentShape(Rectangle())
+    }
+
+    private func toggleAnalyst(_ id: UUID) {
+        if expandedAnalysts.contains(id) {
+            expandedAnalysts.remove(id)
+        } else {
+            expandedAnalysts.insert(id)
+        }
+    }
+
+    // MARK: Layer 5 — Risk gate (passed case)
+
+    /// Inline pill that says "the risk gate fired and agreed with the
+    /// trader". Only shown when there was no override; the override
+    /// case is promoted into the verdict capsule's ribbon.
+    /// Compact "gate passed" line — `checkmark.shield` (hierarchical
+    /// SF Symbol, secondary tint) + a tracked caption + optional
+    /// headline. No green pill background. The pass case is reassurance,
+    /// not an alert, so it doesn't deserve loud chrome.
+    private func riskGatePassed(_ risk: AgentMessage) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.shield")
+                .font(.callout)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("Risk gate passed")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+            if let h = risk.headline, !h.isEmpty {
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                Text(h)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Risk gate passed. \(risk.headline ?? "")")
     }
 
     // MARK: Section wrapper
@@ -1249,29 +1672,21 @@ struct AITab: View {
         return nil
     }
 
-    /// Visual chip for a parsed stance — colored capsule with an
-    /// arrow glyph + label.
-    ///
-    /// **Accessibility:** arrow glyph is decorative (color encodes
-    /// the same info as text). Collapse into one element with the
-    /// stance read as a static text. `accessibilityValue` so VoiceOver
-    /// announces "Lean, bullish" rather than just "bullish".
+    /// Subtle stance indicator — semantic dot + label, no capsule
+    /// background. Apple "tag" pattern (Mail labels, Reminders flags):
+    /// the dot carries the semantic color, the text reads as a
+    /// neutral secondary label. Avoids three loud colored pills
+    /// stacked next to each card header.
     private func leanChip(_ lean: Lean) -> some View {
         let tint = leanTint(lean)
-        return HStack(spacing: 4) {
-            Image(systemName: leanSymbol(lean))
-                .font(.system(.caption2, weight: .semibold))
+        return HStack(spacing: 5) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
             Text(lean.rawValue.capitalized)
-                .font(.system(.caption, weight: .semibold))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
         }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(
-            Capsule().fill(tint.opacity(0.14))
-        )
-        .overlay(
-            Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.8)
-        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Lean")
         .accessibilityValue(lean.rawValue.capitalized)
@@ -1289,16 +1704,22 @@ struct AITab: View {
     private func strippedSummary(_ summary: String) -> String {
         let verdicts: Set<String> = ["STRONG SELL", "SELL", "HOLD", "BUY",
                                       "STRONG BUY", "STRONG-SELL", "STRONG-BUY"]
+        // Chars LLMs sometimes wrap verdicts in. Strip these from both
+        // ends before comparing so `[BUY]`, `**HOLD**`, `「SELL」` etc.
+        // all read as the bare verdict and get peeled off the summary.
+        let stripChars: CharacterSet = CharacterSet(
+            charactersIn: "[]()*_`【】「」《》\"' \t")
         var lines = summary.components(separatedBy: "\n")
         while let first = lines.first {
             let trimmed = first.trimmingCharacters(in: .whitespaces)
-            let upper = trimmed.uppercased()
+            let upperNaked = trimmed.uppercased()
+                .trimmingCharacters(in: stripChars)
             if trimmed.isEmpty
-                || verdicts.contains(upper)
-                || upper.hasPrefix("POSITION:")
-                || upper.hasPrefix("ALLOC:")
-                || upper.hasPrefix("ALLOCATION:")
-                || upper.hasPrefix("TARGET WEIGHT")
+                || verdicts.contains(upperNaked)
+                || upperNaked.hasPrefix("POSITION:")
+                || upperNaked.hasPrefix("ALLOC:")
+                || upperNaked.hasPrefix("ALLOCATION:")
+                || upperNaked.hasPrefix("TARGET WEIGHT")
             {
                 lines.removeFirst()
                 continue
@@ -1341,84 +1762,22 @@ struct AITab: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // MARK: Workflow phase grouping
-
-    /// The four logical phases of the multi-agent desk workflow.
-    /// Order here is rendering order (and roughly chronological:
-    /// information → debate → synthesis → gatekeep).
-    enum AgentPhase: String, CaseIterable, Identifiable, Hashable {
-        case analysts  = "Analysts"
-        case research  = "Research"
-        case decision  = "Decision"
-        case gatekeep  = "Risk"
-
-        var id: String { rawValue }
-        var title: String { rawValue }
-
-        /// One-liner under the phase header to remind the user what
-        /// happens at this stage. Same vocabulary the engine uses.
-        var subtitle: String {
-            switch self {
-            case .analysts: return "Information gathering"
-            case .research: return "Bull vs Bear debate"
-            case .decision: return "Trade synthesis"
-            case .gatekeep: return "Risk gate"
-            }
-        }
-
-        /// Phase accent — drives the leading dot + the agent name's
-        /// phase pill colour. Kept distinct from each role's own
-        /// accent so the phase reads as group-membership, not
-        /// individual identity.
-        var color: Color {
-            switch self {
-            case .analysts: return .blue
-            case .research: return .indigo
-            case .decision: return .orange
-            case .gatekeep: return .gray
-            }
-        }
-
-        static func from(role: String) -> AgentPhase {
-            switch role {
-            case "Fundamental Analyst", "Technical Analyst",
-                 "Sentiment Analyst",   "News Analyst":
-                return .analysts
-            case "Bull Researcher", "Bear Researcher":
-                return .research
-            case "Trader":
-                return .decision
-            case "Risk Manager":
-                return .gatekeep
-            default:
-                return .analysts
-            }
-        }
-
-        /// Group a flat transcript by phase, preserving each phase's
-        /// internal order. Returns a dictionary so callers can iterate
-        /// `AgentPhase.allCases` and ask for the bucket they want.
-        static func partition(_ messages: [AgentMessage])
-            -> [AgentPhase: [AgentMessage]]
-        {
-            var out: [AgentPhase: [AgentMessage]] = [:]
-            for msg in messages {
-                out[from(role: msg.role), default: []].append(msg)
-            }
-            return out
-        }
-    }
-
     /// SF Symbol + accent per desk role.
     private func roleStyle(_ role: String) -> (symbol: String, color: Color) {
+        // Roles differentiate by SF Symbol, not color. Tints all
+        // returned as `Color.secondary` so analyst cards stop being
+        // a rainbow of teal/blue/purple/indigo — that "AI feel" comes
+        // from many simultaneous accents. Apple HIG: let typography
+        // and icon identity carry meaning; reserve color for state +
+        // semantic axes (rating up/down, override).
         switch role {
-        case "Fundamental Analyst": return ("building.columns", .teal)
-        case "Technical Analyst":   return ("chart.xyaxis.line", .blue)
-        case "Sentiment Analyst":   return ("bubble.left.and.bubble.right", .purple)
-        case "News Analyst":        return ("newspaper", .indigo)
-        case "Bull Researcher":     return ("arrow.up.forward.circle", .green)
-        case "Bear Researcher":     return ("arrow.down.forward.circle", .red)
-        case "Trader":              return ("checkmark.seal", .orange)
+        case "Fundamental Analyst": return ("building.columns", Color.secondary)
+        case "Technical Analyst":   return ("chart.xyaxis.line", Color.secondary)
+        case "Sentiment Analyst":   return ("bubble.left.and.bubble.right", Color.secondary)
+        case "News Analyst":        return ("newspaper", Color.secondary)
+        case "Bull Researcher":     return ("arrow.up.forward.circle", Color.secondary)
+        case "Bear Researcher":     return ("arrow.down.forward.circle", Color.secondary)
+        case "Trader":              return ("checkmark.seal", Color.secondary)
         case "Risk Manager":        return ("shield.lefthalf.filled", Color.secondary)
         default:                    return ("sparkles", Color.secondary)
         }
@@ -1431,6 +1790,75 @@ struct AITab: View {
         case .hold:       return .gray
         case .buy:        return .green
         case .strongBuy:  return .green
+        }
+    }
+}
+
+// MARK: - Analysis history inspector
+
+/// Simple vertical list of past desk runs for the current ticker —
+/// each row is just date + rating. Lives in `DetailView`'s
+/// `.inspector(isPresented:)` slot so it occupies the scene-level
+/// right column, never fighting the outer ScrollView for sizing.
+struct AnalysisHistoryInspector: View {
+    let symbol: String
+    @Binding var expanded: Date?
+    @Binding var historyOpen: Bool
+    @Environment(ReportHistoryStore.self) private var history
+
+    var body: some View {
+        let items = history.reports(for: symbol)
+        List(selection: Binding(
+            get: { expanded },
+            set: { new in if let new { expanded = new } }
+        )) {
+            ForEach(items, id: \.generatedAt) { report in
+                row(report)
+                    .tag(report.generatedAt)
+            }
+        }
+        .listStyle(.inset)
+        .overlay {
+            if items.isEmpty {
+                Text("No analyses yet")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    historyOpen = false
+                } label: {
+                    Label("Close history", systemImage: "sidebar.right")
+                }
+                .help("Hide history")
+            }
+        }
+    }
+
+    private func row(_ report: Report) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(report.generatedAt.formatted(
+                        date: .abbreviated, time: .shortened))
+                    .font(.callout.weight(.medium))
+                Text(report.rating.label)
+                    .font(.caption)
+                    .foregroundStyle(ratingTint(report.rating))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+    }
+
+    private func ratingTint(_ rating: Rating) -> Color {
+        switch rating {
+        case .strongSell: return .red
+        case .sell:       return .orange
+        case .hold:       return .gray
+        case .buy, .strongBuy: return .green
         }
     }
 }

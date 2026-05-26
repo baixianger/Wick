@@ -79,6 +79,8 @@ struct FloatingWickerComposer: View {
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(!canSubmit)
             .help("Ask Wicker (⌘⏎)")
+            .accessibilityLabel("Ask Wicker")
+            .accessibilityIdentifier("FloatingComposerSendButton")
         }
         .padding(10)
     }

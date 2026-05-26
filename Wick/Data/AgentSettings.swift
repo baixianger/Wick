@@ -55,7 +55,7 @@ final class AgentSettings {
 
     /// The API key for the CURRENTLY-SELECTED `providerKind`. Mirrored
     /// to the Keychain on every change under that provider's own
-    /// account (`ai.omika.wick.{kind}-key`), so swapping providers
+    /// account (`me.impai.wick.{kind}-key`), so swapping providers
     /// preserves all the other keys.
     var currentAPIKey: String {
         didSet {
@@ -107,21 +107,21 @@ final class AgentSettings {
     // FRED but no FMP) is fine.
     var fmpKey: String {
         didSet {
-            let account = "ai.omika.wick.fmp-key"
+            let account = "me.impai.wick.fmp-key"
             if fmpKey.isEmpty { Keychain.delete(account: account) }
             else { Keychain.save(fmpKey, account: account) }
         }
     }
     var finnhubKey: String {
         didSet {
-            let account = "ai.omika.wick.finnhub-key"
+            let account = "me.impai.wick.finnhub-key"
             if finnhubKey.isEmpty { Keychain.delete(account: account) }
             else { Keychain.save(finnhubKey, account: account) }
         }
     }
     var fredKey: String {
         didSet {
-            let account = "ai.omika.wick.fred-key"
+            let account = "me.impai.wick.fred-key"
             if fredKey.isEmpty { Keychain.delete(account: account) }
             else { Keychain.save(fredKey, account: account) }
         }
@@ -138,8 +138,8 @@ final class AgentSettings {
     /// development.
     var serverAuthToken: String {
         didSet {
-            if serverAuthToken.isEmpty { Keychain.delete(account: "ai.omika.wick.server-token") }
-            else { Keychain.save(serverAuthToken, account: "ai.omika.wick.server-token") }
+            if serverAuthToken.isEmpty { Keychain.delete(account: "me.impai.wick.server-token") }
+            else { Keychain.save(serverAuthToken, account: "me.impai.wick.server-token") }
         }
     }
 
@@ -264,13 +264,13 @@ final class AgentSettings {
         }
 
         // Data-source keys (BYO tier).
-        self.fmpKey     = Keychain.load(account: "ai.omika.wick.fmp-key")     ?? ""
-        self.finnhubKey = Keychain.load(account: "ai.omika.wick.finnhub-key") ?? ""
-        self.fredKey    = Keychain.load(account: "ai.omika.wick.fred-key")    ?? ""
+        self.fmpKey     = Keychain.load(account: "me.impai.wick.fmp-key")     ?? ""
+        self.finnhubKey = Keychain.load(account: "me.impai.wick.finnhub-key") ?? ""
+        self.fredKey    = Keychain.load(account: "me.impai.wick.fred-key")    ?? ""
 
         // Server config — independent of provider selection.
         self.serverBaseURL   = ud.string(forKey: "tf.serverBaseURL") ?? "http://localhost:8771"
-        self.serverAuthToken = Keychain.load(account: "ai.omika.wick.server-token") ?? ""
+        self.serverAuthToken = Keychain.load(account: "me.impai.wick.server-token") ?? ""
 
         // Workflow knobs — default to "all analysts, 1 debate round".
         if let raws = ud.array(forKey: "tf.analysts") as? [String] {

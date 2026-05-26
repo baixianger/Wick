@@ -139,9 +139,9 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
     /// Keychain account name used to store this provider's API key.
     /// One key per provider so switching providers doesn't lose the
     /// other's credentials. Matches the existing
-    /// `ai.omika.wick.{kind}-key` convention.
+    /// `me.impai.wick.{kind}-key` convention.
     var keychainAccount: String {
-        "ai.omika.wick.\(rawValue)-key"
+        "me.impai.wick.\(rawValue)-key"
     }
 
     /// Whether this provider needs an API key at all. Local Ollama

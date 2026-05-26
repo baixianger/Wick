@@ -91,6 +91,8 @@ struct WickerView: View {
             .buttonStyle(.plain)
             .keyboardShortcut("n", modifiers: .command)
             .help("New chat (⌘N)")
+            .accessibilityLabel("New chat")
+            .accessibilityIdentifier("WickerNewChatButton")
 
             Button {
                 withAnimation(.snappy(duration: 0.22)) {
@@ -101,11 +103,15 @@ struct WickerView: View {
                       ? "sidebar.trailing"
                       : "sidebar.trailing")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(showHistoryDrawer ? .accent : .secondary)
+                    .foregroundStyle(showHistoryDrawer
+                                      ? AnyShapeStyle(Color.accentColor)
+                                      : AnyShapeStyle(HierarchicalShapeStyle.secondary))
             }
             .buttonStyle(.plain)
             .keyboardShortcut("h", modifiers: [.command, .shift])
             .help(showHistoryDrawer ? "Hide history (⌘⇧H)" : "Show history (⌘⇧H)")
+            .accessibilityLabel(showHistoryDrawer ? "Hide history" : "Show history")
+            .accessibilityIdentifier("WickerHistoryToggle")
         }
     }
 
@@ -307,7 +313,7 @@ private struct SessionRow: View {
                         Text(sym)
                             .font(.system(size: 10, weight: .semibold,
                                           design: .rounded))
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(Color.accentColor)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(Color.accentColor.opacity(0.15),
@@ -748,6 +754,8 @@ private struct ConversationView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!canSubmit)
                 .help("Send (⌘⏎)")
+                .accessibilityLabel(pending ? "Stop generating" : "Send message")
+                .accessibilityIdentifier("WickerSendButton")
             }
             .padding(.horizontal, outerHPad)
             .padding(.bottom, hero ? 0 : 14)
@@ -930,28 +938,6 @@ private struct MessageBubble: View {
     /// to know about the watchlist itself.
     var mentionedTickers: [String] = []
 
-    /// Parse the assistant's body as Markdown so **bold**, *italic*,
-    /// `code`, bullet lists, and links render. User + system messages
-    /// stay as plain text — markdown in a user message rarely makes
-    /// sense and parsing every turn would just cost cycles.
-    ///
-    /// `interpretedSyntax: .full` lets the parser see block-level
-    /// constructs (lists, headers) instead of the inline-only
-    /// default. Failure falls back to the raw string — Foundation's
-    /// parser tolerates a lot, but defensive default beats a blank
-    /// bubble on edge-case input.
-    private var renderedBody: AttributedString {
-        guard message.role == .assistant else {
-            return AttributedString(message.text)
-        }
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .full,
-            failurePolicy: .returnPartiallyParsedIfPossible)
-        return (try? AttributedString(markdown: message.text,
-                                       options: options))
-            ?? AttributedString(message.text)
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             if message.role == .user { Spacer(minLength: 60) }
@@ -962,10 +948,8 @@ private struct MessageBubble: View {
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(.tertiary)
-                Text(renderedBody)
-                    .font(.system(size: 13))
+                bubbleContent
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
                     .background {
@@ -974,9 +958,14 @@ private struct MessageBubble: View {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Color.accentColor.opacity(0.18))
                         case .assistant:
+                            // Solid low-opacity fill — Liquid Glass on
+                            // long-text bubbles renders as a "fog"
+                            // (subsurface scattering + vibrancy blur
+                            // eats the small body type's edges).
+                            // Glass belongs on chrome / buttons, not
+                            // prose surfaces.
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .glassEffect(.regular,
-                                             in: .rect(cornerRadius: 12))
+                                .fill(Color.secondary.opacity(0.08))
                         case .system:
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Color.orange.opacity(0.14))
@@ -1004,6 +993,26 @@ private struct MessageBubble: View {
                 }
             }
             if message.role != .user { Spacer(minLength: 60) }
+        }
+    }
+
+    /// Assistant messages route through `WickMarkdown` so block-level
+    /// markdown (headings, bullet lists, numbered lists) lays out
+    /// properly — Apple's `AttributedString(markdown:)` only handles
+    /// inline marks, so the previous `Text(AttributedString)` path
+    /// collapsed every `### Heading` and `- item` into one wall of
+    /// text. User / system messages stay plain — they're typed by a
+    /// person, not the LLM, so markdown in them is the exception.
+    @ViewBuilder
+    private var bubbleContent: some View {
+        if message.role == .assistant {
+            WickMarkdown(text: message.text,
+                          accent: Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(message.text)
+                .font(.system(size: 13))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

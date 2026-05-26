@@ -20,7 +20,8 @@ struct WickMarketDataProvider: MarketDataProvider {
 
     func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot {
         // ~1y of daily bars: enough for SMA200, RSI, MACD, and 52w range.
-        let series = try await adapter.fetch(symbol: ySymbol(symbol), interval: .d1, range: .y1)
+        let series = try await adapter.fetch(symbol: YahooSymbol.map(symbol),
+                                              interval: .d1, range: .y1)
         let closes = series.candles.map(\.close)
         guard let last = closes.last else {
             return MarketSnapshot(symbol: symbol, asOf: asOf)
@@ -37,13 +38,5 @@ struct WickMarketDataProvider: MarketDataProvider {
                                                   last: last),
             technicals: Technicals.technicalsSummary(closes: closes, last: last)
         )
-    }
-
-    // MARK: - Yahoo quirks
-
-    /// Yahoo uses `-` for class-share `.` symbols (BRK.B → BRK-B), matching
-    /// `LiveDataStore`.
-    private func ySymbol(_ id: String) -> String {
-        id.replacingOccurrences(of: ".", with: "-")
     }
 }
