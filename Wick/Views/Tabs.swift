@@ -491,10 +491,6 @@ struct AITab: View {
     /// `nil` = list-only view. Keyed by `generatedAt` since `Report`
     /// has no id and timestamps are unique per (ticker, run).
     @State private var expanded: Date?
-    /// Selected DAG node inside the expanded report. The
-    /// `reportView` clears this when `expanded` changes so each
-    /// report opens fresh on its first contributor.
-    @State private var selectedAgent: String?
     /// History timeline visibility. Hidden by default — the most
     /// recent report renders inline; clicking the History icon next
     /// to "AI Desk" pops the alternating-vertical timeline above the
@@ -799,7 +795,6 @@ struct AITab: View {
         .onTapGesture {
             withAnimation(.spring(duration: 0.32)) {
                 expanded = report.generatedAt
-                selectedAgent = nil  // re-default to Trader on switch
                 historyOpen = false  // collapse timeline after pick
             }
         }
@@ -873,251 +868,343 @@ struct AITab: View {
 
     // MARK: - Report view (active selection)
 
-    /// Layout for the expanded report:
-    ///   - Verdict hero (ticker / rating chip / compact gauge)
-    ///   - "Bottom line" editorial paragraph
-    ///   - HSplitView: DAG on the left, selected contributor's
-    ///     markdown on the right (the side-by-side reading layout
-    ///     the user asked for — chart + content, not stacked)
-    ///   - Disclaimer footer
+    /// Three-layer information architecture:
+    ///   1. Verdict band — rating, optional position, editorial summary
+    ///   2. Debate row — Bull vs Bear, side-by-side cards
+    ///   3. Evidence grid — four analysts in a 2×2 grid
+    ///   4. Risk review — risk manager's confirmation/override
+    ///   5. Disclaimer
+    ///
+    /// Each agent's body is rendered as-is markdown (LLM-free-form).
+    /// The only structural extraction the client does is a best-effort
+    /// `Lean: bullish|bearish|neutral` chip — when not present, no chip
+    /// is shown (never a fallback). All future-typed fields (stance,
+    /// headline) should be added to `AgentMessage` server-side, not
+    /// regexed here.
     private func reportView(_ report: Report) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
-            verdictCard(report)
-            bottomLine(report)
-            deskSection(report)
-            disclaimerRow(report)
-        }
-        .onAppear {
-            // Default-select the report's verdict producer (Trader)
-            // so the right pane has content the moment the row opens.
-            if selectedAgent == nil {
-                selectedAgent = DeskDAGView.nodeId(for: "Trader")
-                    ?? DeskDAGView.nodes.first?.id
+        let buckets = AgentPhase.partition(report.transcript)
+        let analysts = (buckets[.analysts] ?? []).sorted { sortKey($0.role) < sortKey($1.role) }
+        let researchers = buckets[.research] ?? []
+        let bull = researchers.first { $0.role == "Bull Researcher" }
+        let bear = researchers.first { $0.role == "Bear Researcher" }
+        let risk = (buckets[.gatekeep] ?? []).first
+
+        return VStack(alignment: .leading, spacing: 28) {
+            verdictBand(report)
+            if bull != nil || bear != nil {
+                section("Debate", subtitle: "Bull vs bear — argued in pairs") {
+                    HStack(alignment: .top, spacing: 16) {
+                        debateColumn(bull, side: .bull)
+                        debateColumn(bear, side: .bear)
+                    }
+                }
             }
+            if !analysts.isEmpty {
+                section("Evidence", subtitle: "What each analyst found") {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: 16),
+                        GridItem(.flexible(), spacing: 16)
+                    ], spacing: 16) {
+                        ForEach(analysts) { msg in
+                            agentCard(msg, compact: true)
+                        }
+                    }
+                }
+            }
+            if let risk {
+                section("Risk review", subtitle: "Final gate before publishing") {
+                    agentCard(risk, compact: false)
+                }
+            }
+            disclaimerRow(report)
         }
     }
 
-    // MARK: Verdict header + rating gauge
+    /// Stable ordering for analyst grid: Fundamental → Technical →
+    /// Sentiment → News. Anything unrecognized sinks to the end so a
+    /// future analyst role doesn't break the 2×2 layout.
+    private func sortKey(_ role: String) -> Int {
+        switch role {
+        case "Fundamental Analyst": return 0
+        case "Technical Analyst":   return 1
+        case "Sentiment Analyst":   return 2
+        case "News Analyst":        return 3
+        default:                    return 99
+        }
+    }
 
-    /// Hero card. Cleaner type stack (ticker huge, "As of <date>"
-    /// subdued, big rating chip on the right). Gauge sits in its own
-    /// row below for breathing room.
-    private func verdictCard(_ report: Report) -> some View {
+    // MARK: Layer 1 — Verdict band
+
+    /// Single hero block combining what used to be three stacked
+    /// sections (verdict card + bottom line + rating gauge) into one
+    /// scannable unit. Uses `.regularMaterial` instead of Liquid
+    /// Glass — HIG reserves Liquid Glass for chrome/navigation, not
+    /// content surfaces.
+    private func verdictBand(_ report: Report) -> some View {
         let tint = ratingColor(report.rating)
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(report.ticker)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    Text("As of " + report.asOf.formatted(
-                            date: .abbreviated, time: .omitted))
-                        .font(.system(size: 11))
+        // Prefer the trader's typed headline + body (v2 envelope). If the
+        // trader emitted neither (older models, parse miss), fall back to
+        // the legacy "strip `HOLD\nPosition: 0%` prefix" routine on the
+        // raw `report.summary` text.
+        let trader = report.transcript.first { $0.role == "Trader" }
+        let headline = trader?.headline
+        let body: String = {
+            if let b = trader?.body, !b.isEmpty { return b }
+            return strippedSummary(report.summary)
+        }()
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(report.ticker)
+                    .font(.system(.title, weight: .bold))
+                Text("· As of " + report.asOf.formatted(
+                        date: .abbreviated, time: .omitted))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            HStack(alignment: .center, spacing: 14) {
+                Text(report.rating.label.uppercased())
+                    .font(.system(.subheadline, weight: .heavy))
+                    .tracking(0.8)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(tint.gradient, in: Capsule())
+                    .foregroundStyle(.white)
+                if let pos = report.position {
+                    let pct = Int((pos.targetWeight * 100).rounded())
+                    HStack(spacing: 5) {
+                        Text("Position")
+                            .foregroundStyle(.secondary)
+                        Text("\(pct)%")
+                            .fontWeight(.semibold)
+                            .monospacedDigit()
+                    }
+                    .font(.callout)
+                }
+                Spacer()
+                inlineRatingDots(report.rating)
+            }
+
+            if let headline, !headline.isEmpty {
+                Text(headline)
+                    .font(.system(.title3, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 760, alignment: .leading)
+            }
+            if !body.isEmpty {
+                Text(body)
+                    .font(.body)
+                    .foregroundStyle(headline == nil ? .primary : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 760, alignment: .leading)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.regularMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(tint.opacity(0.30), lineWidth: 1)
+        )
+        // Group the whole hero so VoiceOver reads it as one unit:
+        // "AAPL verdict, Hold, no position committed, …". Children are
+        // combined rather than ignored so the editorial summary text
+        // is still in the announced label.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(verdictBandAccessibilityLabel(for: report,
+                                                          headline: headline))
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Build the spoken summary for the verdict band. Stays compact so
+    /// VoiceOver doesn't read for 20 seconds. Position is omitted when
+    /// the trader declined to commit a number — matches the visual
+    /// behaviour (no "0%" fallback).
+    private func verdictBandAccessibilityLabel(for report: Report,
+                                                headline: String?) -> String
+    {
+        var parts: [String] = [
+            "\(report.ticker) verdict",
+            report.rating.label,
+        ]
+        if let pos = report.position {
+            let pct = Int((pos.targetWeight * 100).rounded())
+            parts.append("Position \(pct) percent")
+        }
+        if let headline, !headline.isEmpty {
+            parts.append(headline)
+        }
+        return parts.joined(separator: ". ")
+    }
+
+    /// Five-dot inline gauge. Active dot in rating tint, others dim.
+    /// The dots replace the old wide 220pt gauge — now they tuck into
+    /// the same row as the rating chip + position, taking ~60pt.
+    ///
+    /// **Accessibility:** the dots are pure decoration — the rating
+    /// chip beside them already announces the same value. We collapse
+    /// them into one element with a single descriptive label, and add
+    /// the `isImage` trait so VoiceOver treats it as a visual.
+    private func inlineRatingDots(_ rating: Rating) -> some View {
+        let tint = ratingColor(rating)
+        return HStack(spacing: 6) {
+            ForEach(Rating.allCases, id: \.self) { r in
+                let active = r == rating
+                Circle()
+                    .fill(active ? tint : Color.secondary.opacity(0.32))
+                    .frame(width: active ? 9 : 6,
+                           height: active ? 9 : 6)
+            }
+        }
+        .help("Strong Sell  ←  →  Strong Buy")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Rating gauge: \(rating.label) on a five-step scale from Strong Sell to Strong Buy.")
+        .accessibilityAddTraits(.isImage)
+    }
+
+    // MARK: Layer 2 — Debate
+
+    private enum DebateSide { case bull, bear
+        var label: String { self == .bull ? "Bull case" : "Bear case" }
+        var tint: Color { self == .bull ? .green : .red }
+        var symbol: String {
+            self == .bull ? "arrow.up.forward.circle.fill"
+                          : "arrow.down.forward.circle.fill"
+        }
+    }
+
+    /// One half of the debate. Rendered as a tinted card so Bull / Bear
+    /// read as a matched pair, but uses standard material (not Liquid
+    /// Glass) per HIG content-layer rules. Empty placeholder when the
+    /// debate didn't run / one side is missing.
+    @ViewBuilder
+    private func debateColumn(_ msg: AgentMessage?, side: DebateSide) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: side.symbol)
+                    .font(.title3)
+                    .foregroundStyle(side.tint)
+                Text(side.label)
+                    .font(.system(.headline, weight: .semibold))
+                Spacer()
+                if let msg, let lean = extractedLean(from: msg) {
+                    leanChip(lean)
+                }
+            }
+            if let msg {
+                WickMarkdown(text: displayBody(msg),
+                             accent: side.tint)
+            } else {
+                Text("No \(side.label.lowercased()) recorded for this run.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(side.tint.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(side.tint.opacity(0.28), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(side.label) research column")
+    }
+
+    // MARK: Layer 3 — Agent card (analyst grid + risk row)
+
+    /// One agent's contribution as a card. Used by the 4-analyst grid
+    /// (compact: true) and the Risk row (compact: false). The header
+    /// has the role icon + name + (optional) lean chip; the body is
+    /// the LLM's free-form markdown rendered by `WickMarkdown` —
+    /// **no client-side parsing of bullets, no key-value extraction**.
+    private func agentCard(_ msg: AgentMessage, compact: Bool) -> some View {
+        let style = roleStyle(msg.role)
+        let phase = AgentPhase.from(role: msg.role)
+        let lean = extractedLean(from: msg)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: style.symbol)
+                    .font(.system(.callout, weight: .semibold))
+                    .foregroundStyle(style.color)
+                    .symbolRenderingMode(.hierarchical)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(style.color.opacity(0.14))
+                    )
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(msg.role)
+                        .font(.system(compact ? .subheadline : .body,
+                                      weight: .semibold))
+                    Text(phase.title)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(report.rating.label.uppercased())
-                    .font(.system(size: 13, weight: .heavy, design: .rounded))
-                    .tracking(1.0)
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(tint.gradient, in: Capsule())
-                    .foregroundStyle(.white)
+                if let lean { leanChip(lean) }
             }
-            ratingGauge(report.rating)
+            WickMarkdown(text: displayBody(msg),
+                         accent: style.color)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlass(cornerRadius: 16, tint: tint.opacity(0.12))
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(style.color.opacity(0.18), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(msg.role) card, \(phase.title) phase")
     }
 
-    /// Editorial "bottom line" — Stocks app uses a paragraph with a
-    /// thin coloured leading rule to set off the human-readable take.
-    /// No glass card around the text itself; it's content.
-    private func bottomLine(_ report: Report) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Capsule()
-                .fill(ratingColor(report.rating).opacity(0.85))
-                .frame(width: 3)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("THE BOTTOM LINE")
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(1.0)
-                    .foregroundStyle(.tertiary)
-                Text(report.summary)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, 4)
-    }
+    // MARK: Section wrapper
 
-    /// Side-by-side desk view: workflow DAG on the left, selected
-    /// contributor's full markdown reasoning on the right. Replaces
-    /// the earlier stacked phase list — the DAG carries the structure
-    /// visually, and the reading pane is no longer a wall of text.
-    private func deskSection(_ report: Report) -> some View {
-        let messagesByNodeID: [String: AgentMessage] = Dictionary(
-            uniqueKeysWithValues: report.transcript.compactMap { msg in
-                guard let id = DeskDAGView.nodeId(for: msg.role) else {
-                    return nil
-                }
-                return (id, msg)
-            })
-
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("THE DESK")
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(1.0)
-                    .foregroundStyle(.tertiary)
-                Spacer()
-                Text("\(report.transcript.count) contributors · click any node")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-
-            HStack(alignment: .top, spacing: 22) {
-                // LEFT: DAG flow chart
-                DeskDAGView(selected: Binding(
-                    get: { selectedAgent },
-                    set: { newValue in
-                        // Always keep one node selected so the right
-                        // pane never goes blank inside an open report.
-                        if let newValue { selectedAgent = newValue }
-                    }
-                ))
-                .frame(width: 460, height: 520)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.regularMaterial.opacity(0.4))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.18),
-                                       lineWidth: 1)
-                )
-
-                // RIGHT: selected analyst's markdown
-                analystReadingPane(
-                    activeID: selectedAgent,
-                    messagesByNodeID: messagesByNodeID
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-        }
-    }
-
-    /// Right-side reading column. Renders the active DAG node's
-    /// markdown content via `WickMarkdown`, with a small header row
-    /// (avatar + name + phase pill) anchoring identity at the top.
+    /// Consistent section chrome: headline + optional subtitle, then
+    /// the content with breathing room above. Uses system text styles
+    /// (`.headline` + `.subheadline`) so Dynamic Type / accessibility
+    /// settings carry through. Title-style capitalization per macOS 26
+    /// section header convention.
     @ViewBuilder
-    private func analystReadingPane(
-        activeID: String?,
-        messagesByNodeID: [String: AgentMessage]
-    ) -> some View {
-        if let id = activeID,
-           let node = DeskDAGView.nodes.first(where: { $0.id == id }),
-           let msg = messagesByNodeID[id]
-        {
-            let phase = AgentPhase.from(role: msg.role)
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    DeskNodeAvatar(node: node, isSelected: false)
-                        .frame(width: 90, height: 90)
-                        .scaleEffect(0.7, anchor: .topLeading)
-                        .frame(width: 60, height: 60)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(msg.role)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        Text("\(phase.title.uppercased())  ·  \(phase.subtitle)")
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(0.6)
-                            .foregroundStyle(node.color)
-                    }
-                    Spacer()
+    private func section<Content: View>(_ title: String,
+                                         subtitle: String? = nil,
+                                         @ViewBuilder content: () -> Content)
+        -> some View
+    {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(title)
+                    .font(.system(.headline, weight: .semibold))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-
-                Divider().opacity(0.3)
-
-                ScrollView {
-                    WickMarkdown(text: msg.content, accent: node.color)
-                        .padding(.trailing, 4)
-                }
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.regularMaterial.opacity(0.4))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(node.color.opacity(0.35), lineWidth: 1)
-            )
-            .frame(minHeight: 520)
-            .id(id) // animate-in on switch
-            .transition(.opacity.combined(with: .move(edge: .trailing)))
-        } else {
-            VStack(spacing: 12) {
-                Image(systemName: "arrow.left")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.tertiary)
-                Text("Pick a node on the left to read its full reasoning.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity, minHeight: 520)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.regularMaterial.opacity(0.3))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(0.15),
-                                  style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-            )
-        }
-    }
-
-    /// One phase of the workflow: small phase label up top, then the
-    /// member analysts as rows (divider between siblings only — no
-    /// trailing divider so the cluster reads as one block).
-    private func phaseSection(_ phase: AgentPhase, messages: [AgentMessage]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(phase.color.opacity(0.5))
-                    .frame(width: 6, height: 6)
-                Text(phase.title.uppercased())
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(0.9)
-                    .foregroundStyle(.secondary)
-                Text(phase.subtitle)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
                 Spacer()
             }
-            .padding(.bottom, 10)
-            ForEach(Array(messages.enumerated()), id: \.element.id) { idx, msg in
-                agentRow(msg)
-                    .padding(.vertical, 10)
-                if idx < messages.count - 1 {
-                    Divider().opacity(0.35)
-                }
-            }
+            content()
         }
     }
 
     private func disclaimerRow(_ report: Report) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "info.circle")
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(.tertiary)
             Text(report.disclaimer)
-                .font(.system(size: 10))
+                .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -1125,153 +1212,133 @@ struct AITab: View {
         .padding(.top, 6)
     }
 
-    /// Compact rating gauge — single horizontal track, 5 evenly
-    /// spaced dots, active one enlarged with a dropped pill badge
-    /// directly beneath it. Replaces the earlier full-width 5-segment
-    /// bar (which wasted horizontal space and competed with the
-    /// metric chips below for the eye).
-    private func ratingGauge(_ rating: Rating) -> some View {
-        let labels = ["Strong Sell", "Sell", "Hold", "Buy", "Strong Buy"]
-        let tint = ratingColor(rating)
-        return VStack(spacing: 12) {
-            ZStack {
-                // Thin track line connecting the dots end-to-end.
-                Capsule()
-                    .fill(Color.secondary.opacity(0.18))
-                    .frame(width: 220, height: 1.5)
-                HStack(spacing: 0) {
-                    ForEach(Rating.allCases, id: \.self) { r in
-                        let active = r == rating
-                        ZStack {
-                            // Active gets a soft halo behind the dot.
-                            if active {
-                                Circle()
-                                    .fill(tint.opacity(0.28))
-                                    .frame(width: 22, height: 22)
-                                    .blur(radius: 3)
-                            }
-                            Circle()
-                                .fill(active ? tint : Color.secondary.opacity(0.45))
-                                .frame(width: active ? 12 : 6,
-                                       height: active ? 12 : 6)
-                                .overlay(
-                                    Circle()
-                                        .strokeBorder(active
-                                            ? Color.white.opacity(0.25)
-                                            : Color.clear,
-                                            lineWidth: 1)
-                                )
-                                .shadow(color: active ? tint : .clear,
-                                        radius: active ? 6 : 0)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .frame(width: 220)
-            }
-            // Dropped badge for the active rating — anchored under
-            // the active dot via a manual offset (5 dots evenly across
-            // 220pt → step ~44pt; index 0..4 maps to -88..+88).
-            HStack {
-                Text(labels[rating.rawValue].uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.8)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(tint.gradient))
-                    .offset(x: CGFloat(rating.rawValue - 2) * 44)
-            }
-            .frame(width: 220)
+    // MARK: Lean chip (typed → fallback substring)
+
+    /// Visual properties for the three analyst stances. The enum itself
+    /// lives in `TradingFloor` (`Lean`) — this is just the view layer's
+    /// tint / glyph mapping.
+    private func leanTint(_ lean: Lean) -> Color {
+        switch lean {
+        case .bullish: .green
+        case .bearish: .red
+        case .neutral: .gray
         }
     }
 
-    /// (Legacy multi-segment gauge kept for reference — unused.)
-    @ViewBuilder
-    private func legacyRatingGauge(_ rating: Rating) -> some View {
-        let labels = ["Strong\nSell", "Sell", "Hold", "Buy", "Strong\nBuy"]
-        HStack(alignment: .bottom, spacing: 5) {
-            ForEach(Rating.allCases, id: \.self) { r in
-                let active = r == rating
-                VStack(spacing: 5) {
-                    Capsule()
-                        .fill(active ? ratingColor(r).gradient
-                                     : Color.secondary.opacity(0.18).gradient)
-                        .frame(height: active ? 10 : 6)
-                    Text(labels[r.rawValue])
-                        .font(.system(size: 8, weight: active ? .bold : .regular))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(active ? ratingColor(r) : Color.secondary)
-                }
-            }
+    private func leanSymbol(_ lean: Lean) -> String {
+        switch lean {
+        case .bullish: "arrow.up.right"
+        case .bearish: "arrow.down.right"
+        case .neutral: "minus"
         }
     }
 
-    // MARK: Agent rows (avatar circle + name + body)
-
-    /// One analyst's contribution. Avatar-style header:
-    ///   - Circular gradient pill with the role's SF Symbol (the
-    ///     closest native parallel to a memoji — Apple doesn't expose
-    ///     a Memoji / Genmoji creation API on macOS, so SF Symbols
-    ///     on gradient circles are the right macOS-native equivalent
-    ///     for "analyst headshot")
-    ///   - Role name + workflow phase pill on the right
-    ///   - Content paragraph underneath in body type
-    private func agentRow(_ msg: AgentMessage) -> some View {
-        let style = roleStyle(msg.role)
-        let phase = AgentPhase.from(role: msg.role)
-        return HStack(alignment: .top, spacing: 12) {
-            agentAvatar(style: style)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(msg.role)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text(phase.title)
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(style.color)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(style.color.opacity(0.4),
-                                              lineWidth: 0.8)
-                        )
-                }
-                Text(msg.content)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(2)
-            }
-            Spacer(minLength: 0)
+    /// Resolve the agent's stance. Prefers the typed JSON envelope field
+    /// (`msg.lean`); falls back to a substring scan of the raw content so
+    /// older cached reports (pre-JSON-envelope) still render a chip.
+    ///
+    /// Returns nil only when neither path produced a value — UI then
+    /// shows no chip. Never coerces to "neutral" as a fallback.
+    private func extractedLean(from msg: AgentMessage) -> Lean? {
+        if let typed = msg.lean { return typed }
+        let lower = msg.content.lowercased()
+        for lean in Lean.allCases {
+            if lower.contains("lean: " + lean.rawValue) { return lean }
+            if lower.contains("lean:" + lean.rawValue)  { return lean }
         }
+        return nil
     }
 
-    /// 36-pt circular avatar — radial gradient in the role's tint
-    /// with the SF Symbol centered + a faint inner ring. Reads as
-    /// "this is who is speaking" at a glance, like a headshot in a
-    /// Slack thread, without committing to a real face.
-    private func agentAvatar(style: (symbol: String, color: Color)) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [style.color.opacity(0.45),
-                                 style.color.opacity(0.18)],
-                        center: .topLeading,
-                        startRadius: 2,
-                        endRadius: 36)
-                )
-            Circle()
-                .strokeBorder(style.color.opacity(0.55),
-                              lineWidth: 1)
-            Image(systemName: style.symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(style.color)
+    /// Visual chip for a parsed stance — colored capsule with an
+    /// arrow glyph + label.
+    ///
+    /// **Accessibility:** arrow glyph is decorative (color encodes
+    /// the same info as text). Collapse into one element with the
+    /// stance read as a static text. `accessibilityValue` so VoiceOver
+    /// announces "Lean, bullish" rather than just "bullish".
+    private func leanChip(_ lean: Lean) -> some View {
+        let tint = leanTint(lean)
+        return HStack(spacing: 4) {
+            Image(systemName: leanSymbol(lean))
+                .font(.system(.caption2, weight: .semibold))
+            Text(lean.rawValue.capitalized)
+                .font(.system(.caption, weight: .semibold))
         }
-        .frame(width: 34, height: 34)
+        .foregroundStyle(tint)
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(
+            Capsule().fill(tint.opacity(0.14))
+        )
+        .overlay(
+            Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.8)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Lean")
+        .accessibilityValue(lean.rawValue.capitalized)
+    }
+
+    // MARK: Summary helpers
+
+    /// Drop the redundant rating + position prefix from
+    /// `Report.summary` so the verdict band's editorial paragraph
+    /// doesn't repeat the chip beside it. Tolerates several shapes
+    /// observed in cached reports:
+    ///   - "HOLD\nPosition: 0%\n\n<paragraph>"   (AAPL)
+    ///   - "SELL\n\n<paragraph>"                  (TSLA — no Position)
+    ///   - "<paragraph>"                          (legacy)
+    private func strippedSummary(_ summary: String) -> String {
+        let verdicts: Set<String> = ["STRONG SELL", "SELL", "HOLD", "BUY",
+                                      "STRONG BUY", "STRONG-SELL", "STRONG-BUY"]
+        var lines = summary.components(separatedBy: "\n")
+        while let first = lines.first {
+            let trimmed = first.trimmingCharacters(in: .whitespaces)
+            let upper = trimmed.uppercased()
+            if trimmed.isEmpty
+                || verdicts.contains(upper)
+                || upper.hasPrefix("POSITION:")
+                || upper.hasPrefix("ALLOC:")
+                || upper.hasPrefix("ALLOCATION:")
+                || upper.hasPrefix("TARGET WEIGHT")
+            {
+                lines.removeFirst()
+                continue
+            }
+            break
+        }
+        return lines.joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// What to render inside an agent card's WickMarkdown view. Prefers
+    /// the typed `msg.body` (set by `Agents.parseEnvelope`); falls back
+    /// to the legacy "strip trailing `Lean:` line" routine for older
+    /// cached reports where the envelope wasn't yet emitted.
+    private func displayBody(_ msg: AgentMessage) -> String {
+        if let body = msg.body, !body.isEmpty { return body }
+        return strippedLeanLine(msg.content)
+    }
+
+    /// Legacy fallback: remove a trailing `Lean: ...` line from an
+    /// agent's body so the chip in the card header doesn't read twice
+    /// — once in the chip, once in the prose. If no Lean line is
+    /// detected, returns the body unchanged. Kept only for pre-v2
+    /// reports cached on disk.
+    private func strippedLeanLine(_ body: String) -> String {
+        let lines = body.components(separatedBy: "\n")
+        guard !lines.isEmpty else { return body }
+        var trimmed = lines
+        while let last = trimmed.last,
+              last.trimmingCharacters(in: .whitespaces).isEmpty
+        {
+            trimmed.removeLast()
+        }
+        if let last = trimmed.last,
+           last.lowercased().contains("lean:")
+        {
+            trimmed.removeLast()
+        }
+        return trimmed.joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: Workflow phase grouping
