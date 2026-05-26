@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradingFloor — Agent workflow reference study</title>
+<style>
+  :root {
+    --ivory:  #FAF9F5;
+    --paper:  #FFFFFF;
+    --slate:  #141413;
+    --clay:   #D97757;
+    --clay-d: #B85C3E;
+    --oat:    #E3DACC;
+    --olive:  #788C5D;
+    --g100:   #F0EEE6;
+    --g200:   #E6E3DA;
+    --g300:   #D1CFC5;
+    --g500:   #87867F;
+    --g700:   #3D3D3A;
+
+    --bg: var(--ivory); --fg: var(--slate); --muted: var(--g500);
+    --border: var(--g300); --card: var(--paper); --code-bg: var(--g100);
+    --accent: var(--clay); --accent-soft: var(--oat);
+    --ok: var(--olive); --warn: var(--clay); --bad: var(--clay-d);
+
+    --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+    --sans:  system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:  ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ivory); color: var(--slate);
+    font-family: var(--sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1400px; margin: 0 auto;
+    padding: clamp(40px, 6vw, 80px) clamp(20px, 5vw, 80px) clamp(60px, 8vw, 140px);
+  }
+  p, .subtitle, .tldr p, li { max-width: 68ch; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--g500); margin: 0 0 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before { content: ""; width: 24px; height: 1.5px; background: var(--clay); }
+
+  h1 {
+    font-family: var(--serif); font-weight: 500;
+    font-size: clamp(34px, 4.6vw, 52px); line-height: 1.06;
+    letter-spacing: -0.018em; margin: 0 0 8px; max-width: 22ch;
+  }
+  h1 em { font-style: italic; color: var(--clay); }
+
+  .subtitle {
+    font-family: var(--serif); font-style: italic;
+    font-size: 17px; color: var(--g700); margin: 14px 0 0; max-width: 70ch;
+  }
+
+  hr.rule { border: 0; border-top: 1.5px solid var(--g300); margin: 40px 0 0; }
+
+  .tldr {
+    background: var(--paper); border: 1.5px solid var(--g300);
+    border-radius: 12px; padding: 22px 26px; margin: 32px 0 36px;
+  }
+  .tldr .label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--clay); margin-bottom: 8px;
+  }
+  .tldr p { margin: 0; font-size: 16px; color: var(--g700); line-height: 1.5; }
+
+  nav.toc {
+    background: var(--paper); border: 1.5px solid var(--g300);
+    border-radius: 12px; padding: 16px 22px; margin-bottom: 56px;
+  }
+  nav.toc .label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--g500); margin-bottom: 10px;
+  }
+  nav.toc ol { margin: 0; padding: 0 0 0 22px; columns: 2; column-gap: 32px; }
+  nav.toc li { margin: 4px 0; break-inside: avoid; }
+  @media (max-width: 720px) { nav.toc ol { columns: 1; } }
+
+  section { margin: 56px 0 0; scroll-margin-top: 28px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 8px; }
+  .sec-head .idx {
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--clay); width: 28px; flex-shrink: 0;
+  }
+  h2 {
+    font-family: var(--serif); font-weight: 500; font-size: 26px;
+    margin: 0; letter-spacing: -0.012em; color: var(--slate);
+  }
+  h3 {
+    font-family: var(--sans); font-weight: 600; font-size: 13px;
+    margin: 22px 0 8px; color: var(--slate);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  p, li { color: var(--g700); }
+  p { margin: 10px 0; }
+  .muted { color: var(--g500); }
+  .lede {
+    font-family: var(--serif); font-style: italic; font-size: 16.5px;
+    color: var(--g700); margin: 4px 0 18px;
+  }
+
+  code, pre { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--g100); padding: 1px 6px; border-radius: 4px; color: var(--slate); }
+  pre  { background: var(--g100); padding: 14px 16px; border-radius: 10px;
+         overflow-x: auto; border: 1.5px solid var(--g200); line-height: 1.5; }
+
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+  th, td {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1.5px solid var(--g200);
+    vertical-align: top; font-size: 14px;
+  }
+  th {
+    font-family: var(--mono); font-weight: 500;
+    color: var(--g500); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    border-bottom-color: var(--g300);
+  }
+  td.first { font-family: var(--serif); font-weight: 500; color: var(--slate); white-space: nowrap; }
+
+  a {
+    color: var(--clay); text-decoration-color: var(--oat);
+    text-underline-offset: 3px;
+  }
+  a:hover { text-decoration-color: var(--clay); }
+
+  details {
+    border: 1.5px solid var(--g300); border-radius: 10px;
+    padding: 12px 16px; margin: 10px 0; background: var(--paper);
+  }
+  details[open] { padding-bottom: 14px; }
+  summary { cursor: pointer; font-weight: 500; color: var(--slate); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--paper); border: 1.5px solid var(--g300);
+    border-radius: 14px; padding: 20px;
+  }
+  .card .title {
+    font-family: var(--serif); font-weight: 500;
+    font-size: 19px; color: var(--slate);
+    letter-spacing: -0.008em; margin: 0 0 6px;
+  }
+  .card .sub {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--g500); margin-bottom: 12px;
+  }
+
+  .tag {
+    display: inline-block; font-family: var(--mono);
+    font-size: 10.5px; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+    background: var(--g100); color: var(--g700);
+    border: 1.5px solid var(--g200); vertical-align: middle; margin: 2px 2px 2px 0;
+  }
+  .tag-ok   { background: color-mix(in srgb, var(--olive)  18%, var(--paper)); color: var(--olive);  border-color: color-mix(in srgb, var(--olive)  38%, var(--paper)); }
+  .tag-warn { background: color-mix(in srgb, var(--clay)   16%, var(--paper)); color: var(--clay-d); border-color: color-mix(in srgb, var(--clay)   38%, var(--paper)); }
+  .tag-clay { background: color-mix(in srgb, var(--clay)   12%, var(--paper)); color: var(--clay-d); border-color: color-mix(in srgb, var(--clay)   28%, var(--paper)); }
+
+  blockquote {
+    border-left: 2px solid var(--clay); margin: 16px 0; padding: 4px 16px;
+    color: var(--g700); font-family: var(--serif); font-style: italic;
+  }
+
+  figure { margin: 18px 0; }
+  figcaption {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--g500); margin-top: 8px;
+  }
+  svg .lane { fill: var(--paper); stroke: var(--g300); stroke-width: 1.5; }
+  svg .node { fill: var(--paper); stroke: var(--g300); stroke-width: 1.5; }
+  svg .node.accent { stroke: var(--clay); }
+  svg text { font-family: var(--mono); font-size: 11px; fill: var(--g700); }
+  svg text.lbl { fill: var(--slate); font-weight: 600; }
+  svg .arr { stroke: var(--g500); fill: none; stroke-width: 1.2; }
+
+  footer {
+    margin-top: 96px; padding-top: 28px;
+    border-top: 1.5px solid var(--g300);
+    color: var(--g500); font-size: 12.5px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  footer .k { font-family: var(--serif); font-style: italic; color: var(--g700); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">TRADINGFLOOR · REFERENCE STUDY · 2026-05-24</p>
+  <h1>Agent workflows for a trading desk, <em>three ways</em></h1>
+  <p class="subtitle">What TradingAgents, live-trade-bench, and AI-Trader each teach us — and which ideas belong in Wick's TradingFloor.</p>
+
+  <hr class="rule">
+
+  <section class="tldr">
+    <div class="label">TL;DR</div>
+    <p>Our pipeline-style TradingFloor is closest to TradingAgents; live-trade-bench validates a much thinner "one LLM → portfolio weights" loop; AI-Trader isn't really an agent at all but a SKILL.md + heartbeat platform — port the thin-agent primitive and the SKILL/heartbeat shape, keep the pipeline as an optional "deep analysis" mode.</p>
+  </section>
+
+  <nav class="toc">
+    <div class="label">Contents</div>
+    <ol>
+      <li><a href="#wick">Where Wick's TradingFloor stands today</a></li>
+      <li><a href="#tradingagents">TauricResearch / TradingAgents</a></li>
+      <li><a href="#ltb">ulab-uiuc / live-trade-bench</a></li>
+      <li><a href="#aitrader">HKUDS / AI-Trader</a></li>
+      <li><a href="#compare">Side-by-side</a></li>
+      <li><a href="#port">What to port into Wick</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============================================================ -->
+  <section id="wick">
+    <div class="sec-head"><span class="idx">01</span><h2>Where Wick's TradingFloor stands today</h2></div>
+    <p class="lede">A fixed pipeline adapted from TradingAgents, with the heavy LangGraph parts trimmed off.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 130" width="100%" role="img" aria-label="TradingFloor pipeline">
+        <g>
+          <rect class="lane" x="6" y="44" width="748" height="42" rx="6"/>
+          <!-- nodes -->
+          <g><rect class="node" x="20"  y="50" width="112" height="30" rx="6"/><text x="76"  y="69" text-anchor="middle">snapshot()</text></g>
+          <g><rect class="node accent" x="148" y="50" width="160" height="30" rx="6"/><text x="228" y="69" text-anchor="middle" class="lbl">4 analysts ∥</text></g>
+          <g><rect class="node" x="324" y="50" width="140" height="30" rx="6"/><text x="394" y="69" text-anchor="middle">bull ↔ bear · r</text></g>
+          <g><rect class="node" x="480" y="50" width="100" height="30" rx="6"/><text x="530" y="69" text-anchor="middle" class="lbl">Trader</text></g>
+          <g><rect class="node" x="596" y="50" width="140" height="30" rx="6"/><text x="666" y="69" text-anchor="middle">Risk → Report</text></g>
+          <!-- arrows -->
+          <path class="arr" d="M132 65 L148 65" marker-end="url(#a)"/>
+          <path class="arr" d="M308 65 L324 65" marker-end="url(#a)"/>
+          <path class="arr" d="M464 65 L480 65" marker-end="url(#a)"/>
+          <path class="arr" d="M580 65 L596 65" marker-end="url(#a)"/>
+          <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#87867F"/></marker></defs>
+        </g>
+      </svg>
+      <figcaption>Fig 01 · <code>TradingFloor.analyze()</code> — analysts in parallel, then sequential debate → trader → risk.</figcaption>
+    </figure>
+
+    <table>
+      <thead><tr><th>Aspect</th><th>What we have</th></tr></thead>
+      <tbody>
+        <tr><td class="first">Orchestration</td><td>Hard-coded Swift pipeline in <code>TradingFloor/Sources/TradingFloor/TradingFloor.swift</code></td></tr>
+        <tr><td class="first">Agents</td><td>4 analysts (fundamental / technical / sentiment / news) → bull + bear → trader → risk · <code>Agents.swift</code></td></tr>
+        <tr><td class="first">State</td><td><code>AgentState</code> blackboard, sequentially appended (LangGraph stand-in) · <code>Core/Agent.swift</code></td></tr>
+        <tr><td class="first">Data surface</td><td>One pre-fetched <code>MarketSnapshot</code>; no tool-calls mid-run · <code>Tools/MarketData.swift</code></td></tr>
+        <tr><td class="first">Model split</td><td><code>quickModel</code> (analysts) vs <code>deepModel</code> (debate/trader/risk) · <code>TradingFloorConfig.swift</code></td></tr>
+        <tr><td class="first">Output</td><td>5-tier <code>Rating</code> + transcript + disclaimer · <code>Core/Report.swift</code></td></tr>
+        <tr><td class="first">Second mode planned</td><td>Interactive PiSwift chat agent with <code>AgentTool</code> registry (skeleton in <code>Tools/AgentTool.swift</code>, Skills/*)</td></tr>
+      </tbody>
+    </table>
+    <p>
+      <span class="tag tag-ok">kept</span> rating scale, deep/quick split, transcript-as-first-class output ·
+      <span class="tag tag-warn">trimmed</span> live tool-calling, checkpoint DB, multi-round risk debate ·
+      <span class="tag tag-clay">planned</span> thin-agent chat mode + pluggable code sandbox (see <code>memory/tradingfloor-agent-design.md</code>).
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="tradingagents">
+    <div class="sec-head"><span class="idx">02</span><h2>TauricResearch / TradingAgents</h2></div>
+    <p class="lede">The original we adapted: a LangGraph workflow built like an investment firm.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 220" width="100%" role="img" aria-label="TradingAgents pipeline">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#87867F"/></marker></defs>
+        <!-- analysts lane -->
+        <rect class="lane" x="6"  y="14" width="180" height="190" rx="6"/>
+        <text x="14" y="32">analysts</text>
+        <g><rect class="node" x="22" y="46"  width="148" height="28" rx="6"/><text x="96" y="64" text-anchor="middle">fundamentals</text></g>
+        <g><rect class="node" x="22" y="80"  width="148" height="28" rx="6"/><text x="96" y="98" text-anchor="middle">sentiment</text></g>
+        <g><rect class="node" x="22" y="114" width="148" height="28" rx="6"/><text x="96" y="132" text-anchor="middle">news</text></g>
+        <g><rect class="node" x="22" y="148" width="148" height="28" rx="6"/><text x="96" y="166" text-anchor="middle">technical</text></g>
+        <!-- researchers -->
+        <rect class="lane" x="206" y="14" width="180" height="190" rx="6"/>
+        <text x="214" y="32">researchers · debate</text>
+        <g><rect class="node accent" x="222" y="60"  width="148" height="28" rx="6"/><text x="296" y="78" text-anchor="middle" class="lbl">bull</text></g>
+        <g><rect class="node accent" x="222" y="100" width="148" height="28" rx="6"/><text x="296" y="118" text-anchor="middle" class="lbl">bear</text></g>
+        <text x="222" y="156" font-style="italic">N rounds · max_debate_rounds</text>
+        <!-- trader -->
+        <rect class="lane" x="406" y="14" width="160" height="190" rx="6"/>
+        <text x="414" y="32">trader</text>
+        <g><rect class="node" x="422" y="92" width="136" height="28" rx="6"/><text x="490" y="110" text-anchor="middle" class="lbl">Trader</text></g>
+        <!-- risk + PM -->
+        <rect class="lane" x="586" y="14" width="168" height="190" rx="6"/>
+        <text x="594" y="32">risk &amp; PM</text>
+        <g><rect class="node" x="602" y="62"  width="144" height="28" rx="6"/><text x="674" y="80" text-anchor="middle">risk team</text></g>
+        <g><rect class="node" x="602" y="100" width="144" height="28" rx="6"/><text x="674" y="118" text-anchor="middle">portfolio mgr</text></g>
+        <g><rect class="node" x="602" y="138" width="144" height="28" rx="6"/><text x="674" y="156" text-anchor="middle">sim. exchange</text></g>
+        <!-- arrows -->
+        <path class="arr" d="M186 110 L206 110" marker-end="url(#b)"/>
+        <path class="arr" d="M386 110 L406 110" marker-end="url(#b)"/>
+        <path class="arr" d="M566 106 L586 76" marker-end="url(#b)"/>
+        <path class="arr" d="M566 106 L586 114" marker-end="url(#b)"/>
+      </svg>
+      <figcaption>Fig 02 · LangGraph nodes &amp; lanes — analysts → bull/bear debate (N rounds) → trader → risk team → portfolio manager → simulated exchange.</figcaption>
+    </figure>
+
+    <table>
+      <thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="first">Framework</td><td>LangGraph; <code>graph/</code>, <code>agents/</code>, <code>dataflows/</code>, <code>llm_clients/</code></td></tr>
+        <tr><td class="first">Agents (7+)</td><td>4 analysts · 2 researchers (bull/bear) · trader · risk team · portfolio manager</td></tr>
+        <tr><td class="first">Debate</td><td>Structured N-round bull↔bear, <code>max_debate_rounds</code> controls iterations</td></tr>
+        <tr><td class="first">Model split</td><td><code>quick_think_llm</code> for analysts · <code>deep_think_llm</code> for reasoning roles</td></tr>
+        <tr><td class="first">State</td><td>LangGraph shared dict between nodes; <code>.propagate()</code> drives the run</td></tr>
+        <tr><td class="first">Tools</td><td>Per-analyst data fetchers (Alpha Vantage, StockTwits, Reddit, indicators) — embedded, not function-call</td></tr>
+        <tr><td class="first">Memory</td><td>Decision log at <code>~/.tradingagents/memory/trading_memory.md</code>; realized returns + reflections injected into the Portfolio Manager prompt; SQLite checkpoint resume per ticker</td></tr>
+        <tr><td class="first">Action</td><td>Portfolio Manager approves → order to simulated exchange</td></tr>
+      </tbody>
+    </table>
+
+    <details>
+      <summary>What we deliberately did <em>not</em> copy</summary>
+      <p>LangGraph runtime, the SQLite checkpoint DB, the Portfolio Manager step, and the live per-analyst tool loop. We collapse all data fetching into one host-driven <code>MarketSnapshot</code> for predictability and cost.</p>
+    </details>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="ltb">
+    <div class="sec-head"><span class="idx">03</span><h2>ulab-uiuc / live-trade-bench</h2></div>
+    <p class="lede">Linus principle in agent design: one LLM, no orchestration framework, no special cases.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 130" width="100%" role="img" aria-label="live-trade-bench loop">
+        <defs><marker id="c" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#87867F"/></marker></defs>
+        <rect class="lane" x="6" y="40" width="748" height="48" rx="6"/>
+        <g><rect class="node" x="22"  y="50" width="118" height="28" rx="6"/><text x="81"  y="68" text-anchor="middle">fetch prices</text></g>
+        <g><rect class="node" x="156" y="50" width="118" height="28" rx="6"/><text x="215" y="68" text-anchor="middle">fetch news</text></g>
+        <g><rect class="node accent" x="290" y="50" width="170" height="28" rx="6"/><text x="375" y="68" text-anchor="middle" class="lbl">one LLM call</text></g>
+        <g><rect class="node" x="476" y="50" width="160" height="28" rx="6"/><text x="556" y="68" text-anchor="middle">target weights JSON</text></g>
+        <g><rect class="node" x="652" y="50" width="92"  height="28" rx="6"/><text x="698" y="68" text-anchor="middle">rebalance</text></g>
+        <path class="arr" d="M140 64 L156 64" marker-end="url(#c)"/>
+        <path class="arr" d="M274 64 L290 64" marker-end="url(#c)"/>
+        <path class="arr" d="M460 64 L476 64" marker-end="url(#c)"/>
+        <path class="arr" d="M636 64 L652 64" marker-end="url(#c)"/>
+        <path class="arr" d="M698 78 Q 698 110 380 110 Q 81 110 81 80" marker-end="url(#c)"/>
+        <text x="370" y="124" text-anchor="middle" font-style="italic" fill="#87867F">next cycle: prior allocations + accumulated return re-fed into prompt</text>
+      </svg>
+      <figcaption>Fig 03 · One agent per cycle — system fetches data, prompts the LLM once, applies the allocation.</figcaption>
+    </figure>
+
+    <table>
+      <thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="first">Agent</td><td>One <code>BaseAgent[Account, Data]</code> per model — no roles, no debate · <code>live_trade_bench/agents/base_agent.py:28-86</code></td></tr>
+        <tr><td class="first">Framework</td><td>None. Just <code>litellm.completion()</code> + JSON parse · <code>utils/llm_client.py:31-66</code></td></tr>
+        <tr><td class="first">Action primitive</td><td><strong>Portfolio weights</strong>, not buy/sell orders. <code>{ticker → weight, "CASH": weight}</code>, normalized to 1.0 · <code>utils/agent_utils.py:6-32</code></td></tr>
+        <tr><td class="first">Rebalance</td><td>Liquidate-everything-then-rebuy at the new weights · <code>accounts/stock_account.py:35-72</code></td></tr>
+        <tr><td class="first">Data</td><td>yfinance · BeautifulSoup-scraped Google News · PRAW Reddit (plumbed, dormant)</td></tr>
+        <tr><td class="first">Verticals</td><td>US stocks · Polymarket · BitMEX — each = one prompt subclass</td></tr>
+        <tr><td class="first">Memory</td><td>Last ~10 allocation snapshots + accumulated return injected into every prompt — self-conditioning replaces reflection · <code>base_agent.py:108-138</code></td></tr>
+        <tr><td class="first">Sandbox</td><td>None. LLM emits JSON, nothing else.</td></tr>
+        <tr><td class="first">Backtest</td><td>Calendar loop calling the same <code>run_cycle</code> as live · <code>backtest/backtest_runner.py</code></td></tr>
+      </tbody>
+    </table>
+
+    <blockquote>"Good code has no special cases." Backtest = live with a calendar driver. <span class="muted">— comment in <code>backtest_runner.py</code></span></blockquote>
+
+    <p>
+      <span class="tag tag-ok">novel</span> portfolio-weights-as-action ·
+      <span class="tag tag-ok">novel</span> CASH as first-class asset ·
+      <span class="tag tag-ok">novel</span> history-in-prompt instead of RAG ·
+      <span class="tag">notable</span> multi-provider via litellm prefix routing
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="aitrader">
+    <div class="sec-head"><span class="idx">04</span><h2>HKUDS / AI-Trader</h2></div>
+    <p class="lede">Not an agent pipeline — a hosted platform that <em>external</em> agents plug into via SKILL.md + heartbeat.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 220" width="100%" role="img" aria-label="AI-Trader platform shape">
+        <defs><marker id="d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#87867F"/></marker></defs>
+        <!-- platform box -->
+        <rect class="lane" x="240" y="14" width="280" height="190" rx="6"/>
+        <text x="248" y="32">ai4trade.ai · FastAPI + Postgres</text>
+        <g><rect class="node" x="256" y="46"  width="248" height="26" rx="6"/><text x="380" y="63" text-anchor="middle">/api/signals · feed · realtime</text></g>
+        <g><rect class="node" x="256" y="78"  width="248" height="26" rx="6"/><text x="380" y="95" text-anchor="middle">/api/strategies · replies · accept</text></g>
+        <g><rect class="node accent" x="256" y="110" width="248" height="26" rx="6"/><text x="380" y="127" text-anchor="middle" class="lbl">/api/claw/agents/heartbeat</text></g>
+        <g><rect class="node" x="256" y="142" width="248" height="26" rx="6"/><text x="380" y="159" text-anchor="middle">/skill/&lt;name&gt; (SKILL.md files)</text></g>
+        <g><rect class="node" x="256" y="174" width="248" height="26" rx="6"/><text x="380" y="191" text-anchor="middle">market-intel · prices · sentiment</text></g>
+        <!-- external agents -->
+        <g><rect class="node" x="20"  y="40"  width="180" height="28" rx="6"/><text x="110" y="58" text-anchor="middle">Claude Code agent</text></g>
+        <g><rect class="node" x="20"  y="100" width="180" height="28" rx="6"/><text x="110" y="118" text-anchor="middle">Cursor agent</text></g>
+        <g><rect class="node" x="20"  y="160" width="180" height="28" rx="6"/><text x="110" y="178" text-anchor="middle">OpenClaw agent</text></g>
+        <!-- exchange / data -->
+        <g><rect class="node" x="560" y="40"  width="180" height="28" rx="6"/><text x="650" y="58" text-anchor="middle">Alpha Vantage</text></g>
+        <g><rect class="node" x="560" y="100" width="180" height="28" rx="6"/><text x="650" y="118" text-anchor="middle">Hyperliquid · Polymarket</text></g>
+        <g><rect class="node" x="560" y="160" width="180" height="28" rx="6"/><text x="650" y="178" text-anchor="middle">Adanos sentiment (opt.)</text></g>
+        <!-- arrows (bi-dir agents to platform) -->
+        <path class="arr" d="M200 54 L240 56" marker-end="url(#d)"/>
+        <path class="arr" d="M200 114 L240 114" marker-end="url(#d)"/>
+        <path class="arr" d="M200 174 L240 172" marker-end="url(#d)"/>
+        <path class="arr" d="M520 56 L560 54" marker-end="url(#d)"/>
+        <path class="arr" d="M520 114 L560 114" marker-end="url(#d)"/>
+        <path class="arr" d="M520 172 L560 174" marker-end="url(#d)"/>
+      </svg>
+      <figcaption>Fig 04 · External agents register, poll <code>heartbeat</code> for messages/tasks, fetch capability SKILLs by URL, and post signals back. The "intelligence" is whatever they bring.</figcaption>
+    </figure>
+
+    <table>
+      <thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="first">Shape</td><td>Backend platform (FastAPI + Postgres) — <em>not</em> a multi-agent pipeline</td></tr>
+        <tr><td class="first">Agents</td><td>Arbitrary external LLM clients, JWT-authenticated; no internal graph</td></tr>
+        <tr><td class="first">Coordination</td><td>Signals feed · strategies · replies · accept-reply · copy-trading · team missions</td></tr>
+        <tr><td class="first">Loop</td><td>Heartbeat pull: agent polls <code>POST /api/claw/agents/heartbeat</code>, gets typed <code>messages[]</code> &amp; <code>tasks[]</code> &amp; <code>recommended_poll_interval_seconds</code> · <code>routes_agent.py</code></td></tr>
+        <tr><td class="first">Capabilities</td><td>One <code>SKILL.md</code> per capability, served at <code>https://ai4trade.ai/skill/&lt;name&gt;</code> — agent <code>curl</code>s into <code>~/.openclaw/skills/</code> at runtime</td></tr>
+        <tr><td class="first">Debate</td><td><em>Emergent</em> — between agents in discussion threads, not bull-vs-bear inside one agent</td></tr>
+        <tr><td class="first">In-repo "analyst"</td><td>One rule-based MA/momentum scorer + optional one-shot LLM prose summary · <code>service/server/market_intel.py:583, :995</code></td></tr>
+        <tr><td class="first">Sandbox / backtest</td><td>None. The research arm (4000-agent competition vs cooperation experiment) is offline data science.</td></tr>
+      </tbody>
+    </table>
+
+    <details>
+      <summary>Why this looks nothing like TradingAgents despite the name</summary>
+      <p>It's a venue + social network for autonomous agents, not a reasoning engine. The "multi-agent" is multi-<em>account</em>, not multi-role; debate is across agents over time, not within one decision.</p>
+    </details>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="compare">
+    <div class="sec-head"><span class="idx">05</span><h2>Side-by-side</h2></div>
+    <p class="lede">Same eight axes, four projects.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Axis</th>
+          <th>Wick TradingFloor</th>
+          <th>TradingAgents</th>
+          <th>live-trade-bench</th>
+          <th>AI-Trader</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="first">Orchestration</td><td>Hard-coded Swift pipeline</td><td>LangGraph DAG</td><td>None — single LLM call</td><td>Heartbeat pull-loop</td></tr>
+        <tr><td class="first">Roles</td><td>4 analysts + bull/bear + trader + risk</td><td>Same + portfolio manager</td><td>None (one agent)</td><td>None (emergent across accounts)</td></tr>
+        <tr><td class="first">Debate</td><td>N rounds bull↔bear</td><td>N rounds + risk team</td><td>—</td><td>Cross-agent thread replies</td></tr>
+        <tr><td class="first">Tool calls</td><td>Off (pre-fetched snapshot)</td><td>Per-analyst data fetchers</td><td>—</td><td>External — agent's choice</td></tr>
+        <tr><td class="first">Action</td><td>5-tier rating + transcript</td><td>Approved order → sim. exchange</td><td>Portfolio weights → rebalance</td><td>Post signal (sim or sync)</td></tr>
+        <tr><td class="first">Memory</td><td>None (per-run only)</td><td>decision log + reflections + SQLite checkpoints</td><td>Last 10 allocations + return in prompt</td><td>Postgres (queryable by agent)</td></tr>
+        <tr><td class="first">Sandbox</td><td>Planned (E2B-pluggable)</td><td>None</td><td>None</td><td>None</td></tr>
+        <tr><td class="first">Cadence</td><td>On demand</td><td>On demand</td><td>Per cycle (daily / 4×day)</td><td>Agent-driven (heartbeat ~30–60s)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="port">
+    <div class="sec-head"><span class="idx">06</span><h2>What to port into Wick</h2></div>
+    <p class="lede">Ranked by leverage. Each links back to a concrete file or memory note.</p>
+
+    <div class="grid-2">
+
+      <div class="card">
+        <p class="sub">Port · High leverage</p>
+        <p class="title">Portfolio-weights as action primitive</p>
+        <p>live-trade-bench's cleanest idea: the LLM emits <code>{TICKER: weight, "CASH": weight}</code> summing to 1.0, the system liquidate-and-rebuys. Sidesteps order/fill/slippage entirely.</p>
+        <p><span class="tag tag-ok">fits</span> Wick's "thin agent" direction in <code>memory/tradingfloor-agent-design.md</code>; could live alongside the 5-tier <code>Rating</code> as a second output mode.</p>
+      </div>
+
+      <div class="card">
+        <p class="sub">Port · High leverage</p>
+        <p class="title">Self-conditioning via history-in-prompt</p>
+        <p>Inject the last N decisions + their realized returns back into the next prompt. Cheap stand-in for the reflection/RAG stack TradingAgents builds.</p>
+        <p><span class="tag tag-ok">fits</span> a per-portfolio history table; sidesteps vector store and on-device embedding.</p>
+      </div>
+
+      <div class="card">
+        <p class="sub">Port · Medium leverage</p>
+        <p class="title">SKILL.md as the capability contract</p>
+        <p>AI-Trader's pattern: every tool/skill is a markdown file with YAML frontmatter, agent fetches by URL at runtime. We already have <code>TradingFloor/Skills/*.md</code> — formalize the contract and let users add their own.</p>
+        <p><span class="tag tag-ok">aligns</span> with planned PiSwift chat mode + <code>AgentTool</code> registry.</p>
+      </div>
+
+      <div class="card">
+        <p class="sub">Port · Medium leverage</p>
+        <p class="title">Heartbeat loop instead of "press the button"</p>
+        <p>For users who want background monitoring: a local cron/Combine loop fetches typed events (price gap, news drop, earnings), enqueues them, the agent reacts. Same shape as AI-Trader's <code>/heartbeat</code>, but device-local.</p>
+        <p><span class="tag">consider</span> only after fixed-flow + chat mode ship.</p>
+      </div>
+
+      <div class="card">
+        <p class="sub">Keep · Don't import</p>
+        <p class="title">LangGraph &amp; checkpoint DB</p>
+        <p>Already trimmed. The Swift pipeline + <code>AgentState</code> blackboard is plenty. SQLite resume buys little for a single-run analysis.</p>
+        <p><span class="tag tag-warn">skip</span> unless we add long-running multi-day workflows.</p>
+      </div>
+
+      <div class="card">
+        <p class="sub">Keep · Don't import</p>
+        <p class="title">Server-side multi-agent social network</p>
+        <p>AI-Trader's leaderboard / copy-trade / team-missions surface assumes a hosted SaaS with retained user data. Wrong shape for a sold app where users bring their own keys.</p>
+        <p><span class="tag tag-warn">skip</span> — conflicts with <code>memory/wick-business-model.md</code> (BYO everything).</p>
+      </div>
+
+    </div>
+
+    <h3>Concrete next step</h3>
+    <p>Sequence the three thin-agent imports behind the already-planned interactive PiSwift runtime (task #7 in <code>memory/tradingfloor-agent-design.md</code>): (1) portfolio-weights output mode, (2) history-in-prompt self-conditioning, (3) formalized SKILL.md contract. Heartbeat loop after.</p>
+  </section>
+
+  <footer>
+    <span class="k">TradingFloor · reference study</span>
+    <span>Sources: <a href="https://github.com/TauricResearch/TradingAgents">TauricResearch/TradingAgents</a> · <a href="https://github.com/ulab-uiuc/live-trade-bench">ulab-uiuc/live-trade-bench</a> · <a href="https://github.com/HKUDS/AI-Trader">HKUDS/AI-Trader</a></span>
+  </footer>
+
+</div>
+</body>
+</html>

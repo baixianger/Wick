@@ -281,6 +281,197 @@ Portfolio / Wicker / Market 三行直接放在第一个 `Section {}`（无 heade
 
 ---
 
+## 四、Xcode 项目目录结构
+
+### 现状摸底
+
+```
+/Users/baixianger/personal/
+├── CandleKit/                 ← 同级仓库（out-of-tree 包）
+└── Wick/                      ← 本仓库根
+    ├── Wick.xcodeproj/        ← xcodegen 生成，.gitignore 忽略
+    ├── project.yml            ← xcodegen spec
+    ├── Wick/                  ← app target 源码根（与仓库同名，嵌套）
+    │   ├── App/               (3 files)
+    │   ├── Data/              (17 files — 混合 store / model / infra)
+    │   ├── Design/            (3 files — 仅视觉效果，名不副实)
+    │   ├── Resources/         (Assets / Info.plist / entitlements)
+    │   └── Views/             (11 files — sheet / tab / main 没分层)
+    ├── TradingFloor/          ← in-tree SPM package
+    ├── WickServer/            ← in-tree SPM package
+    ├── docs/                  ← 文档（本文所在）
+    ├── notes/                 ← 单文件，与 docs 语义重叠
+    └── scripts/               ← generate.sh
+```
+
+### 问题清单
+
+#### a. SPM 包位置策略不一致 ⚠️
+**位置：** `project.yml` packages 段
+
+```yaml
+packages:
+  CandleKit:
+    path: ../CandleKit          # out-of-tree（同级仓库）
+  TradingFloor:
+    path: TradingFloor          # in-tree（子目录）
+```
+
+而 `WickServer/` 又是另一个 in-tree SPM 包（虽然不挂在 app 上，但物理位置混在仓库里）。三个本地包用两种策略。
+
+**后果：**
+- 新协作者 clone `Wick` 后 `xcodegen generate` 会失败（找不到 `../CandleKit`），必须先 clone 同级的 CandleKit 仓库
+- README.md 仅 1KB，没有写"先 clone CandleKit"的引导
+- IDE 跨仓库跳转 vs in-tree 跳转体验不同
+
+**建议（任选其一）：**
+- **方案 A（推荐）：把 CandleKit 作为 git submodule** 放到 `Wick/Packages/CandleKit`，`project.yml` 改成 `path: Packages/CandleKit`，三个包统一为 in-tree。submodule 保留独立提交历史。
+- **方案 B：保持 out-of-tree 但显式声明** — README 里加 "Prerequisites: clone CandleKit alongside this repo"，并在 `scripts/generate.sh` 里做存在性检查。
+
+#### b. `Wick/Wick/` 嵌套命名
+仓库 = 子目录 = target，路径写起来繁琐：`Wick/Wick/App/WickApp.swift`。xcodegen 项目常见现象，但可改善。
+
+**建议：** 把 source root 改名为 `Wick/Sources/`（或 `App/`），`project.yml` target 的 `sources` 路径同步更新。会更接近 SPM-native 风格，跟 `TradingFloor/Sources/TradingFloor/` 一致。
+
+#### c. `Wick/Data/` 17 文件扁平混合
+当前同时塞了 4 个职责：
+
+| 类别 | 文件 |
+|---|---|
+| Stores (state holders) | `HoldingsStore`, `ChatStore`, `WatchlistStore`, `ReportHistoryStore`, `LiveDataStore` |
+| Settings / Config | `AgentSettings`, `Provider`, `ModelDiscovery`, `AgentRuntime`, `DeskRunner` |
+| Domain models | `Ticker`, `News`, `Holding`(in Holdings.swift), `ChartIndicatorConfig` |
+| Infra / Adapters | `Keychain`, `ServerReportClient`, `SessionTitler`, `WickMarketDataProvider` |
+
+**建议拆分：**
+```
+Wick/
+├── Models/         ← Ticker, News, Holding 等纯数据
+├── Stores/         ← 5 个 @Observable store
+├── Services/       ← Keychain, ServerReportClient, SessionTitler, WickMarketDataProvider
+└── Config/         ← AgentSettings, Provider, ModelDiscovery, AgentRuntime, DeskRunner
+```
+扁平 17 文件夹在 17 行已经超过一屏，Xcode navigator 滚动找文件成本高。
+
+#### d. `Wick/Views/` 11 文件不分层
+`Tabs.swift`（估计 700+ 行，含多个 sub-view）、`SettingsView.swift`、`HoldingEditorSheet.swift`、`IndicatorManagerView.swift`、`DetailView.swift`、`PortfolioView.swift`、`WickerView.swift`、`SidebarView.swift`、`MarketView.swift`、`FloatingWickerComposer.swift`、`OverviewRange.swift` 都在一起。
+
+**建议拆分：**
+```
+Wick/
+└── Views/
+    ├── Detail/        ← DetailView.swift, Tabs.swift(拆分), OverviewRange.swift
+    ├── Sidebar/       ← SidebarView.swift
+    ├── Wicker/        ← WickerView.swift, FloatingWickerComposer.swift
+    ├── Portfolio/     ← PortfolioView.swift, HoldingEditorSheet.swift
+    ├── Market/        ← MarketView.swift
+    ├── Settings/      ← SettingsView.swift（拆成 6 个文件，对应 6 个 tab）
+    └── Indicators/    ← IndicatorManagerView.swift
+```
+`Tabs.swift` 单文件多 view 也建议拆开 —— 跟 `DetailView` 一起放 `Detail/Tabs/` 目录。
+
+#### e. `Wick/Design/` 命名不副实
+只放 `FlatPicker`, `IntelligenceGlow`, `LiquidGlass` —— 都是**视觉组件 / 效果**，不是"设计系统"。
+
+**建议改名：** `Effects/` 或 `Components/`。如果未来想做真正的设计系统（Token / Spacing / Typography），再用 `DesignSystem/` 这个名字。
+
+#### f. `Wick/App/SidebarRoute.swift` 应该分离
+`SidebarRoute` 是 routing enum（domain model），不是 app shell。`App/` 应该只有 `WickApp.swift` + `ContentView.swift`。
+
+**建议：** 挪到 `Models/Navigation/` 或者 `Views/Sidebar/SidebarRoute.swift`。
+
+#### g. `docs/` 与 `notes/` 重叠
+`notes/` 里只有 1 个 HTML 文件（`agent-workflow-references.html`）。等于平行了两个文档目录。
+
+**建议：** 合并到 `docs/`：
+```
+docs/
+├── audit/                  ← 审计报告（本文）
+├── references/             ← 外部资料（agent-workflow-references.html 进这里）
+└── architecture/           ← 未来的 ADR / 架构图
+```
+然后删 `notes/`。
+
+#### h. `Wick.xcodeproj` 被 gitignore — 但需要文档说明工作流
+`.gitignore` 第 22 行：
+
+```
+# Generated Xcode project (regenerate via `xcodegen generate`)
+Wick.xcodeproj
+```
+
+`scripts/generate.sh` 里应该是 `xcodegen generate` 包装。新协作者从零开始：
+
+1. clone Wick + clone CandleKit (跨仓库 sibling)
+2. `brew install xcodegen`
+3. 运行 `scripts/generate.sh`
+4. 打开 Wick.xcodeproj
+
+但 README.md 1KB 没写这个流程 —— 没有 onboarding。
+
+**建议：** 在 README.md 里加 "Getting Started" 段。或者用 GitHub Actions 在 CI 里验证 `xcodegen generate && xcodebuild` 跑得起来。
+
+#### i. 缺少 app target 的测试目录
+`TradingFloor/Tests/`、`CandleKit/Tests/` 都有完整单测，但 `Wick/` app target 本身没有 `Tests/`。即使 SwiftUI 单测不容易，至少：
+- store 层（`HoldingsStore.positions()`、`WatchlistStore.filter(...)`、`SessionGroup.build(...)`）应该有单测
+- regex / parsing（`mentionedTickers`）应该有单测
+
+**建议：** 加 `WickTests/` 目录，在 `project.yml` 里挂上 unit-test target。
+
+#### j. WickServer 的私有 markdown 进了仓库
+`WickServer/fmp.md` 和 `WickServer/finnhub.md` 被 `.gitignore` 排除（line 41-42），但物理存在 —— 这意味着它们是私有笔记，靠 gitignore 隐藏。
+
+**建议：**
+- 如果是临时调研笔记，挪到 `docs/research/`（注意脱敏）
+- 如果是 server 的 API key 配置说明，应该挪进 `WickServer/docs/` 并入仓
+- 不要靠 gitignore 隐藏，命名上就分开（比如 `*.private.md`）
+
+### 推荐的目标结构
+
+```
+Wick/                              ← 仓库根
+├── README.md                       ← 扩成 ~5KB 含 Getting Started
+├── project.yml                     ← xcodegen
+├── scripts/
+│   └── generate.sh
+├── docs/
+│   ├── audit/
+│   ├── references/                 ← 收编 notes/
+│   └── architecture/
+├── Packages/                       ← 统一 in-tree 本地包
+│   ├── CandleKit/                  ← 改成 git submodule
+│   ├── TradingFloor/               ← 从 Wick/TradingFloor 挪入
+│   └── WickServer/                 ← 从 Wick/WickServer 挪入
+├── Sources/                        ← 取代嵌套的 Wick/Wick/
+│   ├── App/                        ← 只剩 WickApp + ContentView
+│   ├── Models/                     ← Ticker, News, Holding, SidebarRoute
+│   ├── Stores/                     ← 5 个 @Observable
+│   ├── Services/                   ← Keychain, ServerReportClient...
+│   ├── Config/                     ← AgentSettings, Provider, AgentRuntime...
+│   ├── Views/
+│   │   ├── Detail/
+│   │   ├── Sidebar/
+│   │   ├── Wicker/
+│   │   ├── Portfolio/
+│   │   ├── Market/
+│   │   ├── Settings/
+│   │   └── Indicators/
+│   ├── Effects/                    ← 原 Design/
+│   └── Resources/
+└── Tests/
+    └── WickTests/
+```
+
+### 结构层面的修复优先级
+
+| 优先级 | 项 |
+|---|---|
+| **P1 短期** | (a) CandleKit 改 submodule + Packages/ 统一；(h) README.md 扩 Getting Started |
+| **P2 中期** | (c) `Data/` 四向拆分；(d) `Views/` 按 feature 分子目录；(g) 合并 notes 进 docs |
+| **P3 长期** | (b) 去掉 `Wick/Wick/` 嵌套；(e) `Design/` 改名；(i) 加 WickTests target |
+
+---
+
 ## 附：审计方法
 
 - 静态阅读 `Wick/App/*.swift`、`Wick/Data/*.swift`、`Wick/Views/*.swift`、`Wick/Design/*.swift` 全量
@@ -290,3 +481,4 @@ Portfolio / Wicker / Market 三行直接放在第一个 `Section {}`（无 heade
 - Grep `DispatchQueue|withCheckedContinuation|@unchecked|nonisolated\(unsafe\)|Sendable` → 仅 7 处，均已具名审查
 - Grep `\.toolbar|NavigationStack|NavigationSplitView|hiddenTitleBar|windowStyle|GeometryReader|glassEffect` → 摸清 chrome 与 Liquid Glass 用法
 - 对照 Apple Developer Documentation（`SearchFieldPlacement.sidebar`、`NavigationSplitView`）确认 macOS 26 推荐路径
+- 文件系统层面：`ls`/`find` 摸清 `Wick.xcodeproj`、`project.yml`、`.gitignore`、`Packages/` 实际存在状态；确认 CandleKit 是 out-of-tree 同级仓库（`/Users/baixianger/personal/CandleKit`）
