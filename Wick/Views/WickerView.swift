@@ -1,5 +1,7 @@
 import SwiftUI
+import Combine
 import CoreCharts
+import MarkdownUI
 import TradingFloor
 
 /// Wicker — the global chat / analysis agent. Layout cribs from the new
@@ -929,103 +931,143 @@ private struct ConversationView: View {
 
 // MARK: - Bubbles + typing indicator
 
+/// Document-waterfall message view (borrowed from `clawbox`'s chat
+/// surface). The old bubble layout treated the assistant like an IM
+/// reply, but agent output is multi-paragraph long-form — bubbles
+/// chop that into walls of cramped inline text. Layout per role:
+///
+///   - **assistant** → full-width Markdown rendered in flow (no
+///     background, no padding wrapper). Reads like a document.
+///   - **user** → right-aligned card with subtle fill (short input
+///     benefits from a visual boundary).
+///   - **system** → centered capsule pill (auxiliary, low weight).
+///
+/// `glowing == true` means this is the streaming message — we skip
+/// `StableMarkdownView`'s equatable cache (content changes per token)
+/// and append an animated dot trio underneath.
 private struct MessageBubble: View {
     let message: ChatMessage
     var glowing: Bool = false
-    /// Symbols the message mentions that we recognise. Detected by
-    /// `ConversationView` before construction (it has access to the
-    /// known-tickers set) and passed in so the bubble doesn't need
-    /// to know about the watchlist itself.
+    /// Symbols the message mentions that we recognise — surfaced as
+    /// inline sparkline chips beneath the assistant message.
     var mentionedTickers: [String] = []
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if message.role == .user { Spacer(minLength: 60) }
-            VStack(alignment: message.role == .user ? .trailing : .leading,
-                   spacing: 3)
-            {
-                Text(label)
+        switch message.role {
+        case .system:    systemRow
+        case .user:      userCard
+        case .assistant: assistantFlow
+        }
+    }
+
+    // MARK: User
+
+    private var userCard: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Spacer(minLength: 48)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("YOU")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(.tertiary)
-                bubbleContent
+                Text(message.text)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.primary)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background {
-                        switch message.role {
-                        case .user:
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.18))
-                        case .assistant:
-                            // Solid low-opacity fill — Liquid Glass on
-                            // long-text bubbles renders as a "fog"
-                            // (subsurface scattering + vibrancy blur
-                            // eats the small body type's edges).
-                            // Glass belongs on chrome / buttons, not
-                            // prose surfaces.
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
-                        case .system:
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.orange.opacity(0.14))
-                        }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.secondary.opacity(0.08))
+            )
+        }
+    }
+
+    // MARK: Assistant
+
+    private var assistantFlow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("WICKER")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.4)
+                .foregroundStyle(.tertiary)
+            // Streaming messages bypass `StableMarkdownView` — its
+            // `Equatable` short-circuit would suppress per-token
+            // updates. Completed messages do go through it so
+            // sibling re-renders (scroll, focus) don't re-parse.
+            if glowing {
+                Markdown(message.text)
+                    .markdownTheme(.wickerWaterfall)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                StreamingDots()
+            } else {
+                StableMarkdownView(content: message.text)
+            }
+            if !mentionedTickers.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(mentionedTickers, id: \.self) { symbol in
+                        TickerMentionChip(symbol: symbol)
                     }
-                    .foregroundStyle(textColor)
-                    .intelligenceGlow(
-                        active: glowing && message.role == .assistant,
-                        cornerRadius: 12,
-                        intensity: 0.7
-                    )
-                if !mentionedTickers.isEmpty,
-                   message.role == .assistant
-                {
-                    // Tiny inline sparklines for tickers Wicker brought
-                    // up. Visual short-hand for "here's what those
-                    // names actually look like" without making the
-                    // user click out.
-                    HStack(spacing: 6) {
-                        ForEach(mentionedTickers, id: \.self) { symbol in
-                            TickerMentionChip(symbol: symbol)
-                        }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    // MARK: System
+
+    private var systemRow: some View {
+        HStack {
+            Spacer()
+            Text(message.text)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.secondary.opacity(0.10)))
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Streaming dots
+
+/// Three-dot pulse animation shown beneath a streaming assistant
+/// message. Replaces the bubble-level `intelligenceGlow` — without a
+/// bubble there's no rectangle to glow around, but the user still
+/// needs feedback that more is coming.
+private struct StreamingDots: View {
+    @State private var phase: Int = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.secondary)
+                    .frame(width: 5, height: 5)
+                    .opacity(phase == i ? 1.0 : 0.3)
+            }
+        }
+        .onAppear {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.4,
+                                          repeats: true) { _ in
+                Task { @MainActor in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        phase = (phase + 1) % 3
                     }
-                    .padding(.top, 4)
                 }
             }
-            if message.role != .user { Spacer(minLength: 60) }
         }
-    }
-
-    /// Assistant messages route through `WickMarkdown` so block-level
-    /// markdown (headings, bullet lists, numbered lists) lays out
-    /// properly — Apple's `AttributedString(markdown:)` only handles
-    /// inline marks, so the previous `Text(AttributedString)` path
-    /// collapsed every `### Heading` and `- item` into one wall of
-    /// text. User / system messages stay plain — they're typed by a
-    /// person, not the LLM, so markdown in them is the exception.
-    @ViewBuilder
-    private var bubbleContent: some View {
-        if message.role == .assistant {
-            WickMarkdown(text: message.text,
-                          accent: Color.accentColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Text(message.text)
-                .font(.system(size: 13))
-                .fixedSize(horizontal: false, vertical: true)
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
-    }
-
-    private var label: String {
-        switch message.role {
-        case .user:      return "YOU"
-        case .assistant: return "WICKER"
-        case .system:    return "SYSTEM"
-        }
-    }
-
-    private var textColor: Color {
-        message.role == .system ? .orange : .primary
     }
 }
 

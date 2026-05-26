@@ -1,5 +1,6 @@
 import SwiftUI
 import TradingFloor
+import UniformTypeIdentifiers
 
 /// Native macOS Preferences pane. Renders as the standard
 /// icon-above-label tab strip Apple's first-party apps use (Mail,

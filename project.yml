@@ -42,6 +42,14 @@ packages:
     from: 0.7.0
   TradingFloor:
     path: TradingFloor
+  # MarkdownUI — block-level Markdown renderer (lists, headings,
+  # tables, code blocks, blockquotes). Apple's
+  # `AttributedString(markdown:)` is inline-only; we need real
+  # block layout for the Wicker chat surface so agent transcripts
+  # render as documents rather than walls of inline text.
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui.git
+    from: 2.4.1
 
 targets:
   Wick:
@@ -69,6 +77,8 @@ targets:
         product: DrawingTools
       - package: TradingFloor
         product: TradingFloor
+      - package: MarkdownUI
+        product: MarkdownUI
     settings:
       base:
         # NOTE: no `info:` block — xcodegen would auto-generate the
@@ -88,3 +98,14 @@ targets:
         # `ratingColor(_:)` and friends, not the accent.
         ENABLE_PREVIEWS: YES
         CODE_SIGN_ENTITLEMENTS: Wick/Resources/Wick.entitlements
+        # Xcode 26 / Swift 6.x "Update to recommended settings" keys.
+        # These are added by Xcode's new-project template at the
+        # target's SharedSettings level (see Base_ProjectSettings.
+        # xctemplate/TemplateInfo.plist). XcodeGen's presets don't
+        # ship them yet, so without these here the popup re-appears
+        # every regeneration. Project-base keys (`MTL_FAST_MATH`,
+        # `CLANG_CXX_LANGUAGE_STANDARD`, etc.) are already covered
+        # by XcodeGen's bundled presets — we only need to fill the
+        # Swift-target gap.
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
