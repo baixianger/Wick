@@ -633,20 +633,37 @@ struct AITab: View {
         let items = historyForTicker
         let activeReport = activeReport(in: items)
         return ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: 14) {
-                header(historyCount: items.count,
-                        activeReport: activeReport,
-                        proxy: proxy)
-                if items.isEmpty {
-                    emptyState
-                } else if let target = activeReport {
-                    reportView(target)
-                        .id(target.generatedAt) // re-mount per report switch
+            HStack(alignment: .top, spacing: 18) {
+                // LEFT — main report column. Stays at maxWidth so the
+                // analyst grid + verdict band have room to breathe; the
+                // right history column tucks against its trailing edge.
+                VStack(alignment: .leading, spacing: 14) {
+                    header(historyCount: items.count,
+                            activeReport: activeReport,
+                            proxy: proxy)
+                    if items.isEmpty {
+                        emptyState
+                    } else if let target = activeReport {
+                        reportView(target)
+                            .id(target.generatedAt) // re-mount per report switch
+                    }
+                    // Inline error strip — kept here for the failed-run case;
+                    // the stepper alone can't communicate the error message.
+                    if case .failed(let message) = runner.phase {
+                        failedRunStrip(message)
+                    }
                 }
-                // Inline error strip — kept here for the failed-run case;
-                // the stepper alone can't communicate the error message.
-                if case .failed(let message) = runner.phase {
-                    failedRunStrip(message)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                // RIGHT — vertical history column. Visible when
+                // `historyOpen` is on AND there's at least one report.
+                // Collapses with a slide-out animation so the report
+                // can take the full width when the user wants focus.
+                if historyOpen && !items.isEmpty {
+                    historyColumn(items)
+                        .frame(width: 280)
+                        .transition(reduceMotion ? .identity
+                            : .move(edge: .trailing).combined(with: .opacity))
                 }
             }
         }
@@ -668,8 +685,16 @@ struct AITab: View {
             // that finishes while AITab is offscreen still lands in
             // the archive; the next time the user opens this tab the
             // default-latest line below picks it up.
-            if expanded == nil, let latest = historyForTicker.first {
+            let items = historyForTicker
+            if expanded == nil, let latest = items.first {
                 expanded = latest.generatedAt
+            }
+            // Two-column default: when this ticker has prior reports,
+            // open the right history column on entry. Empty history →
+            // single column so the "no analyses yet" empty state takes
+            // the full width without dead chrome on the right.
+            if !items.isEmpty, !historyOpen {
+                historyOpen = true
             }
         }
         // When a run started elsewhere completes for this ticker, jump
@@ -785,6 +810,91 @@ struct AITab: View {
         }
         .buttonStyle(.plain)
         .help(historyOpen ? "Hide history" : "Show analysis history")
+    }
+
+    // MARK: - History column (right side of the two-column layout)
+
+    /// Vertical history list. Replaces the earlier
+    /// `.inspector(isPresented:)` side panel — being a real child of
+    /// AITab means macOS no longer auto-injects a duplicate toggle
+    /// into the detail-pane toolbar. Header row shows the count;
+    /// each row is a tappable summary that switches `expanded`.
+    private func historyColumn(_ items: [Report]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Text("History")
+                    .font(.system(.subheadline, weight: .semibold))
+                Spacer(minLength: 0)
+                Text("\(items.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.bottom, 12)
+
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(items, id: \.generatedAt) { report in
+                        historyRow(report)
+                    }
+                }
+                .padding(.trailing, 2) // breathing room for scrollbar
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.regularMaterial)
+                .opacity(0.5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    /// One row in the right-side history column. Active row gets a
+    /// tinted background in the rating's colour so the user knows
+    /// which report the left column is rendering.
+    private func historyRow(_ report: Report) -> some View {
+        let active = report.generatedAt == expanded
+        let tint = ratingColor(report.rating)
+        return Button {
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.18)) {
+                expanded = report.generatedAt
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(tint)
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(report.generatedAt.formatted(
+                            date: .abbreviated, time: .shortened))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Text(report.rating.label)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(active ? tint.opacity(0.14) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(active ? tint.opacity(0.42) : Color.clear,
+                                  lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(report.rating.label) on \(report.generatedAt.formatted(date: .abbreviated, time: .shortened))")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 
     /// Prominent "Run Analysis" trigger — the user gap from earlier

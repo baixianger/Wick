@@ -123,14 +123,12 @@ struct DetailView: View {
         .sheet(isPresented: $indicatorSheetShown) {
             IndicatorManagerView(config: indicators)
         }
-        // Scene-level right column. Renders only when the user is on
-        // the AI tab — switching away auto-closes it so the column
-        // doesn't reappear empty on Overview/Chart/News.
-        .inspector(isPresented: $historyOpen) {
-            AnalysisHistoryInspector(symbol: ticker.symbol,
-                                     expanded: $historyExpanded,
-                                     historyOpen: $historyOpen)
-        }
+        // History was previously a `.inspector(isPresented:)` side
+        // column. macOS auto-injects its own toggle button alongside
+        // any inspector, which duplicated the History pill in AITab
+        // header and clutters the detail-pane chrome. AITab now owns
+        // a two-column layout (report on the left, vertical history
+        // on the right), gated by `historyOpen`.
         .onChange(of: tab) { _, new in
             if new != .ai { historyOpen = false }
         }

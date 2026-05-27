@@ -17,9 +17,11 @@ struct ContentView: View {
     /// @State here) so the single Settings pane can drive them.
     @Environment(AgentSettings.self) private var agentSettings
     /// Tickers the user added via global search. Combined with
-    /// `Ticker.samples` at render time; survives the conversation but
-    /// not app restarts.
-    @State private var customTickers: [Ticker] = []
+    /// `Ticker.samples` at render time. Persists across app restarts
+    /// — only the (symbol, name) identity is stored; `series` is
+    /// always rehydrated empty and refilled by `LiveDataStore` on
+    /// first fetch.
+    @State private var customTickers: [Ticker] = ContentView.loadCustomTickers()
     /// User-entered buy / sell transactions. Persists to UserDefaults.
     @State private var holdings = HoldingsStore()
     /// User-defined watchlist groups + selection. Persists to UserDefaults.
@@ -57,6 +59,11 @@ struct ContentView: View {
                         watchlist: watchlist,
                         holdingsCount: holdings.holdings.count)
                 .navigationTitle("Stocks")
+                // Default the sidebar above the 240pt sparkline
+                // threshold (SidebarView.sparklineMinWidth) so the
+                // per-ticker mini chart is visible on first launch.
+                // Min still allows narrowing for users who want it.
+                .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 360)
         } detail: {
             // Detail content varies per route. The floating Wicker
             // composer overlays on every route except `.wicker`
@@ -158,10 +165,40 @@ struct ContentView: View {
                        symbol: r.symbol,
                        name: r.displayName,
                        series: [:]))
+            Self.saveCustomTickers(customTickers)
         }
         route = .ticker(r.symbol)
         searchQuery = ""
         searchResults = []
+    }
+
+    // MARK: - Custom ticker persistence
+
+    /// Only the identity (symbol + name) is persisted. The heavy
+    /// `series: [BarInterval: CandleSeries]` field is rebuilt from
+    /// `LiveDataStore` on demand, so we never write candle blobs to
+    /// UserDefaults.
+    private struct PersistedTicker: Codable {
+        let symbol: String
+        let name: String
+    }
+
+    private static let customTickersKey = "wick.customTickers.v1"
+
+    private static func loadCustomTickers() -> [Ticker] {
+        guard let data = UserDefaults.standard.data(forKey: customTickersKey),
+              let pairs = try? JSONDecoder().decode([PersistedTicker].self, from: data)
+        else { return [] }
+        return pairs.map { p in
+            Ticker(id: p.symbol, symbol: p.symbol, name: p.name, series: [:])
+        }
+    }
+
+    private static func saveCustomTickers(_ tickers: [Ticker]) {
+        let pairs = tickers.map { PersistedTicker(symbol: $0.symbol, name: $0.name) }
+        if let data = try? JSONEncoder().encode(pairs) {
+            UserDefaults.standard.set(data, forKey: customTickersKey)
+        }
     }
 
     /// Whether the floating Wicker composer should sit on top of the
