@@ -87,6 +87,7 @@ struct ContentView: View {
                     PortfolioView(store: holdings)
                 case .wicker:
                     WickerView(store: chat)
+                        .environment(holdings)
                 case .market:
                     MarketView(universe: allTickers,
                                indicators: indicatorConfig)

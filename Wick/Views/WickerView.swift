@@ -3,6 +3,7 @@ import Combine
 import CoreCharts
 import MarkdownUI
 import TradingFloor
+import UniformTypeIdentifiers
 
 /// Wicker — the global chat / analysis agent. Layout cribs from the new
 /// macOS 26 Mail.app: a session column (Mail's message list) on the left
@@ -395,6 +396,7 @@ private struct ConversationView: View {
 
     @Environment(AgentSettings.self) private var settings
     @Environment(AgentRuntime.self) private var runtime
+    @Environment(HoldingsStore.self) private var holdings
     @State private var draft: String = ""
     @State private var pending: Bool = false
     /// Live label shown in the pending indicator — switches between
@@ -403,6 +405,16 @@ private struct ConversationView: View {
     @State private var pendingLabel: String?
     @State private var lastError: String?
     @FocusState private var inputFocused: Bool
+
+    // Document-import state. The composer accepts PDF / CSV drops + a
+    // 📎 file picker; on file received we run `LLMDocumentImporter`,
+    // surface `extractedDocument` via a sheet, and let
+    // `TransactionImportSheet` commit the batch to `HoldingsStore`.
+    @State private var showFilePicker: Bool = false
+    @State private var isExtracting: Bool = false
+    @State private var extractedDocument: ExtractedDocument?
+    @State private var importError: String?
+    @State private var isDropTargeted: Bool = false
 
     private var live: ChatSession {
         store.session(for: session.id) ?? session
@@ -716,7 +728,27 @@ private struct ConversationView: View {
             if !settings.canRun {
                 providerHint
             }
+            if isExtracting {
+                extractingHint
+            }
+            if let err = importError {
+                importErrorBanner(err)
+            }
             HStack(alignment: .bottom, spacing: 10) {
+                Button {
+                    showFilePicker = true
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: hero ? 17 : 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, hero ? 4 : 2)
+                }
+                .buttonStyle(.plain)
+                .disabled(isExtracting || !settings.canRun)
+                .help("Import broker statement (PDF / CSV)")
+                .accessibilityLabel("Import document")
+                .accessibilityIdentifier("WickerImportButton")
+
                 TextField("Ask anything…", text: $draft, axis: .vertical)
                     .lineLimit(lines)
                     .textFieldStyle(.plain)
@@ -735,6 +767,7 @@ private struct ConversationView: View {
                         intensity: pending ? 1.0
                             : (inputFocused ? 0.85 : 0.55)
                     )
+                    .overlay(dropTargetOverlay(cornerRadius: corner))
                     .focused($inputFocused)
                     .onSubmit { submit() }
 
@@ -762,6 +795,133 @@ private struct ConversationView: View {
             .padding(.horizontal, outerHPad)
             .padding(.bottom, hero ? 0 : 14)
             .padding(.top, hero ? 0 : 4)
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDroppedProviders(providers)
+        }
+        .fileImporter(isPresented: $showFilePicker,
+                      allowedContentTypes: Self.importableTypes,
+                      allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                if let first = urls.first { startExtraction(from: first) }
+            case .failure(let err):
+                importError = err.localizedDescription
+            }
+        }
+        .sheet(item: $extractedDocument) { doc in
+            TransactionImportSheet(document: doc, onImported: { _ in })
+                .environment(holdings)
+        }
+    }
+
+    /// File extensions / UTTypes the composer accepts via drop + picker.
+    /// PDF is the main case (broker statements); CSV/plain-text are
+    /// included so future broker exports drop in without code changes.
+    static let importableTypes: [UTType] = [
+        .pdf,
+        .commaSeparatedText,
+        .plainText,
+        .text,
+    ]
+
+    private var extractingHint: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text("Extracting transactions…")
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func importErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(message)
+                .lineLimit(3)
+            Spacer()
+            Button {
+                importError = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.system(size: 11))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+    }
+
+    /// Highlighted ring shown around the textfield while a drag is
+    /// hovering over the composer. Pure feedback — the actual drop
+    /// handler lives on the outer VStack so the user can drop
+    /// anywhere in the composer strip.
+    @ViewBuilder
+    private func dropTargetOverlay(cornerRadius: CGFloat) -> some View {
+        if isDropTargeted {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.accentColor, lineWidth: 2)
+                .background(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.08))
+                )
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// Pulls the first file URL out of the drop, validates the
+    /// extension, and kicks off LLM extraction.
+    private func handleDroppedProviders(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
+            Task { @MainActor in
+                startExtraction(from: url)
+            }
+        }
+        return true
+    }
+
+    private func startExtraction(from url: URL) {
+        guard !isExtracting else { return }
+        importError = nil
+        guard let provider = WickerLLM.provider(for: settings) else {
+            importError = "Configure an LLM provider in Settings before importing documents."
+            return
+        }
+        let importer = LLMDocumentImporter(
+            llm: provider,
+            model: WickerLLM.model(for: settings))
+        isExtracting = true
+        // Re-resolve security-scoped access for sandboxed file
+        // selections from the picker. Drops from Finder don't need
+        // this — the system grants transient access — but the
+        // explicit unlock is harmless either way.
+        let needsScope = url.startAccessingSecurityScopedResource()
+        Task {
+            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let doc = try await importer.extract(url: url)
+                await MainActor.run {
+                    isExtracting = false
+                    if doc.transactions.isEmpty {
+                        importError = "No stock transactions found in \(url.lastPathComponent)."
+                    } else {
+                        extractedDocument = doc
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isExtracting = false
+                    importError = (error as? LocalizedError)?.errorDescription
+                        ?? error.localizedDescription
+                }
+            }
         }
     }
 

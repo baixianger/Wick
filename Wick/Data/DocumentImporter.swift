@@ -4,13 +4,23 @@ import Foundation
 /// transactions list is already filtered to equity Buy/Sell rows;
 /// cash, dividends, deposits, and tax entries are stripped before
 /// the result reaches the store.
-struct ExtractedDocument: Hashable {
+struct ExtractedDocument: Hashable, Identifiable {
+    let id: UUID
     let broker: String
     /// Display name of the source document (typically the file's
     /// `lastPathComponent`). Stored on the resulting `Holding.source`
     /// so the user can audit which file produced which row.
     let document: String
     let transactions: [ImportedTransaction]
+
+    init(broker: String,
+         document: String,
+         transactions: [ImportedTransaction]) {
+        self.id = UUID()
+        self.broker = broker
+        self.document = document
+        self.transactions = transactions
+    }
 }
 
 /// Surface used by `WickerView` and the import sheet to turn a broker
