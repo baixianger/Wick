@@ -9,6 +9,44 @@ enum HoldingSide: String, Codable, Hashable {
     var sign: Double  { self == .buy ?  1 : -1 }
 }
 
+/// Where a `Holding` came from. `.manual` is anything typed into the
+/// Holdings editor; `.imported` carries the originating broker name and
+/// document title so the user can audit which file produced which row.
+enum HoldingSource: Hashable {
+    case manual
+    case imported(broker: String, document: String)
+}
+
+extension HoldingSource: Codable {
+    private enum CodingKeys: String, CodingKey { case kind, broker, document }
+    private enum Kind: String, Codable { case manual, imported }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try c.decode(Kind.self, forKey: .kind)
+        switch kind {
+        case .manual:
+            self = .manual
+        case .imported:
+            let broker = try c.decode(String.self, forKey: .broker)
+            let document = try c.decode(String.self, forKey: .document)
+            self = .imported(broker: broker, document: document)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .manual:
+            try c.encode(Kind.manual, forKey: .kind)
+        case .imported(let broker, let document):
+            try c.encode(Kind.imported, forKey: .kind)
+            try c.encode(broker, forKey: .broker)
+            try c.encode(document, forKey: .document)
+        }
+    }
+}
+
 struct Holding: Identifiable, Hashable, Codable {
     var id: UUID = UUID()
     var symbol: String
@@ -18,6 +56,54 @@ struct Holding: Identifiable, Hashable, Codable {
     var quantity: Double
     var price: Double
     var currency: String
+    /// Broker-assigned trade identifier when known. Primary dedup key on
+    /// re-import: if the same `externalId` already exists, the incoming
+    /// row is treated as a duplicate.
+    var externalId: String?
+    /// Provenance. Defaults to `.manual` so rows written before this
+    /// field existed decode without losing data.
+    var source: HoldingSource
+
+    init(id: UUID = UUID(),
+         symbol: String,
+         name: String,
+         side: HoldingSide,
+         date: Date,
+         quantity: Double,
+         price: Double,
+         currency: String,
+         externalId: String? = nil,
+         source: HoldingSource = .manual) {
+        self.id = id
+        self.symbol = symbol
+        self.name = name
+        self.side = side
+        self.date = date
+        self.quantity = quantity
+        self.price = price
+        self.currency = currency
+        self.externalId = externalId
+        self.source = source
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, symbol, name, side, date, quantity, price, currency
+        case externalId, source
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.symbol = try c.decode(String.self, forKey: .symbol)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.side = try c.decode(HoldingSide.self, forKey: .side)
+        self.date = try c.decode(Date.self, forKey: .date)
+        self.quantity = try c.decode(Double.self, forKey: .quantity)
+        self.price = try c.decode(Double.self, forKey: .price)
+        self.currency = try c.decode(String.self, forKey: .currency)
+        self.externalId = try c.decodeIfPresent(String.self, forKey: .externalId)
+        self.source = try c.decodeIfPresent(HoldingSource.self, forKey: .source) ?? .manual
+    }
 
     var signedQuantity: Double { side.sign * quantity }
 }
