@@ -358,6 +358,18 @@ struct SkippedTransaction: Hashable {
     var reason: Reason
 }
 
+/// One row in an import preview. Either the transaction is new and
+/// will be inserted, or it's a duplicate of `existing` (and the sheet
+/// can show the user why).
+struct DedupPreview: Hashable, Identifiable {
+    var id = UUID()
+    var transaction: ImportedTransaction
+    var existing: Holding?
+    var reason: SkippedTransaction.Reason?
+
+    var isDuplicate: Bool { existing != nil }
+}
+
 @MainActor
 extension HoldingsStore {
     /// Insert a batch of transactions extracted from a broker document.
@@ -377,12 +389,11 @@ extension HoldingsStore {
         var skipped: [SkippedTransaction] = []
 
         for tx in batch {
-            if let eid = tx.externalId, let existing = byExternalId[eid] {
-                skipped.append(SkippedTransaction(incoming: tx, existing: existing, reason: .externalIdMatch))
-                continue
-            }
-            if let existing = working.first(where: { Self.fuzzyMatches(existing: $0, incoming: tx) }) {
-                skipped.append(SkippedTransaction(incoming: tx, existing: existing, reason: .fuzzyMatch))
+            if let (existing, reason) = Self.findDuplicate(of: tx,
+                                                          in: working,
+                                                          byExternalId: byExternalId)
+            {
+                skipped.append(SkippedTransaction(incoming: tx, existing: existing, reason: reason))
                 continue
             }
             let h = Holding(
@@ -409,6 +420,42 @@ extension HoldingsStore {
             save()
         }
         return ImportReport(added: added, skipped: skipped, broker: broker, document: document)
+    }
+
+    /// Dry-run dedup against the live holdings, used by the import
+    /// sheet to show "new" vs "duplicate" badges per row before the
+    /// user commits. The actual `importBatch` re-runs the same logic
+    /// at commit time, so the preview is purely informational.
+    func previewImport(_ batch: [ImportedTransaction]) -> [DedupPreview] {
+        var byExternalId: [String: Holding] = [:]
+        for h in holdings {
+            if let eid = h.externalId { byExternalId[eid] = h }
+        }
+        return batch.map { tx in
+            if let (existing, reason) = Self.findDuplicate(of: tx,
+                                                          in: holdings,
+                                                          byExternalId: byExternalId)
+            {
+                return DedupPreview(transaction: tx, existing: existing, reason: reason)
+            }
+            return DedupPreview(transaction: tx, existing: nil, reason: nil)
+        }
+    }
+
+    /// Shared dedup. Returns the existing row and the reason if `tx`
+    /// matches one; nil if `tx` is genuinely new.
+    private static func findDuplicate(of tx: ImportedTransaction,
+                                      in existing: [Holding],
+                                      byExternalId: [String: Holding])
+        -> (Holding, SkippedTransaction.Reason)?
+    {
+        if let eid = tx.externalId, let h = byExternalId[eid] {
+            return (h, .externalIdMatch)
+        }
+        if let h = existing.first(where: { fuzzyMatches(existing: $0, incoming: tx) }) {
+            return (h, .fuzzyMatch)
+        }
+        return nil
     }
 
     /// Composite-key fuzzy dedup. Only invoked when the incoming row
