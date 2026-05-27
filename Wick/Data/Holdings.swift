@@ -317,6 +317,114 @@ final class HoldingsStore {
     }
 }
 
+// MARK: - Document import
+
+/// Payload returned by a `DocumentImporter`. Mirrors `Holding` minus
+/// the database-level fields (`id`, `source`) which the store fills in.
+struct ImportedTransaction: Hashable {
+    var externalId: String?
+    var symbol: String
+    var name: String
+    var side: HoldingSide
+    var date: Date
+    var quantity: Double
+    var price: Double
+    var currency: String
+}
+
+/// Outcome of `HoldingsStore.importBatch`. `added` are the rows that
+/// were actually written; `skipped` are duplicates that the store
+/// refused to insert again.
+struct ImportReport: Hashable {
+    var added: [Holding]
+    var skipped: [SkippedTransaction]
+    var broker: String
+    var document: String
+
+    var newCount: Int { added.count }
+    var skippedCount: Int { skipped.count }
+}
+
+struct SkippedTransaction: Hashable {
+    enum Reason: String, Hashable {
+        /// Incoming `externalId` matched an existing row's `externalId`.
+        case externalIdMatch
+        /// Incoming row had no `externalId`, but the composite key
+        /// (symbol+day+side+qty+price) matched an existing row.
+        case fuzzyMatch
+    }
+    var incoming: ImportedTransaction
+    var existing: Holding
+    var reason: Reason
+}
+
+@MainActor
+extension HoldingsStore {
+    /// Insert a batch of transactions extracted from a broker document.
+    /// Duplicates are detected primarily by `externalId`. When the
+    /// incoming row lacks one, a composite fuzzy key is used as a
+    /// fallback so re-imports of statements that don't expose Trade IDs
+    /// still don't double-count rows.
+    func importBatch(_ batch: [ImportedTransaction],
+                     broker: String,
+                     document: String) -> ImportReport {
+        var working = holdings
+        var byExternalId: [String: Holding] = [:]
+        for h in working {
+            if let eid = h.externalId { byExternalId[eid] = h }
+        }
+        var added: [Holding] = []
+        var skipped: [SkippedTransaction] = []
+
+        for tx in batch {
+            if let eid = tx.externalId, let existing = byExternalId[eid] {
+                skipped.append(SkippedTransaction(incoming: tx, existing: existing, reason: .externalIdMatch))
+                continue
+            }
+            if let existing = working.first(where: { Self.fuzzyMatches(existing: $0, incoming: tx) }) {
+                skipped.append(SkippedTransaction(incoming: tx, existing: existing, reason: .fuzzyMatch))
+                continue
+            }
+            let h = Holding(
+                symbol: tx.symbol,
+                name: tx.name,
+                side: tx.side,
+                date: tx.date,
+                quantity: tx.quantity,
+                price: tx.price,
+                currency: tx.currency,
+                externalId: tx.externalId,
+                source: .imported(broker: broker, document: document)
+            )
+            added.append(h)
+            working.append(h)
+            if let eid = h.externalId { byExternalId[eid] = h }
+        }
+
+        if !added.isEmpty {
+            // Full reassignment so the @Observable setter fires, then
+            // call save() explicitly because didSet is unreliable on
+            // @Observable-managed properties.
+            holdings = working
+            save()
+        }
+        return ImportReport(added: added, skipped: skipped, broker: broker, document: document)
+    }
+
+    /// Composite-key fuzzy dedup. Only invoked when the incoming row
+    /// has no `externalId` — broker statements that DO include Trade
+    /// IDs always go through the exact-match path.
+    private static func fuzzyMatches(existing: Holding, incoming: ImportedTransaction) -> Bool {
+        guard incoming.externalId == nil else { return false }
+        let cal = Calendar(identifier: .gregorian)
+        return cal.isDate(existing.date, inSameDayAs: incoming.date)
+            && existing.symbol.uppercased() == incoming.symbol.uppercased()
+            && existing.side == incoming.side
+            && abs(existing.quantity - incoming.quantity) < 0.0001
+            && abs(existing.price - incoming.price) < 0.01
+    }
+}
+
 struct SymbolPosition: Identifiable, Hashable {
     let symbol: String
     let name: String
