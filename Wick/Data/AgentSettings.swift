@@ -319,12 +319,12 @@ final class AgentSettings {
         let env = ProcessInfo.processInfo.environment
 
         // Data-source keys.
-        adopt(env["FRED_API_KEY"],    into: &fredKey)
-        adopt(env["FINNHUB_API_KEY"], into: &finnhubKey)
-        adopt(env["FMP_API_KEY"],     into: &fmpKey)
+        adopt(env["FRED_API_KEY"]   , current: fredKey)    { fredKey = $0 }
+        adopt(env["FINNHUB_API_KEY"], current: finnhubKey) { finnhubKey = $0 }
+        adopt(env["FMP_API_KEY"]    , current: fmpKey)     { fmpKey = $0 }
 
         // Server auth — pick whichever the user wired locally.
-        adopt(env["WICK_SERVER_TOKEN"], into: &serverAuthToken)
+        adopt(env["WICK_SERVER_TOKEN"], current: serverAuthToken) { serverAuthToken = $0 }
 
         // LLM keys — match the provider currently selected so the
         // first BYO key the user might have exported lands in the
@@ -332,28 +332,29 @@ final class AgentSettings {
         // every relaunch, which is the opposite of helpful.
         switch providerKind {
         case .anthropic:
-            adopt(env["ANTHROPIC_API_KEY"], into: &currentAPIKey)
+            adopt(env["ANTHROPIC_API_KEY"], current: currentAPIKey) { currentAPIKey = $0 }
         case .openrouter:
-            adopt(env["OPENROUTER_API_KEY"], into: &currentAPIKey)
+            adopt(env["OPENROUTER_API_KEY"], current: currentAPIKey) { currentAPIKey = $0 }
         case .openai:
-            adopt(env["OPENAI_API_KEY"], into: &currentAPIKey)
+            adopt(env["OPENAI_API_KEY"], current: currentAPIKey) { currentAPIKey = $0 }
         case .gemini:
             adopt(env["GEMINI_API_KEY"] ?? env["GOOGLE_API_KEY"],
-                  into: &currentAPIKey)
+                  current: currentAPIKey) { currentAPIKey = $0 }
         case .deepseek:
-            adopt(env["DEEPSEEK_API_KEY"], into: &currentAPIKey)
+            adopt(env["DEEPSEEK_API_KEY"], current: currentAPIKey) { currentAPIKey = $0 }
         case .xai:
-            adopt(env["XAI_API_KEY"], into: &currentAPIKey)
+            adopt(env["XAI_API_KEY"], current: currentAPIKey) { currentAPIKey = $0 }
         case .glm:
-            adopt(env["GLM_API_KEY"] ?? env["ZHIPU_API_KEY"], into: &currentAPIKey)
+            adopt(env["GLM_API_KEY"] ?? env["ZHIPU_API_KEY"],
+                  current: currentAPIKey) { currentAPIKey = $0 }
         case .kimi:
             adopt(env["KIMI_API_KEY"] ?? env["MOONSHOT_API_KEY"],
-                  into: &currentAPIKey)
+                  current: currentAPIKey) { currentAPIKey = $0 }
         case .minimax:
-            adopt(env["MINIMAX_API_KEY"], into: &currentAPIKey)
+            adopt(env["MINIMAX_API_KEY"], current: currentAPIKey) { currentAPIKey = $0 }
         case .qwen:
             adopt(env["QWEN_API_KEY"] ?? env["DASHSCOPE_API_KEY"],
-                  into: &currentAPIKey)
+                  current: currentAPIKey) { currentAPIKey = $0 }
         case .server, .custom, .ollama:
             // Server/custom/ollama don't have a canonical env var name —
             // the user sets baseURL by hand. Skip.
@@ -361,14 +362,27 @@ final class AgentSettings {
         }
     }
 
-    /// Set `slot = candidate` if-and-only-if `slot` is empty and
-    /// `candidate` is a non-empty string. Triggers the property's
-    /// `didSet`, which persists to Keychain.
-    private func adopt(_ candidate: String?, into slot: inout String) {
-        guard slot.isEmpty,
+    /// Assign `candidate` to the slot via the given setter closure when
+    /// `current` is empty and `candidate` is a non-empty string.
+    ///
+    /// **Why a closure instead of `inout`** — the slot properties are
+    /// declared on an `@Observable` class. The macro rewrites them
+    /// into computed properties whose `_modify` accessor mutates the
+    /// backing storage directly and **does not fire the wrapper-level
+    /// `didSet`**. Passing the property as `inout` to a helper uses
+    /// `_modify`, which silently skips the `Keychain.save(...)` side
+    /// effect we depend on for persistence. Direct assignment via the
+    /// setter (`currentAPIKey = $0`) DOES fire didSet, so we hand the
+    /// setter through a closure here. Mirrors the same trap fixed in
+    /// `WatchlistStore`'s `groups` mutations.
+    private func adopt(_ candidate: String?,
+                       current: String,
+                       set: (String) -> Void)
+    {
+        guard current.isEmpty,
               let v = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
               !v.isEmpty else { return }
-        slot = v
+        set(v)
     }
     #endif
 }

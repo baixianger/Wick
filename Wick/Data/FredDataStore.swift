@@ -83,7 +83,15 @@ final class FredDataStore {
     private func scheduleFetchIfNeeded(_ key: Key) {
         guard !inFlight.contains(key) else { return }
         guard !apiKey.isEmpty else {
-            sources[key] = .demo
+            // CRITICAL: `sources` is `@Observable`-tracked. Writing the
+            // same `.demo` value on every body evaluation invalidates
+            // the observation and SwiftUI re-renders, which re-enters
+            // this code path on the next body call → infinite render
+            // loop that locks the main thread (Macro tab "卡死"). Guard
+            // the write so it only fires on actual state transitions.
+            if sources[key] != .demo {
+                sources[key] = .demo
+            }
             return
         }
         inFlight.insert(key)

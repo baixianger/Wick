@@ -17,9 +17,12 @@ enum WatchlistGroupSelection: Hashable, Codable {
 @Observable
 final class WatchlistStore {
 
-    var groups: [WatchlistGroup] {
-        didSet { saveGroups() }
-    }
+    /// Watchlist groups are mutated through `_modify` accessors
+    /// (`groups.append`, `groups[idx].name = …`, `groups.removeAll`).
+    /// The `@Observable` macro's `_modify` accessor doesn't propagate
+    /// to a stored-property `didSet`, so every mutation method below
+    /// calls `saveGroups()` explicitly. Don't rely on `didSet` here.
+    var groups: [WatchlistGroup]
     var selection: WatchlistGroupSelection {
         didSet { saveSelection() }
     }
@@ -45,17 +48,20 @@ final class WatchlistStore {
     func addGroup(name: String) -> WatchlistGroup {
         let g = WatchlistGroup(name: name)
         groups.append(g)
+        saveGroups()
         return g
     }
 
     func rename(id: UUID, to newName: String) {
         guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
         groups[idx].name = newName
+        saveGroups()
     }
 
     func remove(id: UUID) {
         groups.removeAll { $0.id == id }
         if case .user(let sid) = selection, sid == id { selection = .all }
+        saveGroups()
     }
 
     func toggle(symbol: String, in groupId: UUID) {
@@ -65,6 +71,7 @@ final class WatchlistStore {
         } else {
             groups[idx].symbols.append(symbol)
         }
+        saveGroups()
     }
 
     func filter(tickers all: [Ticker], holdings: [Holding]) -> [Ticker] {
