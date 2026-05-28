@@ -94,11 +94,23 @@ public struct ClaudeCodeProvider: LLMProvider {
                         process.terminate()
                     }
                 }
+                // Drain stdout + stderr on detached tasks BEFORE
+                // waitUntilExit. macOS pipe buffer is ~64 KB; a real
+                // `claude -p --output-format json` envelope (long
+                // `result` + usage + session metadata) routinely
+                // exceeds that. If we waited on exit first, the child
+                // would block on `write` and the parent on
+                // `waitUntilExit` → deadlock until timeout SIGTERM.
+                let outReader = Task.detached {
+                    stdout.fileHandleForReading.readDataToEndOfFile()
+                }
+                let errReader = Task.detached {
+                    stderr.fileHandleForReading.readDataToEndOfFile()
+                }
                 process.waitUntilExit()
                 timeoutTask.cancel()
-
-                let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-                let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+                let outData = await outReader.value
+                let errData = await errReader.value
 
                 guard process.terminationStatus == 0 else {
                     let errText = String(data: errData, encoding: .utf8) ?? ""

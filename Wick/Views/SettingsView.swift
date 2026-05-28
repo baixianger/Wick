@@ -253,6 +253,17 @@ private struct MCPTab: View {
             } catch {
                 return .failure(error)
             }
+            // Timeout watchdog. 8 s covers a worst-case cold-cache
+            // App-Group + JSON-RPC handshake by a comfortable margin
+            // while keeping the Settings UI responsive. If the
+            // helper wedges (e.g. waiting on stdin after writing
+            // all responses, or blocked on a sandbox prompt) the
+            // probe surfaces a real error instead of spinning
+            // "Testing…" forever.
+            let timeoutTask = Task.detached {
+                try? await Task.sleep(nanoseconds: 8 * 1_000_000_000)
+                if process.isRunning { process.terminate() }
+            }
             let initReq = #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"settings-probe","version":"0"}}}"# + "\n"
             let initedNote = #"{"jsonrpc":"2.0","method":"notifications/initialized"}"# + "\n"
             let listReq = #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"# + "\n"
@@ -261,15 +272,28 @@ private struct MCPTab: View {
             stdin.fileHandleForWriting.write(listReq.data(using: .utf8)!)
             try? stdin.fileHandleForWriting.close()
 
+            // Drain pipes on detached tasks BEFORE waitUntilExit so
+            // the helper can write its full `tools/list` reply
+            // without blocking on a full pipe buffer. (Same fix as
+            // ClaudeCodeProvider.swift — both probes had the
+            // identical deadlock pattern.)
+            let outReader = Task.detached {
+                stdout.fileHandleForReading.readDataToEndOfFile()
+            }
+            let errReader = Task.detached {
+                stderr.fileHandleForReading.readDataToEndOfFile()
+            }
             process.waitUntilExit()
+            timeoutTask.cancel()
+            let outDataValue = await outReader.value
+            let errDataValue = await errReader.value
             guard process.terminationStatus == 0 else {
-                let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(),
-                                  encoding: .utf8) ?? ""
+                let err = String(data: errDataValue, encoding: .utf8) ?? ""
                 return .failure(NSError(
                     domain: "WickMCPProbe", code: Int(process.terminationStatus),
                     userInfo: [NSLocalizedDescriptionKey: "Helper exited \(process.terminationStatus): \(err)"]))
             }
-            let data = stdout.fileHandleForReading.readDataToEndOfFile()
+            let data = outDataValue
             let lines = (String(data: data, encoding: .utf8) ?? "")
                 .split(separator: "\n")
             for line in lines {

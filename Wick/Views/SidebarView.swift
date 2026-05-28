@@ -326,6 +326,12 @@ private struct TickerRow: View {
         let isUp = (lastPrice >= (baseline ?? lastPrice))
         let tint = isUp ? Color.green : Color.red
         let change = closes.last.flatMap { last in baseline.map { last - $0 } } ?? 0
+        // Yesterday's close — used by the "Percent" pill style so the
+        // percent reflects today's move instead of the trailing 22-day
+        // window. The absolute-delta + sparkline still ride the 22d
+        // window since that matches the tint signal a glance away.
+        let previousClose: Double? = closes.count >= 2 ? closes[closes.count - 2] : nil
+        let dayChange: Double = previousClose.map { lastPrice - $0 } ?? change
 
         HStack(spacing: 12) {
             symbolBlock
@@ -344,7 +350,8 @@ private struct TickerRow: View {
 
             priceBlock(lastPrice: lastPrice,
                        change: change,
-                       baseline: baseline,
+                       dayChange: dayChange,
+                       previousClose: previousClose,
                        tint: tint)
         }
         .padding(.vertical, 4)
@@ -369,13 +376,16 @@ private struct TickerRow: View {
 
     private func priceBlock(lastPrice: Double,
                             change: Double,
-                            baseline: Double?,
+                            dayChange: Double,
+                            previousClose: Double?,
                             tint: Color) -> some View
     {
         VStack(alignment: .trailing, spacing: 4) {
             Text(String(format: "%.2f", lastPrice))
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
-            Text(formattedChange(change: change, baseline: baseline))
+            Text(formattedChange(change: change,
+                                  dayChange: dayChange,
+                                  previousClose: previousClose))
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 7)
@@ -384,18 +394,24 @@ private struct TickerRow: View {
         }
     }
 
-    /// Render the day-over-day move per the Settings → Display preference.
-    /// Falls back to the absolute price delta when the percent computation
-    /// would divide by zero (no baseline yet).
-    private func formattedChange(change: Double, baseline: Double?) -> String {
+    /// Render the watchlist row's change pill per the Settings → Display
+    /// preference. `.absolute` shows the trailing window's absolute
+    /// price delta (matches the sparkline). `.percent` shows the TRUE
+    /// day-over-day percent so the number lines up with what every
+    /// other stock app surfaces on a row at a glance.
+    private func formattedChange(change: Double,
+                                 dayChange: Double,
+                                 previousClose: Double?) -> String {
         switch settings.watchlistChangeStyle {
         case .absolute:
             return (change >= 0 ? "+" : "") + String(format: "%.2f", change)
         case .percent:
-            guard let baseline, baseline != 0 else {
+            guard let prev = previousClose, prev != 0 else {
+                // First-day window with no prior close yet — fall back
+                // to absolute delta rather than a misleading 0%.
                 return (change >= 0 ? "+" : "") + String(format: "%.2f", change)
             }
-            let pct = change / baseline * 100
+            let pct = dayChange / prev * 100
             return String(format: "%+.2f%%", pct)
         }
     }

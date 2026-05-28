@@ -93,6 +93,55 @@ enum Keychain {
         return status
     }
 
+    /// One-shot rescue for items written under earlier Wick builds
+    /// that DID NOT include `kSecAttrService: "Wick"` or
+    /// `kSecUseDataProtectionKeychain: true` in the save query. Those
+    /// entries live in the legacy file-based keychain with no
+    /// service attribute and are invisible to the new `baseQuery`.
+    ///
+    /// Call this once at app launch (gated by a UserDefaults flag).
+    /// For each `account` we expect to own, we run a fallback query
+    /// (no service, no data-protection flag), pull the value, and
+    /// re-save it via the modern `save(_:account:)` path — which
+    /// inserts under the new schema. The legacy item is left in
+    /// place (no risk of data loss if we ever roll back).
+    ///
+    /// Returns the number of accounts successfully recovered.
+    @discardableResult
+    static func migrateLegacyEntriesIfNeeded(accounts: [String],
+                                             flagKey: String = "wick.keychain.legacy-migrated.v1"
+    ) -> Int {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: flagKey) == false else { return 0 }
+        var recovered = 0
+        for account in accounts {
+            // Skip accounts that already have a value under the new schema.
+            if load(account: account) != nil { continue }
+            // Legacy query: no `kSecAttrService`, no
+            // `kSecUseDataProtectionKeychain`. Matches what the prior
+            // build's save() produced.
+            let legacyQuery: [String: Any] = [
+                kSecClass as String:        kSecClassGenericPassword,
+                kSecAttrAccount as String:  account,
+                kSecReturnData as String:   true,
+                kSecMatchLimit as String:   kSecMatchLimitOne,
+            ]
+            var result: AnyObject?
+            let status = SecItemCopyMatching(legacyQuery as CFDictionary, &result)
+            guard status == errSecSuccess,
+                  let data = result as? Data,
+                  let value = String(data: data, encoding: .utf8)
+            else { continue }
+            // Re-save under the new schema. The legacy entry stays.
+            if save(value, account: account) == errSecSuccess {
+                recovered += 1
+                log.info("recovered legacy keychain entry for \(account, privacy: .public)")
+            }
+        }
+        defaults.set(true, forKey: flagKey)
+        return recovered
+    }
+
     // MARK: - Helpers
 
     /// Common attribute set used by every save / load / delete query.

@@ -84,8 +84,10 @@ enum SessionTitler {
             return AnthropicProvider(apiKey: settings.currentAPIKey,
                                       baseURL: baseURL)
         case .claudeCode:
-            return ClaudeCodeProvider(cliPath: settings.claudeCodeCLIPath,
-                                       mode: .subscription)
+            // Empty CLI path → resolve from $PATH (Settings hint).
+            let cli = settings.claudeCodeCLIPath.isEmpty
+                ? "claude" : settings.claudeCodeCLIPath
+            return ClaudeCodeProvider(cliPath: cli, mode: .subscription)
         default:
             guard let url = URL(string: settings.byoBaseURL) else { return nil }
             let key: String? = settings.providerKind.requiresAPIKey

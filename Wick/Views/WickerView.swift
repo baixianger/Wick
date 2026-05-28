@@ -876,12 +876,38 @@ private struct ConversationView: View {
 
     /// Pulls the first file URL out of the drop, validates the
     /// extension, and kicks off LLM extraction.
+    ///
+    /// Uses `loadFileRepresentation` instead of `loadObject(ofClass:
+    /// URL.self)` because the dropped URL on a sandboxed (MAS) build
+    /// is only valid INSIDE the completion handler — the security-
+    /// scoped bookmark isn't preserved across hops. We copy the file
+    /// to a sandbox-writable temp path while we still have access,
+    /// then dispatch the extractor against the copy.
     private func handleDroppedProviders(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
-        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+        // Prefer the canonical UTI for file URLs; falls back to any
+        // available type identifier the system advertises.
+        let typeID = provider.registeredTypeIdentifiers.first {
+            $0 == "public.file-url" || $0 == "public.url" || $0.hasPrefix("public.")
+        } ?? (provider.registeredTypeIdentifiers.first ?? "public.file-url")
+
+        _ = provider.loadFileRepresentation(forTypeIdentifier: typeID) { url, _ in
             guard let url else { return }
+            // `url` is valid only for the duration of this callback —
+            // copy to a sandbox-writable temp path before returning.
+            let tmpBase = FileManager.default.temporaryDirectory
+                .appendingPathComponent("WickImports", isDirectory: true)
+            try? FileManager.default.createDirectory(
+                at: tmpBase, withIntermediateDirectories: true)
+            let copy = tmpBase.appendingPathComponent(
+                "\(UUID().uuidString)-\(url.lastPathComponent)")
+            do {
+                try FileManager.default.copyItem(at: url, to: copy)
+            } catch {
+                return
+            }
             Task { @MainActor in
-                startExtraction(from: url)
+                startExtraction(from: copy)
             }
         }
         return true
@@ -1363,6 +1389,17 @@ enum WickerLLM {
                 ?? URL(string: ProviderKind.anthropic.defaultBaseURL)!
             return AnthropicProvider(apiKey: settings.currentAPIKey,
                                       baseURL: baseURL)
+
+        case .claudeCode:
+            // Locally-installed `claude` CLI driven by the user's
+            // subscription. Empty path → resolve from $PATH (the
+            // Settings UI tells users this; we honour it here so
+            // an empty `claudeCodeCLIPath` doesn't pass `""` to
+            // `Process.executableURL` and instantly fail spawn).
+            let cli = settings.claudeCodeCLIPath.isEmpty
+                ? "claude"
+                : settings.claudeCodeCLIPath
+            return ClaudeCodeProvider(cliPath: cli, mode: .subscription)
 
         default:
             // OpenAI-compatible umbrella: 9 hosted clouds + Custom +

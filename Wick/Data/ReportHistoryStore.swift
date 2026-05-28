@@ -118,8 +118,14 @@ final class ReportHistoryStore {
         let ud = UserDefaults.standard
         let flagKey = SharedStore.Keys.reportsMigrated
         guard ud.bool(forKey: flagKey) == false else { return }
-        defer { ud.set(true, forKey: flagKey) }
-
+        // NOTE: flag is set ONLY after a successful import attempt,
+        // not in a `defer`. A transient read failure (offloaded
+        // iCloud Drive, restricted ACL, locked file) used to flip
+        // the flag and make legacy reports permanently invisible.
+        // Now: if the legacy file is absent we set the flag and
+        // move on (genuine "nothing to migrate"); if it exists but
+        // we can't read or decode it, leave the flag UNSET so the
+        // next launch retries.
         let fm = FileManager.default
         guard let base = try? fm.url(for: .applicationSupportDirectory,
                                        in: .userDomainMask,
@@ -128,10 +134,16 @@ final class ReportHistoryStore {
         let legacy = base
             .appendingPathComponent("Wick", isDirectory: true)
             .appendingPathComponent("reports.json")
+        if !fm.fileExists(atPath: legacy.path) {
+            // Nothing to migrate — record that and don't keep checking.
+            ud.set(true, forKey: flagKey)
+            return
+        }
         guard let data = try? Data(contentsOf: legacy) else { return }
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         guard let rows = try? decoder.decode([Report].self, from: data) else { return }
         for r in rows { SharedStore.appendReport(r) }
+        ud.set(true, forKey: flagKey)
     }
 
     private func persist() {

@@ -356,10 +356,14 @@ final class ToolHost {
                 "netQuantity": p.net,
                 "averageBuyPrice": p.avgBuyPrice,
                 "currency": p.currency,
-                "lastPrice": last as Any,
+                // `Optional<Double>.none as Any` is rejected by
+                // JSONSerialization — would throw and fail the whole
+                // payload when ONE position's snapshot lookup failed.
+                // Normalise nil → NSNull() per `marketValue`.
+                "lastPrice": last.map { $0 as Any } ?? NSNull(),
                 "costBasis": cost,
                 "marketValue": last != nil ? market : NSNull(),
-                "unrealizedPnL": pnl as Any
+                "unrealizedPnL": pnl.map { $0 as Any } ?? NSNull()
             ])
         }
         if totalCost != 0 {

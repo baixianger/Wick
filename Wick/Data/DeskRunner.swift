@@ -54,9 +54,14 @@ final class DeskRunner {
             // Subprocess to the locally-installed `claude` CLI, using the
             // user's existing subscription auth. No API key needed; cost
             // is paid in subscription quota. ~1-2 s extra per call.
+            // Empty CLI path → resolve from $PATH (Settings UI tells
+            // users this; passing "" to Process.executableURL would
+            // instantly fail spawn with a POSIX error).
             runDirect(ticker: ticker,
-                       llm: ClaudeCodeProvider(cliPath: settings.claudeCodeCLIPath,
-                                                mode: .subscription),
+                       llm: ClaudeCodeProvider(
+                            cliPath: settings.claudeCodeCLIPath.isEmpty
+                                ? "claude" : settings.claudeCodeCLIPath,
+                            mode: .subscription),
                        config: settings.workflowConfig(),
                        providerName: settings.providerKind.displayName,
                        data: makeMarketData(settings: settings))

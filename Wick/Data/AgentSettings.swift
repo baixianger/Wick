@@ -154,6 +154,14 @@ final class AgentSettings {
             return !serverBaseURL.isEmpty
         case .ollama:
             return !byoBaseURL.isEmpty
+        case .claudeCode:
+            // Driven by the locally-installed `claude` CLI + the
+            // user's existing subscription auth. No API key, no
+            // base URL — if the binary exists we can run. We don't
+            // verify the binary here (synchronous fs check would
+            // run on every SwiftUI body); the CLI-path field +
+            // Test connection button in Settings → MCP cover that.
+            return true
         default:
             return !currentAPIKey.isEmpty && !byoBaseURL.isEmpty
         }
@@ -164,8 +172,8 @@ final class AgentSettings {
     /// button per-provider.
     var hasKey: Bool {
         switch providerKind {
-        case .server, .ollama: return true       // n/a — no key needed
-        default:               return !currentAPIKey.isEmpty
+        case .server, .ollama, .claudeCode: return true       // n/a — no key needed
+        default:                            return !currentAPIKey.isEmpty
         }
     }
 
@@ -263,6 +271,21 @@ final class AgentSettings {
         let kindRaw = ud.string(forKey: "tf.providerKind") ?? ProviderKind.anthropic.rawValue
         let kind = ProviderKind(rawValue: kindRaw) ?? .anthropic
         self.providerKind = kind
+
+        // One-shot rescue of API keys stored under the previous
+        // Keychain schema (no `kSecAttrService`, no
+        // `kSecUseDataProtectionKeychain`). Without this, every
+        // existing install would silently lose every API key on
+        // first launch after the schema tightening landed. Idempotent
+        // via a UserDefaults flag — runs once per install. Per-
+        // provider accounts + the data-source / server-token slots.
+        let perProviderAccounts = ProviderKind.allCases.map(\.keychainAccount)
+        Keychain.migrateLegacyEntriesIfNeeded(accounts: perProviderAccounts + [
+            "me.impai.wick.fmp-key",
+            "me.impai.wick.finnhub-key",
+            "me.impai.wick.fred-key",
+            "me.impai.wick.server-token",
+        ])
 
         // Per-provider BYO config — each provider has its own bucket
         // of keys (keychain), base URL (UserDefaults), and model

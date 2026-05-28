@@ -38,14 +38,27 @@ public struct MarketSnapshot: Sendable, Codable {
 
     /// Render the slice an analyst of a given kind cares about, for prompting.
     public func brief(for kind: AnalystKind) -> String {
+        // When the data came from `StubMarketDataProvider`, prepend an
+        // explicit "this is sample data" banner so the analyst LLM
+        // doesn't produce an authoritative report from fabricated
+        // numbers. Filter the marker keys (`_stub`, `Source`) out of
+        // the fundamentals block so they don't leak into the prompt
+        // as if they were real fields.
+        let stubBanner = isStub
+            ? "⚠️ Sample data — no live market provider configured. Refuse to give actionable analysis and ask the user to set up a real data source.\n\n"
+            : ""
         switch kind {
         case .fundamental:
-            let lines = fundamentals.map { "- \($0.key): \($0.value)" }.sorted()
-            return lines.isEmpty ? "No fundamentals available." : lines.joined(separator: "\n")
+            let visible = fundamentals.filter {
+                $0.key != StubMarketDataProvider.stubMarkerKey && $0.key != "Source"
+            }
+            let lines = visible.map { "- \($0.key): \($0.value)" }.sorted()
+            let body = lines.isEmpty ? "No fundamentals available." : lines.joined(separator: "\n")
+            return stubBanner + body
         case .technical:
-            return technicals.isEmpty ? "No indicator data available." : technicals
+            return stubBanner + (technicals.isEmpty ? "No indicator data available." : technicals)
         case .sentiment, .news:
-            return news.isEmpty ? "No recent news available." : news.map { "- \($0)" }.joined(separator: "\n")
+            return stubBanner + (news.isEmpty ? "No recent news available." : news.map { "- \($0)" }.joined(separator: "\n"))
         }
     }
 }

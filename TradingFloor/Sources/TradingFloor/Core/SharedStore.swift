@@ -211,11 +211,31 @@ public enum SharedStore {
             target.set(true, forKey: Keys.migrated)
             return
         }
+        // Data keys (blobs).
         for key in [Keys.holdings, Keys.watchlist] {
             if target.data(forKey: key) == nil,
                let data = source.data(forKey: key)
             {
                 target.set(data, forKey: key)
+            }
+        }
+        // Companion keys readers in `WatchlistStore.init` (selection) +
+        // `HoldingsStore.migrateClearAutoSeededRowsIfNeeded` (the
+        // candlekit.holdings.migrate.v4-empty flag) also now read from
+        // the shared suite. Migrate them too so users don't lose their
+        // selected group OR get auto-seed-cleanup re-applied to
+        // hand-typed holdings whose date happens to match a seed row.
+        let companionKeys = [
+            "candlekit.watchlist.selection.v1",
+            "candlekit.holdings.migrate.v4-empty",
+        ]
+        for key in companionKeys where target.object(forKey: key) == nil {
+            if let blob = source.data(forKey: key) {
+                target.set(blob, forKey: key)
+            } else if let str = source.string(forKey: key) {
+                target.set(str, forKey: key)
+            } else if source.object(forKey: key) != nil {
+                target.set(source.bool(forKey: key), forKey: key)
             }
         }
         target.set(true, forKey: Keys.migrated)

@@ -678,6 +678,11 @@ struct AITab: View {
             AccessibilityNotification.Announcement(announcement).post()
         }
         .onAppear {
+            // Pick up reports an external MCP session (e.g. Claude
+            // Code via `wick.write_report`) wrote into the App-Group
+            // container while this tab was offscreen. SharedStore is
+            // the single source of truth; refresh memory from disk.
+            history.reloadFromDisk()
             // Default-expand the most recent report when entering the
             // tab so the page never opens blank if there's history.
             // The runner's `onCompleted` hook is wired by the history

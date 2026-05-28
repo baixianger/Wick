@@ -24,8 +24,14 @@ public struct MarketRouter: MarketDataProvider {
     }
 
     public func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot {
-        if CNSymbol.isCN(symbol) {
-            return try await cn.snapshot(symbol: symbol, asOf: asOf)
+        // `isCN` only accepts already-canonical input — `.SS / .SZ / .HK`
+        // suffix present. LLM tool calls and user input frequently pass
+        // bare digits (`600519`), prefix-style (`SH600519`), or hyphen
+        // forms; route those through `CNSymbol.parse` first so they
+        // reach the EastMoney provider instead of being silently
+        // dropped to the US/Stub fallback.
+        if let canonical = CNSymbol.parse(symbol) {
+            return try await cn.snapshot(symbol: canonical, asOf: asOf)
         }
         return try await fallback.snapshot(symbol: symbol, asOf: asOf)
     }
