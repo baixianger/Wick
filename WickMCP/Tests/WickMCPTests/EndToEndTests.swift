@@ -108,7 +108,7 @@ struct WickMCPEndToEndTests {
         #expect(serverInfo?["name"] as? String == "wick")
     }
 
-    @Test func e2e_tools_list_exposes_five_tools() throws {
+    @Test func e2e_tools_list_exposes_all_tools() throws {
         let requests = [
             """
             {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}
@@ -128,6 +128,7 @@ struct WickMCPEndToEndTests {
         #expect(names.sorted() == [
             "wick.candles",
             "wick.holdings",
+            "wick.methodology",
             "wick.portfolio",
             "wick.snapshot",
             "wick.watchlist"

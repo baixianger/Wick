@@ -12,11 +12,17 @@ final class ToolHost {
     /// today; if and when an FMP/Yahoo equivalent lands, this widens to a
     /// protocol.
     let eastMoney: EastMoneyMarketDataProvider
+    /// Loaded Wicker skill playbooks. The `wick.methodology` tool reads
+    /// from this and hands the agent our analysis recipe so it can drive
+    /// its own multi-step reasoning instead of asking us to do it for it.
+    let skills: SkillRegistry
 
     init(market: any MarketDataProvider,
-         eastMoney: EastMoneyMarketDataProvider) {
+         eastMoney: EastMoneyMarketDataProvider,
+         skills: SkillRegistry = SkillRegistry()) {
         self.market = market
         self.eastMoney = eastMoney
+        self.skills = skills
     }
 
     /// JSON-Schema-style descriptors returned by `tools/list`. Stored as
@@ -29,7 +35,8 @@ final class ToolHost {
             candlesSpec,
             holdingsSpec,
             watchlistSpec,
-            portfolioSpec
+            portfolioSpec,
+            methodologySpec
         ]
     }
 
@@ -44,6 +51,7 @@ final class ToolHost {
         case "wick.holdings":   return try holdings(arguments: arguments)
         case "wick.watchlist":  return try watchlist(arguments: arguments)
         case "wick.portfolio":  return try await portfolio(arguments: arguments)
+        case "wick.methodology": return try await methodology(arguments: arguments)
         default:                throw MCPToolError.unknown(name)
         }
     }
@@ -369,6 +377,114 @@ final class ToolHost {
             ["type": "text", "text": lines.joined(separator: "\n")],
             ["type": "text", "text": "```json\n\(String(data: data, encoding: .utf8) ?? "{}")\n```"]
         ]
+    }
+
+    // MARK: - wick.methodology (Wicker analysis playbook)
+    //
+    // Surfaces TradingFloor's bundled markdown skills as MCP content so an
+    // external agent (Claude Code / Codex / etc.) can READ our analysis
+    // recipe and then orchestrate the steps itself — calling our data
+    // tools at each stage and doing the LLM reasoning on its own side.
+    // The point is the inverse of `wick.run_workflow`: we DON'T do the
+    // analysis for them, but we DO hand them the playbook so they don't
+    // have to invent one. ([[wick-business-model]] + see
+    // `docs/why-no-mcp-run-workflow.md` for the design rationale.)
+
+    private var methodologySpec: [String: Any] {
+        [
+            "name": "wick.methodology",
+            "description": """
+            Read Wicker's analysis playbook — the same step-by-step \
+            instructions our internal Wicker agents follow. Call with no \
+            arguments for the master recipe (full desk workflow + list of \
+            available steps). Call with `name` ('fundamental-analysis', \
+            'technical-analysis', 'sentiment-analysis', 'bull-bear-debate', \
+            'full-desk-analysis', 'desk-analyst') to read that specific \
+            step's instructions in full. Designed for an agent that wants \
+            to drive the analysis itself using `wick.snapshot`, \
+            `wick.candles`, etc. as data sources.
+            """,
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "name": [
+                        "type": "string",
+                        "description": "Skill slug, e.g. 'fundamental-analysis'. Omit to get the master playbook + list of available skills."
+                    ]
+                ]
+            ]
+        ]
+    }
+
+    private func methodology(arguments: [String: Any]) async throws -> [[String: Any]] {
+        // Lazy reload: skills are tiny markdown files, refreshing on each
+        // call lets users override bundled skills by editing their copy in
+        // `~/Library/Application Support/Wick/Skills/` without restarting
+        // the MCP client.
+        await skills.reload()
+        let all = await skills.all()
+
+        if let name = (arguments["name"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty
+        {
+            // Specific skill requested.
+            guard let skill = await skills.skill(named: name) else {
+                let known = all.map(\.name).sorted().joined(separator: ", ")
+                return [[
+                    "type": "text",
+                    "text": "Unknown methodology `\(name)`. Available: \(known)."
+                ]]
+            }
+            var lines: [String] = [
+                "# \(skill.name)",
+                "",
+                "_\(skill.description)_",
+                ""
+            ]
+            if !skill.triggers.isEmpty {
+                lines.append("Triggers: \(skill.triggers.joined(separator: ", "))")
+                lines.append("")
+            }
+            lines.append(skill.body)
+            return [["type": "text", "text": lines.joined(separator: "\n")]]
+        }
+
+        // No name — return the master playbook.
+        return [["type": "text", "text": masterPlaybook(skills: all)]]
+    }
+
+    /// The recipe the agent reads when it asks "how do I analyse a
+    /// ticker with Wick?". Lists every skill it can drill into, but
+    /// also explicitly spells out the calling convention: get data,
+    /// then read methodology, then reason on the client side.
+    private func masterPlaybook(skills: [Skill]) -> String {
+        var lines: [String] = [
+            "# Wicker Analysis Playbook",
+            "",
+            "Wick exposes data + methodology over MCP. You — the calling agent — drive the reasoning. Here's the canonical workflow our internal Wicker desk follows; you can run it step-by-step on your side.",
+            "",
+            "## Recommended steps",
+            "",
+            "1. **Pull the data.** Call `wick.snapshot(ticker)` for price action, technicals, fundamentals. Optionally `wick.candles(ticker, limit)` for raw OHLCV bars, `wick.holdings(symbol)` if the user already has a position, `wick.watchlist()` for context.",
+            "2. **Read each analyst playbook** below and apply its method to the snapshot. Each one tells you what to look for and what shape of output to produce.",
+            "3. **Run a bull-bear debate** using `bull-bear-debate` — debate your own analyst findings to surface counter-arguments.",
+            "4. **Synthesize** a trade decision: `STRONG SELL | SELL | HOLD | BUY | STRONG BUY` with a position-size suggestion and 2-4 sentences of reasoning citing the strongest point on each side.",
+            "5. **Risk-review** your decision — what's the downside, what tail risk would change your mind, what to monitor.",
+            "",
+            "## Available methodologies",
+            ""
+        ]
+        for skill in skills {
+            lines.append("- **`\(skill.name)`** — \(skill.description)")
+        }
+        lines.append("")
+        lines.append("Call `wick.methodology(name: \"<slug>\")` to read any of these in full. The `full-desk-analysis` skill ties them all together.")
+        lines.append("")
+        lines.append("## What Wick does NOT do via MCP")
+        lines.append("")
+        lines.append("Wick deliberately does not expose a `wick.run_workflow` tool. The reasoning is yours — Wick supplies the data and the recipe. This avoids double-billing LLM inference (yours and ours), keeps the surface read-only, and lets you write your own analyst prompts on top of our data.")
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Snapshot rendering helpers

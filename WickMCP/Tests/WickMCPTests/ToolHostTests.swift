@@ -48,7 +48,7 @@ private func wipeSharedStore() {
 
 // MARK: - Stateless tool dispatch tests (parallel-safe)
 
-@Test func toolhost_lists_all_five_tools() {
+@Test func toolhost_lists_all_tools() {
     let host = makeHost()
     let names = host.specs.compactMap { $0["name"] as? String }
     #expect(names == [
@@ -56,7 +56,8 @@ private func wipeSharedStore() {
         "wick.candles",
         "wick.holdings",
         "wick.watchlist",
-        "wick.portfolio"
+        "wick.portfolio",
+        "wick.methodology"
     ])
 }
 

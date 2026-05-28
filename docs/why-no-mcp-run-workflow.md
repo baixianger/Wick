@@ -61,6 +61,29 @@ report, runs on the user's BYO LLM key as before). The MCP integration
 is for users who'd rather drive their own analysis through their own
 LLM. They aren't the same use case.
 
+**But we don't leave them empty-handed.** The MCP server exposes
+`wick.methodology` — the same markdown analyst playbooks Wicker's
+internal desk follows (`fundamental-analysis`, `technical-analysis`,
+`sentiment-analysis`, `bull-bear-debate`, `full-desk-analysis`,
+`desk-analyst`). The calling agent reads the recipe, calls our data
+tools at each stage, does its own LLM reasoning, and arrives at a
+result. It's the inverse of `run_workflow`: we hand them the cookbook
+instead of cooking for them.
+
+Concretely the flow becomes:
+
+```
+agent → wick.methodology()                # read the master playbook
+agent → wick.snapshot("600519.SS")        # pull the data
+agent → wick.methodology("fundamental-analysis")  # read the fundamental analyst's lens
+agent reasons with its own LLM            # produces the fundamental finding
+… repeat per analyst, then debate, then trade decision, then risk review.
+```
+
+The data is ours, the methodology is ours, the reasoning is theirs.
+That split holds the line on "we never see your data" and "you never
+pay twice for inference."
+
 In the Wick docs (and the App Store listing), we frame this as:
 
 > Wick gives you two ways to analyse a position:

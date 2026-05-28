@@ -64,6 +64,7 @@ the bundle.
 | `wick.holdings`       | `symbol?` (filter)         | Transactions from the App-Group container, with net-position summary |
 | `wick.watchlist`      | _none_                     | All watchlist groups + their symbols |
 | `wick.portfolio`      | _none_                     | Net positions × latest price → cost / market value / P&L (parallel snapshots) |
+| `wick.methodology`    | `name?`                    | Wicker's analysis playbook. No args → master recipe + list of available steps. With `name` (`fundamental-analysis`, `technical-analysis`, `sentiment-analysis`, `bull-bear-debate`, `full-desk-analysis`, `desk-analyst`) → that step's full instructions. **Read this first** if you want to drive a full analysis. |
 
 Each tool returns two content blocks: a Markdown digest the LLM reads
 naturally, and a fenced ```json``` payload a programmatic caller can
