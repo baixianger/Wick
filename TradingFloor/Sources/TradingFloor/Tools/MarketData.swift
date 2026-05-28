@@ -55,18 +55,40 @@ public protocol MarketDataProvider: Sendable {
     func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot
 }
 
-/// Deterministic stand-in for tests and SwiftUI previews — no network.
+/// Deterministic stand-in for tests, SwiftUI previews, and the WickMCP
+/// helper's "no FMP key configured" fallback. The marker `Source` /
+/// `_stub` fundamentals key lets downstream surfaces (tool renderers,
+/// LLM prompts) detect that the data is fake instead of pretending it's
+/// real — feeding a stub snapshot into a Wicker desk run without flagging
+/// it produced credible-looking but completely fabricated reports.
 public struct StubMarketDataProvider: MarketDataProvider {
+    /// `fundamentals` key set by this provider; consumers can check for
+    /// it to decide whether to skip / warn / refuse the snapshot.
+    public static let stubMarkerKey = "_stub"
+
     public init() {}
     public func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot {
         MarketSnapshot(
             symbol: symbol, asOf: asOf, lastPrice: 123.45,
             priceSummary: "+4.2% over 30d, ~2% below 52-week high.",
             technicals: "RSI(14) 64; MACD bullish, signal crossed 3 sessions ago; price above 50/200 SMA.",
-            fundamentals: ["P/E": "28.1", "Rev YoY": "+11%", "Gross margin": "54%"],
-            news: ["Q earnings beat on revenue, light guidance.",
-                   "Analyst upgrade to Overweight.",
-                   "Social sentiment mildly positive after product launch."]
+            fundamentals: [
+                Self.stubMarkerKey: "true",
+                "Source": "stub (no live provider configured)",
+                "P/E": "28.1", "Rev YoY": "+11%", "Gross margin": "54%"
+            ],
+            news: ["[stub] Q earnings beat on revenue, light guidance.",
+                   "[stub] Analyst upgrade to Overweight.",
+                   "[stub] Social sentiment mildly positive after product launch."]
         )
+    }
+}
+
+/// Convenience predicate. Marker stays on the snapshot through the
+/// decorator chain (financial / news / macro decorators only ADD keys),
+/// so a Markdown renderer downstream can show a "⚠️ sample data" banner.
+public extension MarketSnapshot {
+    var isStub: Bool {
+        fundamentals[StubMarketDataProvider.stubMarkerKey] == "true"
     }
 }

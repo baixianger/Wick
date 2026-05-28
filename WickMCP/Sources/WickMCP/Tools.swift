@@ -375,6 +375,11 @@ final class ToolHost {
 
     private func render(_ s: MarketSnapshot) -> String {
         var lines: [String] = []
+        if s.isStub {
+            lines.append("> ⚠️ **Sample data** — no live provider is wired for `\(s.symbol)`. ")
+            lines.append("> Non-CN/HK tickers fall back to a stub in this build. Configure FMP in Wick.app → Settings → Data to get real US numbers.")
+            lines.append("")
+        }
         lines.append("# \(s.symbol)")
         if let p = s.lastPrice {
             lines.append("**Last price:** \(String(format: "%.2f", p))")
@@ -385,10 +390,12 @@ final class ToolHost {
         if !s.technicals.isEmpty {
             lines.append("**Technicals:** \(s.technicals)")
         }
-        if !s.fundamentals.isEmpty {
+        let visibleFundamentals = s.fundamentals
+            .filter { $0.key != StubMarketDataProvider.stubMarkerKey }
+        if !visibleFundamentals.isEmpty {
             lines.append("")
             lines.append("**Fundamentals**")
-            for (k, v) in s.fundamentals.sorted(by: { $0.key < $1.key }) {
+            for (k, v) in visibleFundamentals.sorted(by: { $0.key < $1.key }) {
                 lines.append("- \(k): \(v)")
             }
         }

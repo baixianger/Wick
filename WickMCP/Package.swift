@@ -24,5 +24,12 @@ let package = Package(
                 .product(name: "TradingFloor", package: "TradingFloor"),
             ]
         ),
+        .testTarget(
+            name: "WickMCPTests",
+            dependencies: [
+                "WickMCP",
+                .product(name: "TradingFloor", package: "TradingFloor"),
+            ]
+        ),
     ]
 )
