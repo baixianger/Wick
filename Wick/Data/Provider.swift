@@ -40,6 +40,11 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
     // ── BYO local ──
     case ollama                      // localhost OpenAI-compatible
 
+    // ── BYO subscription-driven CLI ──
+    case claudeCode                  // shells out to `claude -p`, uses
+                                     // Claude Code's OAuth subscription
+                                     // (no API key needed)
+
     var id: String { rawValue }
 
     /// Human-readable label for picker rows.
@@ -58,6 +63,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         case .qwen:       return "Qwen (DashScope 阿里)"
         case .custom:     return "Custom (OpenAI-compatible)"
         case .ollama:     return "Local (Ollama)"
+        case .claudeCode: return "Claude Code (subscription)"
         }
     }
 
@@ -79,6 +85,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         case .qwen:       return "https://dashscope.aliyuncs.com/compatible-mode/v1"
         case .custom:     return ""
         case .ollama:     return "http://localhost:11434/v1"
+        case .claudeCode: return ""           // CLI; no URL
         }
     }
 
@@ -100,6 +107,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         case .qwen:       return "qwen-turbo"
         case .custom:     return ""
         case .ollama:     return "llama3.1"
+        case .claudeCode: return "claude-haiku-4-5-20251001"
         }
     }
 
@@ -121,6 +129,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         case .qwen:       return "qwen-max"
         case .custom:     return ""
         case .ollama:     return "llama3.1"
+        case .claudeCode: return "claude-opus-4-7"
         }
     }
 
@@ -130,9 +139,9 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
     /// rest all expose a listing endpoint.
     var supportsModelListing: Bool {
         switch self {
-        case .server:     return false
-        case .custom:     return true       // optimistic; user-configurable
-        default:          return true
+        case .server, .claudeCode: return false
+        case .custom:              return true       // optimistic; user-configurable
+        default:                   return true
         }
     }
 
@@ -149,8 +158,8 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
     /// subscription token rather than a per-provider LLM key.
     var requiresAPIKey: Bool {
         switch self {
-        case .server, .ollama: return false
-        default:               return true
+        case .server, .ollama, .claudeCode: return false
+        default:                            return true
         }
     }
 
@@ -162,6 +171,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         switch self {
         case .anthropic:           return .anthropicMessages
         case .server:              return .wickServer
+        case .claudeCode:          return .claudeCodeCLI
         default:                   return .openAICompatible
         }
     }
@@ -170,6 +180,7 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
         case anthropicMessages       // direct to api.anthropic.com (Messages API)
         case openAICompatible        // POST <baseURL>/chat/completions
         case wickServer              // POST <baseURL>/chat (our broker, OpenRouter behind)
+        case claudeCodeCLI           // spawn `claude -p` per call
     }
 
     /// Picker presentation order — SaaS first, then BYO grouped by
@@ -177,10 +188,11 @@ enum ProviderKind: String, CaseIterable, Codable, Hashable, Identifiable, Sendab
     /// the Settings UI uses this to render the dropdown with section
     /// dividers.
     static let pickerSections: [(title: String, items: [ProviderKind])] = [
-        ("Managed",    [.server]),
-        ("Direct API", [.anthropic, .openai, .openrouter, .gemini,
-                        .deepseek, .xai, .glm, .kimi, .minimax, .qwen]),
-        ("Other",      [.custom, .ollama]),
+        ("Managed",      [.server]),
+        ("Direct API",   [.anthropic, .openai, .openrouter, .gemini,
+                          .deepseek, .xai, .glm, .kimi, .minimax, .qwen]),
+        ("Subscription", [.claudeCode]),
+        ("Other",        [.custom, .ollama]),
     ]
 }
 

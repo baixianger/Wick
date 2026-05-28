@@ -62,6 +62,19 @@ enum ProviderDiscovery {
             // Server tier — model selection happens server-side;
             // the client never picks. Empty list signals "no UI".
             return []
+        case .claudeCode:
+            // No discovery endpoint — Claude Code accepts any model the
+            // user is entitled to on their subscription. The static
+            // default (`claude-haiku-4-5-20251001` / `claude-opus-4-7`)
+            // is good enough; advanced users can override in Settings.
+            return [
+                ModelInfo(id: "claude-haiku-4-5-20251001",
+                          displayName: "Claude Haiku 4.5"),
+                ModelInfo(id: "claude-sonnet-4-6",
+                          displayName: "Claude Sonnet 4.6"),
+                ModelInfo(id: "claude-opus-4-7",
+                          displayName: "Claude Opus 4.7"),
+            ]
         default:
             discovery = OpenAICompatibleModelDiscovery()
         }

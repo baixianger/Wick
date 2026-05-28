@@ -214,6 +214,23 @@ final class AgentSettings {
         didSet { UserDefaults.standard.set(chartSplitView, forKey: "ui.chartSplitView") }
     }
 
+    /// Path to the `claude` CLI for the `.claudeCode` provider. Empty =
+    /// resolve from `$PATH`; non-empty = absolute path the user overrode in
+    /// Settings (covers Homebrew variants and pre-release builds).
+    var claudeCodeCLIPath: String {
+        didSet { UserDefaults.standard.set(claudeCodeCLIPath, forKey: "tf.claudeCodeCLIPath") }
+    }
+
+    /// Sidebar / watchlist change pill — show absolute price delta (`+1.23`)
+    /// or percent change (`+1.4%`). Same data either way; the picker just
+    /// swaps how the number is rendered.
+    var watchlistChangeStyle: WatchlistChangeStyle {
+        didSet {
+            UserDefaults.standard.set(watchlistChangeStyle.rawValue,
+                                      forKey: "ui.watchlistChangeStyle")
+        }
+    }
+
     var appearanceOverride: ColorScheme? {
         didSet {
             let raw: String? = appearanceOverride.map { $0 == .dark ? "dark" : "light" }
@@ -286,6 +303,9 @@ final class AgentSettings {
         self.userSkillsDirectoryPath = ud.string(forKey: "tf.userSkillsDir")
 
         self.chartSplitView = ud.bool(forKey: "ui.chartSplitView")
+        self.claudeCodeCLIPath = ud.string(forKey: "tf.claudeCodeCLIPath") ?? ""
+        self.watchlistChangeStyle = (ud.string(forKey: "ui.watchlistChangeStyle"))
+            .flatMap(WatchlistChangeStyle.init(rawValue:)) ?? .absolute
         self.appearanceOverride = (ud.string(forKey: "ui.appearance")).flatMap {
             switch $0 {
             case "dark":  return .dark
@@ -355,9 +375,10 @@ final class AgentSettings {
         case .qwen:
             adopt(env["QWEN_API_KEY"] ?? env["DASHSCOPE_API_KEY"],
                   current: currentAPIKey) { currentAPIKey = $0 }
-        case .server, .custom, .ollama:
+        case .server, .custom, .ollama, .claudeCode:
             // Server/custom/ollama don't have a canonical env var name —
-            // the user sets baseURL by hand. Skip.
+            // the user sets baseURL by hand. `claudeCode` uses local
+            // OAuth, no key at all. Skip.
             break
         }
     }
@@ -385,4 +406,20 @@ final class AgentSettings {
         set(v)
     }
     #endif
+}
+
+/// How the watchlist row's change pill renders the day-over-day delta.
+/// `.absolute` is the original behavior (`+1.23`), `.percent` mirrors what
+/// most trading apps surface (`+1.4%`). Stored as a string in UserDefaults
+/// so the value survives across launches.
+enum WatchlistChangeStyle: String, CaseIterable, Sendable {
+    case absolute
+    case percent
+
+    var displayName: String {
+        switch self {
+        case .absolute: return "Price"
+        case .percent:  return "Percent"
+        }
+    }
 }

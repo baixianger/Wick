@@ -83,6 +83,9 @@ enum SessionTitler {
                 ?? URL(string: ProviderKind.anthropic.defaultBaseURL)!
             return AnthropicProvider(apiKey: settings.currentAPIKey,
                                       baseURL: baseURL)
+        case .claudeCode:
+            return ClaudeCodeProvider(cliPath: settings.claudeCodeCLIPath,
+                                       mode: .subscription)
         default:
             guard let url = URL(string: settings.byoBaseURL) else { return nil }
             let key: String? = settings.providerKind.requiresAPIKey

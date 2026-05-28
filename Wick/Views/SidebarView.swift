@@ -314,6 +314,7 @@ private struct TickerRow: View {
     let ticker: Ticker
     let showSparkline: Bool
     @Environment(LiveDataStore.self) private var store
+    @Environment(AgentSettings.self) private var settings
 
     var body: some View {
         let liveSeries = store.series(for: ticker.symbol,
@@ -341,7 +342,10 @@ private struct TickerRow: View {
                     .transition(.opacity)
             }
 
-            priceBlock(lastPrice: lastPrice, change: change, tint: tint)
+            priceBlock(lastPrice: lastPrice,
+                       change: change,
+                       baseline: baseline,
+                       tint: tint)
         }
         .padding(.vertical, 4)
         .animation(.snappy(duration: 0.18), value: showSparkline)
@@ -363,18 +367,36 @@ private struct TickerRow: View {
         }
     }
 
-    private func priceBlock(lastPrice: Double, change: Double,
+    private func priceBlock(lastPrice: Double,
+                            change: Double,
+                            baseline: Double?,
                             tint: Color) -> some View
     {
         VStack(alignment: .trailing, spacing: 4) {
             Text(String(format: "%.2f", lastPrice))
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
-            Text((change >= 0 ? "+" : "") + String(format: "%.2f", change))
+            Text(formattedChange(change: change, baseline: baseline))
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
                 .background(RoundedRectangle(cornerRadius: 4).fill(tint))
+        }
+    }
+
+    /// Render the day-over-day move per the Settings → Display preference.
+    /// Falls back to the absolute price delta when the percent computation
+    /// would divide by zero (no baseline yet).
+    private func formattedChange(change: Double, baseline: Double?) -> String {
+        switch settings.watchlistChangeStyle {
+        case .absolute:
+            return (change >= 0 ? "+" : "") + String(format: "%.2f", change)
+        case .percent:
+            guard let baseline, baseline != 0 else {
+                return (change >= 0 ? "+" : "") + String(format: "%.2f", change)
+            }
+            let pct = change / baseline * 100
+            return String(format: "%+.2f%%", pct)
         }
     }
 }

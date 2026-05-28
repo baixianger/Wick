@@ -120,11 +120,22 @@ private struct ProviderTab: View {
             } else {
                 Section("Provider") {
                     providerPicker
-                    TextField("Base URL:", text: $settings.byoBaseURL)
-                    if settings.providerKind.requiresAPIKey {
-                        SecureField("API key:", text: $settings.currentAPIKey)
-                        Text("Stored in your macOS Keychain. Each provider's key gets its own entry — switching providers preserves the others.")
+                    if settings.providerKind == .claudeCode {
+                        // No URL / key — Claude Code uses local OAuth.
+                        // Just let the user override the binary path if
+                        // it's not in $PATH.
+                        TextField("`claude` path (optional):",
+                                  text: $settings.claudeCodeCLIPath,
+                                  prompt: Text("Leave blank to resolve from $PATH"))
+                        Text("Drives the Wicker workflow by shelling out to your locally-installed `claude` CLI. Uses whichever subscription `claude login` is signed into — no API key here. Each desk run is ~10-20 s slower than a direct API call and bills against your Pro/Max quota; not recommended for high-frequency use.")
                             .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        TextField("Base URL:", text: $settings.byoBaseURL)
+                        if settings.providerKind.requiresAPIKey {
+                            SecureField("API key:", text: $settings.currentAPIKey)
+                            Text("Stored in your macOS Keychain. Each provider's key gets its own entry — switching providers preserves the others.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 Section("Models") {
@@ -532,6 +543,16 @@ private struct AppearanceTab: View {
             Section("Chart") {
                 Toggle("Side-by-side pane in Chart tab",
                        isOn: $settings.chartSplitView)
+            }
+            Section("Watchlist") {
+                Picker("Change display:", selection: $settings.watchlistChangeStyle) {
+                    ForEach(WatchlistChangeStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.columns)

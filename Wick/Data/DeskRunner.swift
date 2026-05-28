@@ -50,6 +50,16 @@ final class DeskRunner {
                        config: settings.workflowConfig(),
                        providerName: settings.providerKind.displayName,
                        data: makeMarketData(settings: settings))
+        case .claudeCode:
+            // Subprocess to the locally-installed `claude` CLI, using the
+            // user's existing subscription auth. No API key needed; cost
+            // is paid in subscription quota. ~1-2 s extra per call.
+            runDirect(ticker: ticker,
+                       llm: ClaudeCodeProvider(cliPath: settings.claudeCodeCLIPath,
+                                                mode: .subscription),
+                       config: settings.workflowConfig(),
+                       providerName: settings.providerKind.displayName,
+                       data: makeMarketData(settings: settings))
         default:
             // OpenAI-compatible umbrella (OpenAI / OpenRouter / Gemini /
             // DeepSeek / xAI / GLM / Kimi / MiniMax / Qwen / Custom /
