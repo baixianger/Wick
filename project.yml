@@ -28,13 +28,30 @@ settings:
     # `Image(.appIcon)` / `Color(.accent)` instead of stringly-typed.
     ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: YES
     ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
-    # Xcode 26 "Update to recommended settings" additions. xcodegen
-    # regenerates the .pbxproj from this file, so changes made via
-    # Xcode's recommended-settings popup would be wiped — keys live
-    # here instead.
+    # ─── Xcode 26 "Update to recommended settings" keys ─────────────
+    # xcodegen regenerates the .pbxproj from this file, so changes the
+    # user clicks through in Xcode's recommended-settings popup would
+    # be wiped on the next `xcodegen generate`. Keys live here instead.
+    #
+    # Source of truth (re-verify after each Xcode release):
+    #   /Applications/Xcode.app/Contents/Developer/Library/Xcode/Templates/
+    #     Project Templates/Base/Base_ProjectSettings.xctemplate/TemplateInfo.plist
+    #
+    # The keys below are the delta between Xcode 26.5's template and
+    # xcodegen 2.45.3's bundled `SettingPresets/base.yml` — xcodegen
+    # covers the majority (every CLANG_WARN_* / GCC_WARN_* / MTL_*),
+    # we patch what it doesn't.
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
     SWIFT_EMIT_LOC_STRINGS: YES
     GCC_WARN_SHADOW: YES
+    # Bumped from xcodegen's stale defaults (gnu++14 / gnu11):
+    CLANG_CXX_LANGUAGE_STANDARD: "gnu++20"
+    GCC_C_LANGUAGE_STANDARD: "gnu17"
+    # Swift-target-level recommended keys. Xcode's template puts these
+    # at SharedSettings of every Swift target; centralising at
+    # project-base means new targets inherit automatically.
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
 
 packages:
   CandleKit:
@@ -113,17 +130,9 @@ targets:
         # `ratingColor(_:)` and friends, not the accent.
         ENABLE_PREVIEWS: YES
         CODE_SIGN_ENTITLEMENTS: Wick/Resources/Wick.entitlements
-        # Xcode 26 / Swift 6.x "Update to recommended settings" keys.
-        # These are added by Xcode's new-project template at the
-        # target's SharedSettings level (see Base_ProjectSettings.
-        # xctemplate/TemplateInfo.plist). XcodeGen's presets don't
-        # ship them yet, so without these here the popup re-appears
-        # every regeneration. Project-base keys (`MTL_FAST_MATH`,
-        # `CLANG_CXX_LANGUAGE_STANDARD`, etc.) are already covered
-        # by XcodeGen's bundled presets — we only need to fill the
-        # Swift-target gap.
-        SWIFT_APPROACHABLE_CONCURRENCY: YES
-        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        # SWIFT_APPROACHABLE_CONCURRENCY + SWIFT_UPCOMING_FEATURE_*
+        # live at project-base (see top of file) — every target picks
+        # them up automatically.
 
   # Stdio MCP server bundled inside Wick.app. Built as a sandboxed CLI
   # tool, copied into Wick.app/Contents/MacOS/wick-mcp by the Wick
@@ -152,5 +161,5 @@ targets:
         # The category key for embedded Info.plist; mirrors the main
         # app's category so the sandbox container is sibling, not nested.
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.finance
-        SWIFT_APPROACHABLE_CONCURRENCY: YES
-        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        # SWIFT_APPROACHABLE_CONCURRENCY + SWIFT_UPCOMING_FEATURE_* are
+        # inherited from project-base settings — no per-target copy.
