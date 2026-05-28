@@ -29,9 +29,23 @@ struct WickServer {
         if let finnhub = config.finnhubKey {
             data = FinnhubNewsProvider(base: data, finnhub: FinnhubClient(apiKey: finnhub))
         }
+        // CN macro decorator — no key, always on when CN markets are
+        // enabled. Fills `macro` for CN/HK symbols; non-CN symbols pass
+        // through so the FRED decorator below catches them.
+        if config.enableChinaMarkets {
+            data = EastMoneyMacroProvider(base: data)
+        }
         if let fred = config.fredKey {
             data = FredMacroProvider(base: data, fred: FredClient(apiKey: fred))
         }
+        // Broad-market index context — adds one line to `macro` showing
+        // CSI 300 / HSI / SPX behaviour so the analyst sees regime
+        // alongside the ticker. No key required.
+        data = SectorContextDecorator(base: data)
+        // Cross-asset context — WTI / Gold / BTC / DXY / VIX in one
+        // line. Useful as a "global climate" indicator the LLM can
+        // cross-reference against the stock's micro-climate. No key.
+        data = CrossAssetContextDecorator(base: data)
 
         // LLM: Anthropic → OpenRouter (cheap/free models) → offline canned.
         let llm: any LLMProvider

@@ -93,12 +93,21 @@ final class AgentRuntime {
                 base: data,
                 finnhub: FinnhubClient(apiKey: settings.finnhubKey))
         }
-        // FRED macro decorator.
+        // CN macro decorator — no key, fills macro for CN/HK symbols only.
+        data = EastMoneyMacroProvider(base: data)
+        // FRED macro decorator — fills macro for non-CN symbols only
+        // (guarded inside the provider). Adding both is safe.
         if !settings.fredKey.isEmpty {
             data = FredMacroProvider(
                 base: data,
                 fred: FredClient(apiKey: settings.fredKey))
         }
+        // Broad-market index context — one line in macro per ticker
+        // (CSI 300 / HSI / SPX), no key, sandbox-friendly.
+        data = SectorContextDecorator(base: data)
+        // Cross-asset (global climate): WTI / Gold / BTC / DXY / VIX.
+        // Yahoo Finance free chart endpoint, no key, Foundation HTTP.
+        data = CrossAssetContextDecorator(base: data)
         // Outermost: caching wrapper. 15-min TTL matches DeskRunner.
         return CachingMarketDataProvider(wrapping: data, ttl: 900)
     }

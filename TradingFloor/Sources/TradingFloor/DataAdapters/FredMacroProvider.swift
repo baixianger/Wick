@@ -78,6 +78,13 @@ public actor FredMacroProvider: MarketDataProvider {
 
     public func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot {
         var snapshot = try await base.snapshot(symbol: symbol, asOf: asOf)
+        // CN/HK tickers get their macro from `EastMoneyMacroProvider`
+        // earlier in the chain; firing FRED here would clobber that
+        // with US data the LLM doesn't want for a 600519.SS analysis.
+        // Non-CN suffixes (`.T`, `.L`, etc.) and bare US tickers still
+        // route to FRED — US macro is the best free proxy for global
+        // until a per-market macro source exists.
+        guard !CNSymbol.isCN(symbol) else { return snapshot }
         snapshot.macro = await macro(asOf: asOf)
         return snapshot
     }
