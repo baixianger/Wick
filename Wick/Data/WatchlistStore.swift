@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import TradingFloor
 
 struct WatchlistGroup: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
@@ -27,17 +28,19 @@ final class WatchlistStore {
         didSet { saveSelection() }
     }
 
-    private let groupsKey = "candlekit.watchlist.groups.v1"
+    private let groupsKey = SharedStore.Keys.watchlist
     private let selectionKey = "candlekit.watchlist.selection.v1"
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: groupsKey),
+        SharedStore.migrateIfNeeded()
+        let defaults = SharedStore.defaults
+        if let data = defaults.data(forKey: groupsKey),
            let decoded = try? JSONDecoder().decode([WatchlistGroup].self, from: data) {
             self.groups = decoded
         } else {
             self.groups = []
         }
-        if let data = UserDefaults.standard.data(forKey: selectionKey),
+        if let data = defaults.data(forKey: selectionKey),
            let decoded = try? JSONDecoder().decode(WatchlistGroupSelection.self, from: data) {
             self.selection = decoded
         } else {
@@ -90,12 +93,12 @@ final class WatchlistStore {
 
     private func saveGroups() {
         if let data = try? JSONEncoder().encode(groups) {
-            UserDefaults.standard.set(data, forKey: groupsKey)
+            SharedStore.defaults.set(data, forKey: groupsKey)
         }
     }
     private func saveSelection() {
         if let data = try? JSONEncoder().encode(selection) {
-            UserDefaults.standard.set(data, forKey: selectionKey)
+            SharedStore.defaults.set(data, forKey: selectionKey)
         }
     }
 }

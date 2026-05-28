@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import TradingFloor
 
 enum HoldingSide: String, Codable, Hashable {
     case buy
@@ -116,7 +117,7 @@ final class HoldingsStore {
         didSet { save() }
     }
 
-    private let defaultsKey = "candlekit.holdings.v1"
+    private let defaultsKey = SharedStore.Keys.holdings
     /// One-shot migration flag. When false, every previously auto-seeded
     /// row (legacy 2024 fakes + v2/v3 real-price sample rows) is removed
     /// so existing installs go back to an empty portfolio. Anything the
@@ -125,7 +126,11 @@ final class HoldingsStore {
     private let migrationKey = "candlekit.holdings.migrate.v4-empty"
 
     init() {
-        let defaults = UserDefaults.standard
+        // Run the App-Group migration BEFORE first read so any data the
+        // user had in `UserDefaults.standard` is copied into the shared
+        // suite the first time this version runs.
+        SharedStore.migrateIfNeeded()
+        let defaults = SharedStore.defaults
         if let data = defaults.data(forKey: defaultsKey),
            let decoded = try? JSONDecoder().decode([Holding].self, from: data) {
             self.holdings = decoded
@@ -139,7 +144,7 @@ final class HoldingsStore {
     /// was once injected by an old auto-seed; leaves user-entered rows
     /// (any other date) untouched. Idempotent via `migrationKey`.
     private func migrateClearAutoSeededRowsIfNeeded() {
-        let defaults = UserDefaults.standard
+        let defaults = SharedStore.defaults
         guard !defaults.bool(forKey: migrationKey) else { return }
         let known = Self.autoSeedDateKeys
         let dayKey: (Holding) -> String = { h in
@@ -280,7 +285,7 @@ final class HoldingsStore {
 
     private func save() {
         if let data = try? JSONEncoder().encode(holdings) {
-            UserDefaults.standard.set(data, forKey: defaultsKey)
+            SharedStore.defaults.set(data, forKey: defaultsKey)
         }
     }
 

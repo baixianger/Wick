@@ -79,6 +79,14 @@ targets:
         product: TradingFloor
       - package: MarkdownUI
         product: MarkdownUI
+      # Bundles the wick-mcp helper into Wick.app/Contents/MacOS/. Users
+      # point their Claude Code / Codex MCP config at the absolute path
+      # `/Applications/Wick.app/Contents/MacOS/wick-mcp` — the helper
+      # runs as its own process (Wick.app doesn't need to be open) and
+      # shares state via the App Group container.
+      - target: WickMCP
+        copy:
+          destination: executables
     settings:
       base:
         # NOTE: no `info:` block — xcodegen would auto-generate the
@@ -107,5 +115,35 @@ targets:
         # `CLANG_CXX_LANGUAGE_STANDARD`, etc.) are already covered
         # by XcodeGen's bundled presets — we only need to fill the
         # Swift-target gap.
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+
+  # Stdio MCP server bundled inside Wick.app. Built as a sandboxed CLI
+  # tool, copied into Wick.app/Contents/MacOS/wick-mcp by the Wick
+  # target's copy-files phase (declared above). Shares state with the
+  # main app via the `group.me.impai.wick` App Group.
+  WickMCP:
+    type: tool
+    platform: macOS
+    sources:
+      - path: WickMCP/Sources/WickMCP
+    dependencies:
+      - package: TradingFloor
+        product: TradingFloor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.impai.wick.mcp
+        PRODUCT_NAME: wick-mcp
+        CODE_SIGN_ENTITLEMENTS: WickMCP/wick-mcp.entitlements
+        # CLI tools don't ship an Info.plist as a separate file; embed it
+        # into the Mach-O `__TEXT,__info_plist` section instead. The
+        # sandbox initializer needs the bundle ID to look up which
+        # container to mount — without this, launch crashes in
+        # `_libsecinit_appsandbox` with "invalid sandbox profile data".
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        # The category key for embedded Info.plist; mirrors the main
+        # app's category so the sandbox container is sibling, not nested.
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.finance
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES

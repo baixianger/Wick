@@ -8,5 +8,12 @@
     <true/>
     <key>com.apple.security.files.user-selected.read-only</key>
     <true/>
+    <!-- Shared with the bundled wick-mcp helper so both binaries see
+         one copy of holdings / watchlist. Requires the App Group
+         `group.me.impai.wick` to be registered in App Store Connect. -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.me.impai.wick</string>
+    </array>
 </dict>
 </plist>

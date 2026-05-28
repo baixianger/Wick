@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Sandboxed CLI helper bundled into Wick.app/Contents/MacOS/.
+        Spawned by external MCP clients (Claude Code, Codex CLI, MCP
+        Inspector) over stdio. Each invocation is short-lived — the
+        client kills the process when it disconnects.
+    -->
+
+    <!-- MAS requires every binary in the .app to be sandboxed. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- EastMoney + FMP + LLM provider outbound calls. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!--
+        Shared with the main Wick.app so we see the same holdings +
+        watchlist the user manages in the GUI. The App Group must be
+        registered in App Store Connect and BOTH binaries must be signed
+        with the same Team ID for the container to materialize. Without
+        it the helper silently falls back to per-process storage (empty
+        holdings) — by design; we never crash on missing entitlement.
+    -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.me.impai.wick</string>
+    </array>
+</dict>
+</plist>

@@ -40,7 +40,133 @@ struct SettingsView: View {
 
             AppearanceTab(settings: settings)
                 .tabItem { Label("Display", systemImage: "paintpalette") }
+
+            MCPTab()
+                .tabItem { Label("MCP", systemImage: "puzzlepiece.extension") }
         }
+    }
+}
+
+// MARK: - MCP tab
+
+/// Shows how to wire the bundled `wick-mcp` helper into Claude Code /
+/// Codex CLI / any MCP client. The helper ships inside the .app bundle
+/// at `/Applications/Wick.app/Contents/MacOS/wick-mcp`, runs as its own
+/// sandboxed subprocess each time the client connects, and reads
+/// holdings / watchlist out of the App Group container Wick.app writes
+/// to. The user does NOT need to keep Wick open — the helper is
+/// invoked on demand by their MCP client.
+private struct MCPTab: View {
+    private var helperPath: String { Self.resolveHelperPath() }
+
+    /// JSON snippet the user pastes into `~/.claude.json` (or the Codex
+    /// `mcp.json` equivalent). Built fresh from `helperPath` so it
+    /// always points at the current install location.
+    private var claudeCodeConfig: String {
+        """
+        {
+          "mcpServers": {
+            "wick": {
+              "type": "stdio",
+              "command": "\(helperPath)"
+            }
+          }
+        }
+        """
+    }
+
+    var body: some View {
+        Form {
+            Section("Helper") {
+                HStack {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Text("`wick-mcp` ships inside Wick.app")
+                    Spacer()
+                }
+                Text(helperPath)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                HStack {
+                    Image(systemName: SharedStore.isAppGroupAvailable
+                                       ? "link.circle.fill"
+                                       : "exclamationmark.triangle.fill")
+                        .foregroundStyle(SharedStore.isAppGroupAvailable
+                                          ? Color.green : Color.orange)
+                    Text(SharedStore.isAppGroupAvailable
+                          ? "Sharing holdings + watchlist with helper (App Group active)"
+                          : "App Group not provisioned — helper will see empty holdings")
+                        .font(.caption)
+                }
+            }
+
+            Section("Claude Code / Codex") {
+                Text("Add this to `~/.claude.json` (Claude Code) or your Codex `mcp.json` — then the agent can call `wick.snapshot`, `wick.candles`, `wick.holdings`, `wick.watchlist`, `wick.portfolio`.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ScrollView {
+                    Text(claudeCodeConfig)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(8)
+                }
+                .frame(maxHeight: 160)
+                .background(Color.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                HStack {
+                    Button {
+                        copyToPasteboard(claudeCodeConfig)
+                    } label: {
+                        Label("Copy JSON snippet", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        copyToPasteboard(helperPath)
+                    } label: {
+                        Label("Copy helper path", systemImage: "terminal")
+                    }
+                    Spacer()
+                }
+            }
+
+            Section("Notes") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Wick doesn't need to be running. The helper spawns on demand.",
+                          systemImage: "power.circle")
+                        .font(.caption)
+                    Label("Helper is sandboxed: outbound HTTP + App Group only. No file-system, no listening sockets.",
+                          systemImage: "lock.shield")
+                        .font(.caption)
+                    Label("Each invocation is short-lived — your MCP client kills it when it disconnects.",
+                          systemImage: "hourglass")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.columns)
+        .padding(20)
+        .frame(width: 560)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Locate the helper relative to the current bundle. In a production
+    /// install this is `/Applications/Wick.app/Contents/MacOS/wick-mcp`;
+    /// during development xcodebuild drops the bundle in DerivedData and
+    /// `Bundle.main.bundlePath` resolves there. Either way the absolute
+    /// path is what the user needs.
+    private static func resolveHelperPath() -> String {
+        let bundle = Bundle.main.bundlePath
+        return bundle + "/Contents/MacOS/wick-mcp"
+    }
+
+    private func copyToPasteboard(_ string: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(string, forType: .string)
     }
 }
 
