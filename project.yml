@@ -161,5 +161,9 @@ targets:
         # The category key for embedded Info.plist; mirrors the main
         # app's category so the sandbox container is sibling, not nested.
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.finance
+        # Copyright stays in lockstep with Wick.app/Info.plist — App
+        # Store convention is `YYYY name` (no ©, no "All rights
+        # reserved"). Pendler ships the same shape.
+        INFOPLIST_KEY_NSHumanReadableCopyright: 2026 impai
         # SWIFT_APPROACHABLE_CONCURRENCY + SWIFT_UPCOMING_FEATURE_* are
         # inherited from project-base settings — no per-target copy.
