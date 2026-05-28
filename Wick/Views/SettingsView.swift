@@ -57,6 +57,9 @@ struct SettingsView: View {
 /// to. The user does NOT need to keep Wick open — the helper is
 /// invoked on demand by their MCP client.
 private struct MCPTab: View {
+    @State private var testStatus: MCPTestStatus = .idle
+    @State private var isTesting = false
+
     private var helperPath: String { Self.resolveHelperPath() }
 
     /// JSON snippet the user pastes into `~/.claude.json` (or the Codex
@@ -98,6 +101,17 @@ private struct MCPTab: View {
                           ? "Sharing holdings + watchlist with helper (App Group active)"
                           : "App Group not provisioned — helper will see empty holdings")
                         .font(.caption)
+                }
+                HStack {
+                    Button {
+                        Task { await runTest() }
+                    } label: {
+                        Label(isTesting ? "Testing…" : "Test connection",
+                              systemImage: "bolt.horizontal.circle")
+                    }
+                    .disabled(isTesting)
+                    Spacer()
+                    testStatusBadge
                 }
             }
 
@@ -168,6 +182,117 @@ private struct MCPTab: View {
         pb.clearContents()
         pb.setString(string, forType: .string)
     }
+
+    /// Visual badge next to the Test connection button. Renders the
+    /// most recent test outcome until the user runs the test again.
+    @ViewBuilder
+    private var testStatusBadge: some View {
+        switch testStatus {
+        case .idle:
+            EmptyView()
+        case .testing:
+            ProgressView().controlSize(.small)
+        case .ok(let rttMillis, let toolCount):
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("OK · \(toolCount) tools · \(rttMillis) ms")
+                    .font(.caption.monospacedDigit())
+            }
+        case .failed(let message):
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                Text(message)
+                    .font(.caption)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    /// Spawn the bundled helper, perform the MCP handshake + tools/list
+    /// round-trip, and surface the result. Best-effort: any exception
+    /// surfaces as `.failed(message)` so the user sees what broke.
+    private func runTest() async {
+        await MainActor.run {
+            isTesting = true
+            testStatus = .testing
+        }
+        defer { Task { @MainActor in isTesting = false } }
+
+        let path = helperPath
+        guard FileManager.default.isExecutableFile(atPath: path) else {
+            await MainActor.run { testStatus = .failed("Helper not found at \(path)") }
+            return
+        }
+
+        let started = Date()
+        let result = await Self.probeHelper(at: path)
+        let rttMillis = Int(Date().timeIntervalSince(started) * 1000)
+
+        await MainActor.run {
+            switch result {
+            case .success(let toolCount):
+                testStatus = .ok(rttMillis: rttMillis, toolCount: toolCount)
+            case .failure(let error):
+                testStatus = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Drive one MCP handshake against the binary at `path`. Returns
+    /// the number of tools the helper advertises on success.
+    private static func probeHelper(at path: String) async -> Result<Int, Error> {
+        await Task.detached { () -> Result<Int, Error> in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
+            process.standardInput = stdin
+            process.standardOutput = stdout
+            process.standardError = stderr
+            do {
+                try process.run()
+            } catch {
+                return .failure(error)
+            }
+            let initReq = #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"settings-probe","version":"0"}}}"# + "\n"
+            let initedNote = #"{"jsonrpc":"2.0","method":"notifications/initialized"}"# + "\n"
+            let listReq = #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"# + "\n"
+            stdin.fileHandleForWriting.write(initReq.data(using: .utf8)!)
+            stdin.fileHandleForWriting.write(initedNote.data(using: .utf8)!)
+            stdin.fileHandleForWriting.write(listReq.data(using: .utf8)!)
+            try? stdin.fileHandleForWriting.close()
+
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(),
+                                  encoding: .utf8) ?? ""
+                return .failure(NSError(
+                    domain: "WickMCPProbe", code: Int(process.terminationStatus),
+                    userInfo: [NSLocalizedDescriptionKey: "Helper exited \(process.terminationStatus): \(err)"]))
+            }
+            let data = stdout.fileHandleForReading.readDataToEndOfFile()
+            let lines = (String(data: data, encoding: .utf8) ?? "")
+                .split(separator: "\n")
+            for line in lines {
+                guard let raw = line.data(using: .utf8),
+                      let obj = try? JSONSerialization.jsonObject(with: raw) as? [String: Any],
+                      (obj["id"] as? Int) == 2,
+                      let result = obj["result"] as? [String: Any],
+                      let tools = result["tools"] as? [[String: Any]]
+                else { continue }
+                return .success(tools.count)
+            }
+            return .failure(NSError(
+                domain: "WickMCPProbe", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "No tools/list response in \(lines.count) frames"]))
+        }.value
+    }
+}
+
+private enum MCPTestStatus: Equatable {
+    case idle
+    case testing
+    case ok(rttMillis: Int, toolCount: Int)
+    case failed(String)
 }
 
 // MARK: - Data sources tab

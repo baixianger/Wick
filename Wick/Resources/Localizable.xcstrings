@@ -1,0 +1,186 @@
+{
+  "sourceLanguage" : "en",
+  "version" : "1.0",
+  "strings" : {
+    "Provider" : {
+      "comment" : "Settings tab — LLM provider selection",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "模型" } }
+      }
+    },
+    "Data" : {
+      "comment" : "Settings tab — BYO data-source keys",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "数据" } }
+      }
+    },
+    "Workflow" : {
+      "comment" : "Settings tab — Wicker workflow knobs",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "工作流" } }
+      }
+    },
+    "Free Agent" : {
+      "comment" : "Settings tab — Wicker chat agent",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自由对话" } }
+      }
+    },
+    "Skills" : {
+      "comment" : "Settings tab — markdown skill files",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "技能" } }
+      }
+    },
+    "Display" : {
+      "comment" : "Settings tab — appearance + chart prefs",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "界面" } }
+      }
+    },
+    "MCP" : {
+      "comment" : "Settings tab — MCP integration",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "MCP" } }
+      }
+    },
+    "Helper" : {
+      "comment" : "Settings → MCP → section header",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "助手程序" } }
+      }
+    },
+    "Notes" : {
+      "comment" : "Settings → MCP → notes section",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "说明" } }
+      }
+    },
+    "Test connection" : {
+      "comment" : "Button — spawn helper + probe",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "测试连接" } }
+      }
+    },
+    "Testing…" : {
+      "comment" : "Test connection button — running state",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在测试…" } }
+      }
+    },
+    "Copy JSON snippet" : {
+      "comment" : "MCP tab — copies the mcpServers config",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制 JSON 配置" } }
+      }
+    },
+    "Copy helper path" : {
+      "comment" : "MCP tab — copies the bundled binary path",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制路径" } }
+      }
+    },
+    "Theme" : {
+      "comment" : "Settings → Display → theme picker section",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "主题" } }
+      }
+    },
+    "Chart" : {
+      "comment" : "Settings → Display → chart section",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "图表" } }
+      }
+    },
+    "Watchlist" : {
+      "comment" : "Settings → Display → watchlist section",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自选列表" } }
+      }
+    },
+    "Appearance:" : {
+      "comment" : "Settings → Display → theme picker label",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "外观:" } }
+      }
+    },
+    "System" : {
+      "comment" : "Theme picker — follow system",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "跟随系统" } }
+      }
+    },
+    "Light" : {
+      "comment" : "Theme picker — light mode",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "浅色" } }
+      }
+    },
+    "Dark" : {
+      "comment" : "Theme picker — dark mode",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "深色" } }
+      }
+    },
+    "Change display:" : {
+      "comment" : "Settings → Display → Watchlist → picker label",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "涨跌显示:" } }
+      }
+    },
+    "Price" : {
+      "comment" : "Watchlist change-style — absolute delta",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "价格" } }
+      }
+    },
+    "Percent" : {
+      "comment" : "Watchlist change-style — percent change",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "百分比" } }
+      }
+    },
+    "Add" : {
+      "comment" : "Generic — add row",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加" } }
+      }
+    },
+    "Delete" : {
+      "comment" : "Generic — delete row",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "删除" } }
+      }
+    },
+    "Cancel" : {
+      "comment" : "Generic — dismiss sheet",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消" } }
+      }
+    },
+    "Save" : {
+      "comment" : "Generic — commit form",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
+      }
+    },
+    "Portfolio" : {
+      "comment" : "Main tab — portfolio overview",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "持仓" } }
+      }
+    },
+    "Holdings" : {
+      "comment" : "Sub-page — transaction list",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "交易" } }
+      }
+    },
+    "Reports" : {
+      "comment" : "Main tab — Wicker reports history",
+      "localizations" : {
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "报告" } }
+      }
+    }
+  }
+}

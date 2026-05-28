@@ -66,6 +66,13 @@ targets:
           - "Wick.entitlements"
     resources:
       - path: Wick/Resources/Assets.xcassets
+      # Xcode 15 String Catalog. SwiftUI auto-extracts source strings
+      # from `Text("...")` literals on every build (SWIFT_EMIT_LOC_STRINGS
+      # is on at project base); the catalog ships zh-Hans translations
+      # for the highest-visibility ones and stays a no-op for the rest.
+      # Adding more languages = drop a new locale into the catalog;
+      # no code changes needed.
+      - path: Wick/Resources/Localizable.xcstrings
     dependencies:
       - package: CandleKit
         product: CoreCharts
