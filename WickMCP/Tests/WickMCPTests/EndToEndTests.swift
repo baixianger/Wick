@@ -131,7 +131,8 @@ struct WickMCPEndToEndTests {
             "wick.methodology",
             "wick.portfolio",
             "wick.snapshot",
-            "wick.watchlist"
+            "wick.watchlist",
+            "wick.write_report"
         ])
     }
 
@@ -182,6 +183,54 @@ struct WickMCPEndToEndTests {
         #expect(markdown.contains("600519.SS"))
         #expect(markdown.contains("贵州茅台"))
         #expect(markdown.contains("50"))    // quantity
+    }
+
+    @Test func e2e_external_agent_writes_report_visible_to_gui_store() throws {
+        // Closes the loop: external MCP client writes a report via
+        // wick.write_report → file lands in the shared App-Group
+        // container → Wick.app's ReportHistoryStore (read from
+        // SharedStore.reports()) sees it next time it refreshes.
+        wipe()
+        defer { wipe() }
+
+        // Drop any pre-existing report file for our test ticker (use a
+        // sentinel that won't collide with anything real).
+        let dir = SharedStore.reportsDirectory
+        if let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil) {
+            for e in entries where e.lastPathComponent.hasPrefix("E2E-TEST-") {
+                try? FileManager.default.removeItem(at: e)
+            }
+        }
+
+        let requests = [
+            #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}"#,
+            #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"wick.write_report","arguments":{"ticker":"E2E-TEST-1","rating":"BUY","summary":"Closing the loop from MCP back to GUI.","transcript":[{"role":"Fundamental Analyst","content":"Revenue solid."},{"role":"Trader","content":"BUY at 5%."}],"position_percent":5,"client":"e2e-test"}}}"#
+        ]
+        let responses = try Self.roundTrip(requests)
+        let call = responses.first { ($0["id"] as? Int) == 2 }
+        let result = call?["result"] as? [String: Any]
+        let content = result?["content"] as? [[String: Any]] ?? []
+        let ack = content.first?["text"] as? String ?? ""
+        #expect(ack.contains("Saved report"))
+        #expect(ack.contains("E2E-TEST-1"))
+
+        // Now look at the persisted report from this (the test) process —
+        // simulating what Wick.app's ReportHistoryStore would see.
+        let stored = SharedStore.reports().first { $0.ticker == "E2E-TEST-1" }
+        #expect(stored != nil)
+        #expect(stored?.rating == .buy)
+        #expect(stored?.source == "mcp:e2e-test")
+        #expect(stored?.transcript.count == 2)
+        #expect(stored?.position?.targetWeight == 0.05)
+
+        // Cleanup our sentinel file from the shared directory.
+        if let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil) {
+            for e in entries where e.lastPathComponent.hasPrefix("E2E-TEST-") {
+                try? FileManager.default.removeItem(at: e)
+            }
+        }
     }
 
     @Test func e2e_watchlist_seeded_by_gui_layer_visible_to_helper() throws {

@@ -78,11 +78,19 @@ agent → wick.snapshot("600519.SS")        # pull the data
 agent → wick.methodology("fundamental-analysis")  # read the fundamental analyst's lens
 agent reasons with its own LLM            # produces the fundamental finding
 … repeat per analyst, then debate, then trade decision, then risk review.
+agent → wick.write_report(ticker:..., rating:..., summary:..., transcript:[...])
+                                          # write the result back into Wick's
+                                          # report history — appears in the
+                                          # GUI's Reports tab as if Wicker
+                                          # had run it, with source=mcp:<client>.
 ```
 
-The data is ours, the methodology is ours, the reasoning is theirs.
-That split holds the line on "we never see your data" and "you never
-pay twice for inference."
+The data is ours, the methodology is ours, the reasoning is theirs,
+the persisted artefact comes back to us in our canonical shape. That
+split holds the line on "we never see your data" and "you never pay
+twice for inference" — while also making sure the user always sees
+their analyses in one place (the Reports tab) regardless of who did
+the reasoning.
 
 In the Wick docs (and the App Store listing), we frame this as:
 

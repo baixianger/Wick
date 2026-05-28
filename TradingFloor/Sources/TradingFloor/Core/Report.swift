@@ -220,6 +220,13 @@ public struct Report: Sendable, Codable {
     /// non-personalized analysis to all users → it's market insight, not a
     /// personal recommendation. (MiFID/MAR posture — see project notes.)
     public let disclaimer: String
+    /// Provenance of the report — `nil` means the canonical Wicker desk
+    /// run, anything else identifies the external author. `wick-mcp`
+    /// stamps this with `mcp:<client-name>` (e.g. `mcp:claude-code`) when
+    /// `wick.write_report` is called, so the UI can render a small badge
+    /// distinguishing "you ran Wicker" from "your agent wrote this back".
+    /// Codable-optional → reports written by older builds decode cleanly.
+    public let source: String?
 
     /// Default disclaimer applied to every generated report.
     public static let defaultDisclaimer =
@@ -229,7 +236,8 @@ public struct Report: Sendable, Codable {
     public init(ticker: String, asOf: Date, rating: Rating,
                 position: PositionSize? = nil,
                 summary: String, transcript: [AgentMessage], generatedAt: Date = .now,
-                disclaimer: String = Report.defaultDisclaimer) {
+                disclaimer: String = Report.defaultDisclaimer,
+                source: String? = nil) {
         self.ticker = ticker
         self.asOf = asOf
         self.rating = rating
@@ -238,5 +246,6 @@ public struct Report: Sendable, Codable {
         self.transcript = transcript
         self.generatedAt = generatedAt
         self.disclaimer = disclaimer
+        self.source = source
     }
 }

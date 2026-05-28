@@ -35,6 +35,8 @@ public enum SharedStore {
         public static let holdings    = "candlekit.holdings.v1"
         public static let watchlist   = "candlekit.watchlist.groups.v1"
         public static let migrated    = "wick.sharedstore.migrated.v1"
+        public static let reportsDir  = "Reports"          // sub-dir inside the App Group container
+        public static let reportsMigrated = "wick.sharedstore.reports.migrated.v1"
     }
 
     /// The shared suite if the App Group is reachable, otherwise the
@@ -92,6 +94,104 @@ public enum SharedStore {
     public static func saveWatchlistGroups(_ groups: [SharedWatchlistGroup]) {
         guard let data = try? JSONEncoder().encode(groups) else { return }
         defaults.set(data, forKey: Keys.watchlist)
+    }
+
+    // MARK: - Reports
+    //
+    // Reports are heavier than holdings (transcripts can be a few KB each)
+    // and we want plain-text access for debug grep — so they live as one
+    // JSON file per report inside the App-Group container directory,
+    // rather than encoded into the UserDefaults plist.
+
+    /// On-disk directory the GUI + helper both read/write reports into.
+    /// Returns nil when the App Group container isn't reachable (unsigned
+    /// dev build, missing entitlement). Callers should fall back to a
+    /// per-process Application Support path in that case so report
+    /// history at least survives within one binary.
+    public static var reportsDirectoryURL: URL? {
+        let fm = FileManager.default
+        guard let container = fm.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID) else {
+            return nil
+        }
+        let dir = container.appendingPathComponent(Keys.reportsDir, isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Resolves the right reports directory: App Group when entitled,
+    /// otherwise `~/Library/Application Support/Wick/Reports/` so the GUI
+    /// still works in unsigned dev builds.
+    public static var reportsDirectory: URL {
+        if let url = reportsDirectoryURL {
+            return url
+        }
+        let fm = FileManager.default
+        let base = (try? fm.url(for: .applicationSupportDirectory,
+                                 in: .userDomainMask,
+                                 appropriateFor: nil,
+                                 create: true))
+            ?? fm.temporaryDirectory
+        let dir = base
+            .appendingPathComponent("Wick", isDirectory: true)
+            .appendingPathComponent(Keys.reportsDir, isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Load every report in the shared directory, newest first. Bad /
+    /// unreadable files are skipped silently — the user can delete them
+    /// manually if they ever notice; we never want one corrupt report to
+    /// hide the rest.
+    public static func reports() -> [Report] {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(
+            at: reportsDirectory, includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let reports = entries.compactMap { url -> Report? in
+            guard url.pathExtension == "json",
+                  let data = try? Data(contentsOf: url),
+                  let r = try? decoder.decode(Report.self, from: data)
+            else { return nil }
+            return r
+        }
+        return reports.sorted { $0.generatedAt > $1.generatedAt }
+    }
+
+    /// Append one report to the shared store. Deduplicated by
+    /// `(ticker, generatedAt)` — re-saving the same `Report` returned by
+    /// the engine is a no-op, but a genuinely new run on the same day
+    /// gets its own file (timestamps differ by at least one second).
+    public static func appendReport(_ report: Report) {
+        let filename = reportFilename(for: report)
+        let url = reportsDirectory.appendingPathComponent(filename)
+        // De-dup: if a file with this exact name exists already, skip.
+        if FileManager.default.fileExists(atPath: url.path) { return }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(report) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// Delete one specific report from the shared store. Used by the GUI
+    /// "delete from history" affordance.
+    public static func deleteReport(_ report: Report) {
+        let url = reportsDirectory.appendingPathComponent(reportFilename(for: report))
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// `<ticker>-<unix-ms>.json`. The unix-ms suffix guarantees uniqueness
+    /// across reports written within the same second, which previously
+    /// could collide and lose one of two writes.
+    private static func reportFilename(for report: Report) -> String {
+        let cleanTicker = report.ticker
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let ms = Int(report.generatedAt.timeIntervalSince1970 * 1000)
+        return "\(cleanTicker)-\(ms).json"
     }
 
     // MARK: - Migration

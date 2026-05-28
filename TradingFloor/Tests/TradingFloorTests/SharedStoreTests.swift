@@ -154,34 +154,33 @@ struct SharedStoreMigrationTests {
         SharedStore.migrateIfNeeded()
         #expect(SharedStore.defaults.bool(forKey: SharedStore.Keys.migrated) == true)
     }
+
+    @Test func shared_store_save_then_read_holdings() throws {
+        wipeMigrationState()
+        defer { wipeMigrationState() }
+
+        let one = SharedHolding(symbol: "600519.SS", name: "贵州茅台", side: "buy",
+                                date: Date(), quantity: 50, price: 1300, currency: "CNY")
+        let two = SharedHolding(symbol: "NVDA", name: "NVIDIA", side: "sell",
+                                date: Date(), quantity: 20, price: 130, currency: "USD")
+        SharedStore.saveHoldings([one, two])
+
+        let read = SharedStore.holdings()
+        #expect(read.count == 2)
+        #expect(Set(read.map(\.symbol)) == ["600519.SS", "NVDA"])
+    }
+
+    @Test func shared_store_save_then_read_watchlist() throws {
+        wipeMigrationState()
+        defer { wipeMigrationState() }
+
+        let g1 = SharedWatchlistGroup(name: "China", symbols: ["600519.SS", "000001.SZ"])
+        let g2 = SharedWatchlistGroup(name: "AI", symbols: ["NVDA", "GOOGL"])
+        SharedStore.saveWatchlistGroups([g1, g2])
+
+        let read = SharedStore.watchlistGroups()
+        #expect(read.count == 2)
+        #expect(read.first(where: { $0.name == "China" })?.symbols == ["600519.SS", "000001.SZ"])
+    }
 }
 
-// MARK: - holdings() / saveHoldings() round-trip
-
-@Test func shared_store_save_then_read_holdings() throws {
-    wipeMigrationState()
-    defer { wipeMigrationState() }
-
-    let one = SharedHolding(symbol: "600519.SS", name: "贵州茅台", side: "buy",
-                            date: Date(), quantity: 50, price: 1300, currency: "CNY")
-    let two = SharedHolding(symbol: "NVDA", name: "NVIDIA", side: "sell",
-                            date: Date(), quantity: 20, price: 130, currency: "USD")
-    SharedStore.saveHoldings([one, two])
-
-    let read = SharedStore.holdings()
-    #expect(read.count == 2)
-    #expect(Set(read.map(\.symbol)) == ["600519.SS", "NVDA"])
-}
-
-@Test func shared_store_save_then_read_watchlist() throws {
-    wipeMigrationState()
-    defer { wipeMigrationState() }
-
-    let g1 = SharedWatchlistGroup(name: "China", symbols: ["600519.SS", "000001.SZ"])
-    let g2 = SharedWatchlistGroup(name: "AI", symbols: ["NVDA", "GOOGL"])
-    SharedStore.saveWatchlistGroups([g1, g2])
-
-    let read = SharedStore.watchlistGroups()
-    #expect(read.count == 2)
-    #expect(read.first(where: { $0.name == "China" })?.symbols == ["600519.SS", "000001.SZ"])
-}

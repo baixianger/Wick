@@ -57,7 +57,8 @@ private func wipeSharedStore() {
         "wick.holdings",
         "wick.watchlist",
         "wick.portfolio",
-        "wick.methodology"
+        "wick.methodology",
+        "wick.write_report"
     ])
 }
 

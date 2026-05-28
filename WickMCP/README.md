@@ -65,6 +65,7 @@ the bundle.
 | `wick.watchlist`      | _none_                     | All watchlist groups + their symbols |
 | `wick.portfolio`      | _none_                     | Net positions × latest price → cost / market value / P&L (parallel snapshots) |
 | `wick.methodology`    | `name?`                    | Wicker's analysis playbook. No args → master recipe + list of available steps. With `name` (`fundamental-analysis`, `technical-analysis`, `sentiment-analysis`, `bull-bear-debate`, `full-desk-analysis`, `desk-analyst`) → that step's full instructions. **Read this first** if you want to drive a full analysis. |
+| `wick.write_report`   | `ticker, rating, summary, transcript?, position_percent?, client?` | Save your analysis back into Wick's report history. Same on-disk shape as the in-app Wicker desk produces; appears in the user's Reports tab next to native reports. Stamped with `source: mcp:<client>` so the UI can distinguish "you ran it" from "your agent wrote it back". |
 
 Each tool returns two content blocks: a Markdown digest the LLM reads
 naturally, and a fenced ```json``` payload a programmatic caller can

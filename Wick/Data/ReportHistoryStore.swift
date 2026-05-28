@@ -83,7 +83,10 @@ final class ReportHistoryStore {
     func delete(_ report: Report) {
         let key = Self.key(for: report)
         reports.removeAll { Self.key(for: $0) == key }
-        persist()
+        // Remove the JSON file from the shared store too — `persist()`
+        // only ever ADDS files, so without this the deleted row would
+        // reappear on the next `reloadFromDisk()`.
+        SharedStore.deleteReport(report)
     }
 
     private static func key(for report: Report) -> String {
@@ -92,31 +95,61 @@ final class ReportHistoryStore {
     }
 
     // MARK: - Persistence
-
-    private static var storeURL: URL {
-        let fm = FileManager.default
-        let base = (try? fm.url(for: .applicationSupportDirectory,
-                                 in: .userDomainMask,
-                                 appropriateFor: nil,
-                                 create: true))
-            ?? fm.temporaryDirectory
-        let dir = base.appendingPathComponent("Wick", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("reports.json")
-    }
+    //
+    // Reports live in the shared App-Group container (one JSON file per
+    // report). That way the bundled `wick-mcp` helper can write a report
+    // via the `wick.write_report` MCP tool and the GUI's history list
+    // picks it up the next time it reads — closing the loop where an
+    // external agent's analysis appears here as if Wicker had run it.
+    // See `SharedStore.reports()` / `SharedStore.appendReport(_:)`.
 
     private static func loadFromDisk() -> [Report] {
-        guard let data = try? Data(contentsOf: storeURL) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([Report].self, from: data)) ?? []
+        // Migrate the legacy single-file store into the per-file App
+        // Group directory on first launch after this change. Idempotent.
+        migrateLegacyReportsIfNeeded()
+        return SharedStore.reports()
+    }
+
+    /// Older builds wrote one big `reports.json` to
+    /// `~/Library/Application Support/Wick/reports.json`. Read it once,
+    /// fan its rows into the shared per-file directory, then leave the
+    /// old file in place (we don't delete it — easier rollback path).
+    private static func migrateLegacyReportsIfNeeded() {
+        let ud = UserDefaults.standard
+        let flagKey = SharedStore.Keys.reportsMigrated
+        guard ud.bool(forKey: flagKey) == false else { return }
+        defer { ud.set(true, forKey: flagKey) }
+
+        let fm = FileManager.default
+        guard let base = try? fm.url(for: .applicationSupportDirectory,
+                                       in: .userDomainMask,
+                                       appropriateFor: nil, create: false)
+        else { return }
+        let legacy = base
+            .appendingPathComponent("Wick", isDirectory: true)
+            .appendingPathComponent("reports.json")
+        guard let data = try? Data(contentsOf: legacy) else { return }
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        guard let rows = try? decoder.decode([Report].self, from: data) else { return }
+        for r in rows { SharedStore.appendReport(r) }
     }
 
     private func persist() {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(reports) else { return }
-        try? data.write(to: Self.storeURL, options: .atomic)
+        // We can't bulk-replace the on-disk set anymore (it lives across
+        // many files), so persist deltas: any report we're holding that
+        // isn't already in the shared directory gets appended.
+        // `SharedStore.appendReport` itself is dedup-safe.
+        for r in reports {
+            SharedStore.appendReport(r)
+        }
+    }
+
+    /// Refresh the in-memory list from the shared store. Called from the
+    /// GUI's AI tab `onAppear` so an external `wick.write_report` from a
+    /// background MCP session shows up without restarting the app.
+    /// Always reassigns — `Report` isn't Equatable today and the cost of
+    /// a redundant `@Observable` invalidation on a sub-MB list is nil.
+    func reloadFromDisk() {
+        reports = SharedStore.reports()
     }
 }
