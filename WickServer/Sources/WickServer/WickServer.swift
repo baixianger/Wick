@@ -11,9 +11,21 @@ struct WickServer {
         // Shared, persistent report cache (swap DiskReportStore → Postgres in prod).
         let store = DiskReportStore(directory: config.storeDirectory)
 
-        // Data chain (decorators): FMP per-ticker → Finnhub news → FRED macro.
-        var data: any MarketDataProvider = config.fmpKey
+        // Data chain (decorators): MarketRouter splits CN (EastMoney, no key
+        // required) from US (FMP, BYO key) at the base. Then layered:
+        // Finnhub news → FRED macro. The news / macro decorators only fill
+        // missing slots, so they degrade gracefully for CN tickers (whose
+        // localized news + macro will land via dedicated EastMoney
+        // decorators in later phases).
+        let us: any MarketDataProvider = config.fmpKey
             .map { FMPMarketDataProvider(apiKey: $0) } ?? StubMarketDataProvider()
+        var data: any MarketDataProvider = config.enableChinaMarkets
+            ? MarketRouter(cn: EastMoneyMarketDataProvider(), fallback: us)
+            : us
+        if config.enableChinaMarkets {
+            // Financial-statements decorator. No-op for non-CN symbols.
+            data = EastMoneyFinancialProvider(base: data)
+        }
         if let finnhub = config.finnhubKey {
             data = FinnhubNewsProvider(base: data, finnhub: FinnhubClient(apiKey: finnhub))
         }

@@ -61,26 +61,32 @@ final class AgentRuntime {
         }
     }
 
-    /// Build the full FMP → Finnhub → FRED chain that mirrors
-    /// `WickServer.main`. Each decorator is opt-in: missing keys
-    /// degrade gracefully (Yahoo fallback for base, empty news /
-    /// macro for the decorators). Caching wrapper sits at the
-    /// outermost layer.
+    /// Build the full EastMoney(CN) → FMP(US) / Yahoo(intl) → Finnhub → FRED
+    /// chain that mirrors `WickServer.main`. Each decorator is opt-in:
+    /// missing keys degrade gracefully (Yahoo fallback for base, empty news /
+    /// macro for the decorators). Caching wrapper sits at the outermost
+    /// layer.
     static func buildMarketData(from settings: AgentSettings) -> any MarketDataProvider {
-        // Base layer: FMP if key set, otherwise Yahoo (no-key
-        // baseline). FMP is US-centric — tickers with an exchange
-        // suffix (`.HK`, `.SS`, `.T`, etc.) are routed to Yahoo
-        // even when an FMP key is configured, since FMP returns
-        // empty data for them and feeding the agent an empty
-        // snapshot makes it hallucinate.
-        var data: any MarketDataProvider
+        // Base layer: split first by Chinese-market suffix (`.SS` / `.SZ` /
+        // `.HK`) → EastMoney's open endpoints. Everything else falls through
+        // to the US / international split that depends on whether the user
+        // configured an FMP key.
+        let nonCN: any MarketDataProvider
         if settings.fmpKey.isEmpty {
-            data = WickMarketDataProvider()
+            nonCN = WickMarketDataProvider()
         } else {
-            data = InternationalRouter(
+            nonCN = InternationalRouter(
                 us: FMPMarketDataProvider(apiKey: settings.fmpKey),
                 intl: WickMarketDataProvider())
         }
+        var data: any MarketDataProvider = MarketRouter(
+            cn: EastMoneyMarketDataProvider(),
+            fallback: nonCN
+        )
+        // Financial-statements decorator. No-op for non-CN symbols; for CN
+        // tickers it merges the latest quarter's income-statement digest
+        // into `fundamentals` (营收 YoY, ROE, 毛利率, EPS, 经营现金流, …).
+        data = EastMoneyFinancialProvider(base: data)
         // Finnhub news decorator.
         if !settings.finnhubKey.isEmpty {
             data = FinnhubNewsProvider(
