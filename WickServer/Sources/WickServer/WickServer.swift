@@ -31,6 +31,11 @@ struct WickServer {
             // Main-force capital flow (资金流向) appended to technicals
             // for A-share tickers. No key.
             data = EastMoneyFundFlowDecorator(base: data)
+            // 融资融券 (margin) appended to capitalFlow for A-shares. No key.
+            data = EastMoneyMarginDecorator(base: data)
+            // 龙虎榜 (dragon-tiger) appended to capitalFlow only when the
+            // A-share triggered the list recently. No key.
+            data = EastMoneyBillboardDecorator(base: data)
         }
         if let finnhub = config.finnhubKey {
             data = FinnhubNewsProvider(base: data, finnhub: FinnhubClient(apiKey: finnhub))

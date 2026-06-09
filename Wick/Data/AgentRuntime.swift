@@ -137,6 +137,13 @@ final class AgentRuntime {
         // Main-force capital flow — appends 资金流向 to technicals for
         // A-share tickers. No key.
         data = EastMoneyFundFlowDecorator(base: data)
+        // 融资融券 (margin) — appends 融资余额/融券余额 to capitalFlow for
+        // A-share tickers. No key.
+        data = EastMoneyMarginDecorator(base: data)
+        // 龙虎榜 (dragon-tiger) — appends a 龙虎榜 line to capitalFlow ONLY
+        // when the A-share triggered the list recently; otherwise nothing.
+        // No key.
+        data = EastMoneyBillboardDecorator(base: data)
         // Finnhub news decorator.
         if !settings.finnhubKey.isEmpty {
             data = FinnhubNewsProvider(
