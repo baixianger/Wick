@@ -77,6 +77,10 @@ targets:
       - path: Wick/Data
       - path: Wick/Design
       - path: Wick/Views
+      # Dev-only prototypes (e.g. the 雪球 WebPage BYO-cookie probe). The
+      # code inside is gated `#if DEBUG` / `@available(macOS 26.0, *)`, so
+      # it carries no weight in Release. Kept out of the user-facing nav.
+      - path: Wick/Prototypes
       - path: Wick/Resources
         excludes:
           - "Info.plist"

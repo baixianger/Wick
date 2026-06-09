@@ -79,6 +79,33 @@ struct WickApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
+        // Dev-only: expose the 雪球 WebPage BYO-cookie probe behind a
+        // "Developer" menu command that opens its own window. The whole
+        // thing is `#if DEBUG`, so it never reaches a Release build or the
+        // user-facing navigation — it's a hand-run validation surface for
+        // the two scraping linchpins (see XueqiuProbeView).
+        #if DEBUG
+        .commands {
+            CommandMenu("Developer") {
+                XueqiuProbeMenuButton()
+            }
+        }
+        #endif
+
+        // The probe's own window. Declared at the `App` level (only in DEBUG)
+        // and opened on demand by the Developer-menu command above; it never
+        // shows unless explicitly opened.
+        #if DEBUG
+        Window("雪球 BYO-Cookie Probe (DEV)", id: XueqiuProbeWindow.id) {
+            if #available(macOS 26.0, *) {
+                XueqiuProbeView()
+            } else {
+                Text("雪球 Probe 需要 macOS 26")
+                    .padding()
+            }
+        }
+        .defaultSize(width: 1000, height: 640)
+        #endif
 
         // Native macOS Settings scene — reachable via ⌘, and the
         // standard "Wick › Settings…" menu item. SwiftUI auto-wires
