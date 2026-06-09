@@ -32,18 +32,47 @@ public struct EastMoneyMarketDataProvider: MarketDataProvider {
         self.limiter = limiter
     }
 
-    /// Raw daily bars for a CN ticker, ordered chronologically (oldest →
-    /// newest). Used by the MCP `wick.candles` tool which surfaces the
-    /// series back to its LLM caller — the workflow itself only needs the
-    /// `priceSummary` / `technicals` strings the snapshot already carries.
-    public func dailyBars(symbol: String, limit: Int = 60) async throws -> [DailyBar] {
+    /// EastMoney K-line period — the `klt` query value. Mirrors the chart
+    /// intervals the app's `LiveDataStore` exposes; there's no EastMoney
+    /// equivalent of a 4-hour bar (same gap as Yahoo), so it's absent by
+    /// design and the caller resamples or skips it.
+    public enum KLinePeriod: Int, Sendable, CaseIterable {
+        case m1  = 1
+        case m5  = 5
+        case m15 = 15
+        case m30 = 30
+        case h1  = 60
+        case d1  = 101
+        case w1  = 102
+        case mo1 = 103
+
+        /// Intraday periods carry a `"yyyy-MM-dd HH:mm"` date string in the
+        /// `klines` rows; daily-and-coarser carry `"yyyy-MM-dd"`. The chart
+        /// adapter picks its date formatter off this.
+        public var isIntraday: Bool {
+            switch self {
+            case .m1, .m5, .m15, .m30, .h1: return true
+            case .d1, .w1, .mo1:            return false
+            }
+        }
+    }
+
+    /// Raw bars for a CN ticker at the given period, ordered chronologically
+    /// (oldest → newest). Backs both the MCP `wick.candles` tool (daily) and
+    /// the app's chart UI (any period). For daily-and-coarser periods the
+    /// `DailyBar.date` is `"yyyy-MM-dd"`; for intraday periods it's
+    /// `"yyyy-MM-dd HH:mm"` (EastMoney's native row format).
+    public func bars(symbol: String,
+                     period: KLinePeriod = .d1,
+                     limit: Int = 60) async throws -> [DailyBar]
+    {
         guard let secid = CNSymbol.eastMoneySecid(symbol) else {
             throw EastMoneyError.notCNSymbol(symbol)
         }
         var c = URLComponents(string: "https://push2his.eastmoney.com/api/qt/stock/kline/get")!
         c.queryItems = [
             .init(name: "secid", value: secid),
-            .init(name: "klt", value: "101"),
+            .init(name: "klt", value: String(period.rawValue)),
             .init(name: "fqt", value: "1"),
             .init(name: "fields1", value: "f1,f2,f3,f4,f5,f6"),
             .init(name: "fields2", value: "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"),
@@ -54,6 +83,14 @@ public struct EastMoneyMarketDataProvider: MarketDataProvider {
               let payload: KLinePayload = await get(url),
               let klines = payload.data?.klines else { return [] }
         return klines.compactMap(parsePublicBar)
+    }
+
+    /// Raw daily bars for a CN ticker, ordered chronologically (oldest →
+    /// newest). Used by the MCP `wick.candles` tool which surfaces the
+    /// series back to its LLM caller — the workflow itself only needs the
+    /// `priceSummary` / `technicals` strings the snapshot already carries.
+    public func dailyBars(symbol: String, limit: Int = 60) async throws -> [DailyBar] {
+        try await bars(symbol: symbol, period: .d1, limit: limit)
     }
 
     /// Single-row CSV → typed bar. Public-facing version that surfaces

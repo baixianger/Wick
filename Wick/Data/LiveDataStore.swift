@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import CoreCharts
 import DataAdapters
+import TradingFloor
 
 /// On-demand wrapper around `YahooFinanceAdapter`. Demo views call
 /// `store.series(for:interval:)` synchronously — they get either the
@@ -25,6 +26,11 @@ final class LiveDataStore {
 
     @ObservationIgnored
     private let adapter = YahooFinanceAdapter()
+
+    /// Chinese A-share / HK source (EastMoney). One instance per store so its
+    /// internal rate limiter is shared across this store's fetches.
+    @ObservationIgnored
+    private let eastMoney = EastMoneyChartAdapter()
 
     private var cache: [Key: CandleSeries] = [:]
     private var sources: [Key: Source] = [:]
@@ -56,6 +62,31 @@ final class LiveDataStore {
 
     private func scheduleFetchIfNeeded(_ key: Key, fallback: CandleSeries) {
         guard !inFlight.contains(key) else { return }
+
+        // Chinese A-share / HK tickers (`.SS` / `.SZ` / `.HK`, or any form
+        // `CNSymbol.parse` recognizes) go to EastMoney — the same source the
+        // analysts use — so the chart and the agent never disagree on price.
+        // Everything else stays on Yahoo via CandleKit below.
+        if let canonical = CNSymbol.parse(key.symbol) {
+            guard EastMoneyChartAdapter.supports(key.interval) else {
+                // e.g. 4h — no EastMoney equivalent. Mark demo so the UI
+                // stops retrying, matching the Yahoo unsupported-interval path.
+                sources[key] = .demo
+                return
+            }
+            inFlight.insert(key)
+            Task { @MainActor in
+                do {
+                    let series = try await eastMoney.fetch(symbol: canonical,
+                                                           interval: key.interval)
+                    self.handleFetchSuccess(key: key, series: series)
+                } catch {
+                    self.handleFetchFailure(key: key, error: error)
+                }
+            }
+            return
+        }
+
         guard let yahooInterval = mapInterval(key.interval) else {
             // Interval not supported live (e.g. 4h). Mark demo so the UI
             // doesn't keep retrying.
