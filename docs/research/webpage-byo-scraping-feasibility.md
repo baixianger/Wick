@@ -13,7 +13,7 @@ A `BrowserSessionManager` in the app target supports **three operating modes** (
 Recommendation:
 1. Build this as an **app-target-only `BrowserSessionManager`** vending `WebScrapeProvider` / `WebSessionProvider` (Modes 1–2) plus a `BrowserHTTPTransport` (Mode 3), conforming to the existing `SocialSentimentProvider` seam in the `TradingFloor` package (the package stays Foundation-only / Linux-clean — `WebPage` is Apple-platform only).
 2. Keep the project's existing guardrails (`requiresUserCredentials = true`, `interactiveOnly = true`) and extend them to the broker case.
-3. Prototype against **雪球 (Xueqiu)** first — it's the lowest-risk, highest-value target and we already ship a Xueqiu data skill.
+3. Prototype against **雪球 (Xueqiu)** first — it's the lowest-risk, highest-value target and we already ship a Xueqiu data skill. **A runnable dev probe already exists** (commit `7283a5f`, behind a `#if DEBUG` Developer menu) covering the two linchpins — same-store cookie cross-visibility and headless SPA render — and only awaits a manual login to validate (selectors pending live-DOM).
 4. Treat each site/broker as a **separate, brittle page-structure adapter**; expect maintenance. Surface the visible `WebView` for captcha/2FA/login (human-in-the-loop). Never run in background/batch.
 
 The honest risks are *durability and ToS*, not technical capability: DOM adapters break when sites redesign, anti-bot (Cloudflare) can challenge headless loads, and the legal posture only holds because it's the user reading their own data with their own session on their own device.
@@ -25,6 +25,8 @@ One nuance worth stating up front (full treatment in §6.1): because `WebPage` i
 ## 1. The new API — `WebPage` (headless) vs `WebView(webPage)` (rendered)
 
 Source: WWDC25 Session 231, "Meet WebKit for SwiftUI" (<https://developer.apple.com/videos/play/wwdc2025/231/>); Apple docs `WebPage` (<https://developer.apple.com/documentation/webkit/webpage>).
+
+> ✅ **Compiler-verified against the prototype (commit `7283a5f`).** The API facts below were originally research; they are now checked against a built 雪球 probe (`Wick/Prototypes/Xueqiu/XueqiuProbe.swift` et al.). Several earlier idioms turned out to be wrong and are corrected in place; the corrected forms compile.
 
 `WebPage` is a **brand-new `@Observable` class** that represents web content and is usable **on its own, with no view attached** — i.e. as a headless browser. To *display* it, you hand the same instance to the new `WebView`:
 
@@ -46,12 +48,13 @@ This is the key architectural property for us: **`WebPage` alone = headless brow
 
 ```swift
 let page = WebPage()                 // or WebPage(configuration:)
-page.load(URLRequest(url: url))      // also: load(html:baseURL:), load(_:mimeType:characterEncoding:baseURL:)
+let events = page.load(URLRequest(url: url))   // RETURNS the navigation-event stream directly
+// also: load(html:baseURL:), load(_:mimeType:characterEncoding:baseURL:)
 ```
 
 ### Observing navigation / load completion
 
-`WebPage` exposes observable properties: `isLoading`, `estimatedProgress`, `title`, `url`, and `currentNavigationEvent`. Two idioms:
+`WebPage` exposes observable properties: `isLoading`, `estimatedProgress`, `title`, `url`. Two idioms:
 
 **a) SwiftUI `onChange` on `isLoading`** (simple, view-driven):
 
@@ -62,20 +65,20 @@ page.load(URLRequest(url: url))      // also: load(html:baseURL:), load(_:mimeTy
 }
 ```
 
-**b) `Observations { ... }` async sequence on navigation events** (correct for headless await; recommended). A navigation is a sequence of events: `startedProvisionalNavigation` → optional `receivedServerRedirect` → `committed` → `finished` (or `failed` / `failedProvisionalNavigation`):
+**b) Iterate the navigation-event stream `load` returns** (correct for headless await; recommended).
+
+> ⚠️ **Corrected (verified `7283a5f`).** The earlier idiom — `Observations { page.currentNavigationEvent }` matched against a `NavigationID` — **does not exist**. There is **no** `currentNavigationEvent` property and **no** `NavigationID` type. Instead, `load(_:)` itself **returns** the navigation-event stream: `load(_ request:) -> some AsyncSequence<NavigationEvent, Error>`. You iterate it (or the `WebPage.navigations` property) with `for try await`.
+
+`NavigationEvent` has **only 4 cases** — `.startedProvisionalNavigation`, `.receivedServerRedirect`, `.committed`, `.finished`. There is **no** `.failed` / `.failedProvisionalNavigation` case and **no** `.kind`. Failures are **thrown** from the throwing sequence as `WebPage.NavigationError`. So "await finished" is a `for try await` loop wrapped in a timeout watchdog:
 
 ```swift
-let events = Observations { webPage.currentNavigationEvent }
-for await event in events where event?.navigationID == navID {
-    switch event?.kind {
-    case .finished: return
-    case .failed(let error), .failedProvisionalNavigation(let error): throw error
-    default: continue
-    }
+let events = page.load(URLRequest(url: url))   // some AsyncSequence<NavigationEvent, Error>
+for try await event in events {                // a thrown WebPage.NavigationError = the failure path
+    if case .finished = event { break }
 }
 ```
 
-`load(_:)` returns the `WebPage.NavigationID` you match against. (Sources: <https://troz.net/post/2025/swiftui-webview/>, <https://danielsaidi.com/blog/2025/06/10/webview-is-finally-coming-to-swiftui>, Apple docs `currentNavigationEvent`.)
+(Sources: <https://troz.net/post/2025/swiftui-webview/>, <https://danielsaidi.com/blog/2025/06/10/webview-is-finally-coming-to-swiftui>; corrected against the prototype.)
 
 ### `callJavaScript(...)` — drive the DOM
 
@@ -102,6 +105,28 @@ let result = try await page.callJavaScript(
 Reading `document.documentElement.outerHTML` after `finished` gives us the **rendered** HTML (post-JS, post-login), which is exactly what raw `URLSession` fetching cannot get for SPA-heavy sites like X or 雪球. (Sources: WWDC25-231; <https://folding-sky.com/blog/ios-26-macos-26-swiftui-headless-browser-webpage-webview>; `callAsyncJavaScript` arguments semantics confirmed at <https://developer.apple.com/documentation/webkit/wkwebview/callasyncjavascript(_:arguments:in:contentworld:)>.)
 
 > The "Replacing Server-Side AI Search with iOS 26's New Headless Browser" writeup demonstrates exactly this pattern (headless `WebPage` + `callJavaScript` + `outerHTML`) to replace a server-side scraper — strong external validation of our use case.
+
+### Verified unchanged (`7283a5f`)
+
+These earlier facts held against the prototype, no correction needed:
+
+- `WKWebsiteDataStore(forIdentifier:)` with a **fixed persistent UUID**, recreated on relaunch to restore the session.
+- `WebPage.Configuration().websiteDataStore` carries that store into the page.
+- `callJavaScript(_:arguments:in:contentWorld:)` — dictionary keys → JS locals; returns an optional `Any`.
+- `WebView(webPage)` to render the same instance; `#available(macOS 26.0, *)` gating.
+
+### `@Observable` controller caveat (`7283a5f`)
+
+An `@Observable` controller **cannot** hold the login `WebPage` as a `lazy var` — the Observation macro fails to compile (`"init accessors can refer only to stored properties"`). Make it `@ObservationIgnored` and construct it in `init` via a static factory:
+
+```swift
+@Observable
+final class LoginController {
+    @ObservationIgnored let page: WebPage   // NOT `lazy var`
+    init(storeID: UUID) { self.page = Self.makePage(storeID: storeID) }
+    private static func makePage(storeID: UUID) -> WebPage { /* … */ }
+}
+```
 
 ---
 
@@ -151,7 +176,7 @@ The default for any source that requires the user's own login. **One named persi
 A persisted cookie eventually expires or is invalidated server-side. Mode 2 detects that **before and during** a scrape, and never scrapes with a stale session. Two complementary mechanisms — **both required**:
 
 - **Proactive probe (before a scrape).** A cheap `callJavaScript` check on a freshly-loaded page for a *logged-in-only DOM marker* (e.g. the avatar/account menu) — and conversely, presence of a **login form ⇒ logged out**. Optionally cross-check whether the known auth cookie still exists / hasn't expired in the data store. Fast, runs before committing to the real fetch.
-- **Reactive capture (during a scrape).** Watch the navigation events (§1, `currentNavigationEvent` — `receivedServerRedirect` / `committed`): if navigation **redirects to the site's login URL**, or the returned DOM is the **logged-out shell**, mark the session **stale** mid-flight and abort the extraction.
+- **Reactive capture (during a scrape).** Watch the navigation events (§1, the stream `load` returns — `.receivedServerRedirect` / `.committed`): if navigation **redirects to the site's login URL**, or the returned DOM is the **logged-out shell**, mark the session **stale** mid-flight and abort the extraction.
 
 **Per-site session-status model** — a small state machine surfaced in the UI:
 
@@ -316,6 +341,29 @@ Wick (app target, macOS-only)
 
 **All WebKit lives in the Wick app target only.** The `TradingFloor` SPM package stays Foundation-only / Linux-clean — it never imports WebKit. Its market/social providers accept an **injected transport** (defaulting to `URLSession`), so Mode 3's `BrowserHTTPTransport` is wired in from the app side without the package depending on it — the same dependency-inversion pattern as the BYO X/Reddit rule. The package keeps the **policy** (`requiresUserCredentials`, `interactiveOnly`, and the `interactiveOnly` guard reused for any browser-backed provider) so guards are enforced regardless of which concrete app-side provider is wired in. The app keeps the **WebKit mechanism**. This is consistent with how `WickMarketDataProvider` (app) wraps package providers today.
 
+### 7.1 Browser presentation model
+
+**Core principle: session and presentation are DECOUPLED.** The `WebPage` *is* the session (cookies in its `WKWebsiteDataStore`); the `WebView` is merely one *presentation* of it. One `WebPage`, swap the presentation freely — attach a `WebView`, detach it, attach a different one — and the session is never broken. This is what makes the states below cheap: they are presentation choices over a single long-lived session, not separate browsers.
+
+There are **three user-facing states plus one implementation state**:
+
+- **① Default headless** (agent scraping). No browser is shown at all. **Most agent browser ops show no browser.** The UI surfaces only a status indicator + an activity log in the main window so the user knows work is happening.
+- **② Interaction required** (login / captcha / 2FA / Mode-2 re-login). A **separate, dismissible macOS window** (SwiftUI `Window(id:)` + `openWindow`). **Recommended** over an embedded panel or a full-window sheet: login is a focused, transient credential task; a separate window lets the user keep the analysis visible alongside it, scales naturally to multi-site (one titled window per site), and reinforces the "this is **YOUR** session" BYO framing.
+- **③ Optional "watch the agent"** (transparency / debug). An **embedded, collapsible, read-only panel** (a side or bottom drawer) the user toggles on. Embedded is right here — unlike login, it's glanceable workflow context the user wants *beside* the analysis, not a separate task.
+- **Implementation state — attached-but-hidden** (not a user-facing window). An offscreen-rendered `WebView` kept attached for **X realism** (genuine timing / `requestAnimationFrame` / visibility signals) — see §6.1.
+
+**Interaction etiquette.** The agent **never steals focus mid-run.** When a headless op hits a wall it sets a `needs-interaction` state and the UI floats a gentle, **non-blocking** prompt ("雪球需要登录 →") that the user taps to open the interaction window (state ②). This is the UI manifestation of the Mode-2 per-site status row (§3) — an `expired ✗` source raises the prompt rather than interrupting whatever is on screen.
+
+### 7.2 Session lifecycle — view-independent ownership
+
+**Requirement (stated plainly):** leaving or closing the analysis view must **not** interrupt the browser operation. Mechanics, kept lightweight (this is an ownership point, not heavy blocking machinery):
+
+- **Do not** run the scrape `Task` from a SwiftUI View's `.task {}` modifier or a View `@State` — those are cancelled / torn down when the view disappears.
+- **Own the `WebPage` + scrape `Task` in the app-scoped `BrowserSessionManager`** — held at the App/Scene root, `@Environment`-injected, a peer of the existing `LiveDataStore` / `AgentRuntime`. A headless `WebPage` needs **no** `WebView` in the view hierarchy to keep running; it lives as long as the manager holds it. Leaving a view just detaches UI observation — the work continues. Progress is exposed via the manager's `@Observable` state and surfaced by a **global** indicator independent of which view is on screen.
+- The **only** view-bound piece is the visible login `WebView` (state ②, its own window). The session itself — the cookie in `WKWebsiteDataStore` — persists independently of that window: closing it, or leaving the analysis view, does **not** kill the session.
+
+> Because browser / BYO-cookie data is device-pinned and may need interaction, that part stays **on-device** and cannot move to the (deferred) server-compat phase — only the headless-HTTP + LLM parts could.
+
 ---
 
 ## 8. Prototype plan — 雪球 (Xueqiu) BYO-cookie proof
@@ -350,20 +398,13 @@ final class XueqiuScraper {
     func hotPosts(symbol: String) async throws -> [String] {
         let page = makeHeadlessPage()
         let url  = URL(string: "https://xueqiu.com/S/\(symbol)")!     // e.g. SH600519
-        let navID = page.load(URLRequest(url: url))
 
-        // await load settle via navigation events
-        for await event in Observations({ page.currentNavigationEvent })
-        where event?.navigationID == navID {
-            switch event?.kind {
-            case .finished: 
-                // detect login wall → caller should re-present the visible WebView
-                break
-            case .failed(let e), .failedProvisionalNavigation(let e):
-                throw e
-            default: continue
-            }
-            if case .finished = event?.kind { break }
+        // await load settle: load(_:) RETURNS the event stream; iterate to `.finished`.
+        // A failure is THROWN as WebPage.NavigationError (no `.failed` case). Wrap in a
+        // timeout watchdog in real code; a login wall surfaces via a redirect / DOM probe.
+        let events = page.load(URLRequest(url: url))
+        for try await event in events {
+            if case .finished = event { break }
         }
 
         // extract just the post text (token-cheap), keys become JS locals
@@ -382,7 +423,7 @@ final class XueqiuScraper {
 }
 ```
 
-(Selectors above are placeholders — finalize against the live 雪球 DOM during implementation; keep them in a versioned adapter.)
+(Selectors above — and those in the prototype's `XueqiuProbe.swift` — are **placeholders pending validation against the live 雪球 DOM**; that validation is itself a finding for the eventual per-site adapter. Finalize during implementation and keep them in a versioned adapter.)
 
 ---
 
@@ -392,12 +433,12 @@ final class XueqiuScraper {
 - **DOM brittleness.** Site redesigns break selectors. Mitigate with per-site versioned adapters + a "this adapter needs an update" UX, not a crash.
 - **Anti-bot / Cloudflare.** Logged-in real sessions help; human-paced, low-volume, user-triggered access helps. No fingerprint evasion.
 - **ToS gray area.** Defensible *because* it's the user's own data/session/device, opt-in, ephemeral, with a notice — but it's not zero-risk; keep it off by default and clearly disclosed.
-- **API maturity.** `WebPage` is 26.0-new; expect rough edges in headless navigation-event timing. Prefer the `Observations`/`currentNavigationEvent` path over `isLoading` for deterministic awaits.
+- **API maturity.** `WebPage` is 26.0-new; expect rough edges in headless navigation-event timing. Prefer iterating the navigation-event stream `load` returns (with a timeout watchdog) over `isLoading` for deterministic awaits.
 - **Broker MFA churn.** Some brokers expire sessions aggressively; re-login may be frequent. Acceptable for a user-triggered "refresh holdings."
 
 ### Open questions
-1. Does a fully **headless** `WebPage` (never wrapped in a `WebView`) reliably fire JS-render + navigation `finished` for SPA pages, or does some content require an attached/visible view? **Validate empirically in the 雪球 prototype.** This also bears directly on the X adapter (§6.1): if headless lacks genuine timing / `requestAnimationFrame` / visibility signals, X should be driven through an attached-but-hidden `WebView` rather than a never-rendered `WebPage`.
-2. **(Mode 1 cross-store cookie visibility.)** Does a headless `WebPage` bound to a named `WKWebsiteDataStore(forIdentifier:)` **reliably see cookies written by the visible login `WebView`** that used the same identifier? (Should hold — same store — but it is the linchpin of Mode 1; verify on macOS 26 before building on it.)
+1. **(Linchpin B — headless SPA render.)** Does a fully **headless** `WebPage` (never wrapped in a `WebView`) reliably fire JS-render + navigation `.finished` for SPA pages, or does some content require an attached/visible view? **A runnable dev probe now exists** (commit `7283a5f`, `Wick/Prototypes/Xueqiu/`, behind a `#if DEBUG` Developer-menu window) — it awaits a manual login to validate; selectors are still pending live-DOM. This also bears directly on the X adapter (§6.1): if headless lacks genuine timing / `requestAnimationFrame` / visibility signals, X should be driven through an attached-but-hidden `WebView` rather than a never-rendered `WebPage`.
+2. **(Linchpin A — Mode 1 cross-store cookie visibility.)** Does a headless `WebPage` bound to a named `WKWebsiteDataStore(forIdentifier:)` **reliably see cookies written by the visible login `WebView`** that used the same identifier? (Should hold — same store — but it is the linchpin of Mode 1.) **The same `7283a5f` probe exercises exactly this** (visible login → headless reuse on one store identifier); awaiting a manual login run on macOS 26 to confirm.
 3. **(Mode 2 probe portability.)** Can the proactive logged-in probe be made **site-agnostic enough to reuse** across 雪球 / 推特 / brokers — i.e. is "login-form-present ⇒ logged out" + a per-site logged-in marker a reliable, low-maintenance contract — or does each site need a bespoke probe? Determines how much of Mode 2 is shared vs per-adapter.
 4. **(Mode 3 trigger fidelity.)** What signal cleanly distinguishes "endpoint blocked us, escalate to browser transport" from an ordinary transient error or a genuinely empty payload, so we don't pay the WebKit cost on every miss? (Empty body + prior-success heuristic; tune against the observed EastMoney IP-block behaviour.)
 5. Whether 雪球 / each broker serves hot-posts/holdings as real DOM text vs canvas (determines DOM-vs-OCR per adapter).
@@ -418,7 +459,6 @@ This adds real local capability with no backend, keeps all WebKit in the app tar
 - WWDC25 Session 231, "Meet WebKit for SwiftUI" — <https://developer.apple.com/videos/play/wwdc2025/231/>
 - Apple docs: `WebPage` — <https://developer.apple.com/documentation/webkit/webpage>
 - Apple docs: `callJavaScript(_:arguments:in:contentWorld:)` — <https://developer.apple.com/documentation/webkit/webpage/calljavascript(_:arguments:in:contentworld:)>
-- Apple docs: `currentNavigationEvent` — <https://developer.apple.com/documentation/webkit/webpage/currentnavigationevent>
 - Apple docs: `WKWebsiteDataStore` — <https://developer.apple.com/documentation/webkit/wkwebsitedatastore>
 - Apple docs: `callAsyncJavaScript(_:arguments:in:contentWorld:)` (arguments-as-locals semantics) — <https://developer.apple.com/documentation/webkit/wkwebview/callasyncjavascript(_:arguments:in:contentworld:)>
 - WebKit blog: "Building Profiles with new WebKit API" (`dataStore(forIdentifier:)`) — <https://webkit.org/blog/14423/building-profiles-with-new-webkit-api/>
