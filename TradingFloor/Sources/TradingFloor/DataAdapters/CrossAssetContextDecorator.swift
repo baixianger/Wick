@@ -42,11 +42,11 @@ public actor CrossAssetContextDecorator: MarketDataProvider {
 
         // Fetch each leg in parallel — Yahoo's chart endpoint is
         // per-symbol so we burn 5 concurrent requests once per day.
-        async let wti  = fetchQuote(symbol: "CL=F")
-        async let gold = fetchQuote(symbol: "GC=F")
-        async let btc  = fetchQuote(symbol: "BTC-USD")
-        async let dxy  = fetchQuote(symbol: "DX-Y.NYB")
-        async let vix  = fetchQuote(symbol: "^VIX")
+        async let wti  = YahooChartQuote.fetch(symbol: "CL=F", session: session)
+        async let gold = YahooChartQuote.fetch(symbol: "GC=F", session: session)
+        async let btc  = YahooChartQuote.fetch(symbol: "BTC-USD", session: session)
+        async let dxy  = YahooChartQuote.fetch(symbol: "DX-Y.NYB", session: session)
+        async let vix  = YahooChartQuote.fetch(symbol: "^VIX", session: session)
         let (a, b, c, d, e) = await (wti, gold, btc, dxy, vix)
 
         var parts: [String] = []
@@ -62,38 +62,11 @@ public actor CrossAssetContextDecorator: MarketDataProvider {
         return line
     }
 
-    // MARK: - Yahoo chart endpoint
-
-    private func fetchQuote(symbol: String) async -> Quote? {
-        var c = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(symbol)")!
-        c.queryItems = [
-            .init(name: "interval", value: "1d"),
-            .init(name: "range", value: "1d"),
-        ]
-        guard let url = c.url else { return nil }
-        var req = URLRequest(url: url)
-        req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await session.data(for: req),
-              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
-              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let chart = json["chart"] as? [String: Any],
-              let result = (chart["result"] as? [[String: Any]])?.first,
-              let meta = result["meta"] as? [String: Any]
-        else { return nil }
-        let price = (meta["regularMarketPrice"] as? Double)
-            ?? (meta["regularMarketPrice"] as? Int).map(Double.init)
-        let prev = (meta["chartPreviousClose"] as? Double)
-            ?? (meta["chartPreviousClose"] as? Int).map(Double.init)
-        guard let p = price, let pp = prev, pp != 0 else { return nil }
-        let pct = (p / pp - 1) * 100
-        return Quote(price: p, dayChangePct: pct)
-    }
-
     // MARK: - Rendering
 
     /// Formats `Gold $4527.30 (-0.1%)`. Big-currency symbols (BTC, oil,
     /// gold) get a thousands separator, small ones don't.
-    private func format(label: String, quote: Quote, currency: String) -> String {
+    private func format(label: String, quote: YahooChartQuote, currency: String) -> String {
         let priceStr: String
         if quote.price >= 1000 {
             // Force en_US so the thousands separator is `,` not `.`
@@ -110,10 +83,5 @@ public actor CrossAssetContextDecorator: MarketDataProvider {
             priceStr = String(format: "%.2f", quote.price)
         }
         return "\(label) \(currency)\(priceStr) (\(String(format: "%+.1f%%", quote.dayChangePct)))"
-    }
-
-    private struct Quote {
-        let price: Double
-        let dayChangePct: Double
     }
 }

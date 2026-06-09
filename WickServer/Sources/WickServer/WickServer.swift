@@ -46,6 +46,10 @@ struct WickServer {
         // line. Useful as a "global climate" indicator the LLM can
         // cross-reference against the stock's micro-climate. No key.
         data = CrossAssetContextDecorator(base: data)
+        // Overnight external markets — CN/HK tickers only: US indices,
+        // Golden Dragon ADRs, FTSE A50, USD/CNH, US 10Y yield. The
+        // pre-open checklist an A-share analyst reads first. No key.
+        data = OvernightContextDecorator(base: data)
 
         // LLM: Anthropic → OpenRouter (cheap/free models) → offline canned.
         let llm: any LLMProvider

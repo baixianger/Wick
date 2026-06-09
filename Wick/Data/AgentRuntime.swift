@@ -108,6 +108,10 @@ final class AgentRuntime {
         // Cross-asset (global climate): WTI / Gold / BTC / DXY / VIX.
         // Yahoo Finance free chart endpoint, no key, Foundation HTTP.
         data = CrossAssetContextDecorator(base: data)
+        // Overnight external markets — CN/HK tickers only: US indices,
+        // Golden Dragon ADRs, FTSE A50, USD/CNH, US 10Y yield. Same
+        // Yahoo endpoint, no key.
+        data = OvernightContextDecorator(base: data)
         // Outermost: caching wrapper. 15-min TTL matches DeskRunner.
         return CachingMarketDataProvider(wrapping: data, ttl: 900)
     }
