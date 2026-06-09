@@ -201,6 +201,17 @@ final class AgentSettings {
         didSet { UserDefaults.standard.set(freeAgentMaxToolTurns, forKey: "tf.freeAgentTurns") }
     }
 
+    // MARK: - BYO browser-scraping sources (off by default)
+
+    /// Append BYO-cookie 雪球 discussion lines into CN/HK snapshots' `news`
+    /// (Mode 1 of the webpage-scraping research doc). **Default FALSE** — the
+    /// path is best-effort and requires the user to sign in to 雪球 once in the
+    /// in-app browser; it stays inert until both this flag is on AND the session
+    /// is valid. CN/HK tickers only; non-CN runs are never touched.
+    var enableXueqiuSentiment: Bool {
+        didSet { UserDefaults.standard.set(enableXueqiuSentiment, forKey: "tf.enableXueqiuSentiment") }
+    }
+
     // MARK: - Skills (user-supplied playbooks)
 
     var userSkillsDirectoryPath: String? {
@@ -323,6 +334,9 @@ final class AgentSettings {
         self.temperature     = ud.object(forKey: "tf.temperature")     as? Double ?? 0.7
 
         self.freeAgentMaxToolTurns = ud.object(forKey: "tf.freeAgentTurns") as? Int ?? 6
+        // Off by default — the BYO 雪球 scraping path is inert until the user
+        // opts in (and signs in to 雪球 in the in-app browser).
+        self.enableXueqiuSentiment = ud.bool(forKey: "tf.enableXueqiuSentiment")
         self.userSkillsDirectoryPath = ud.string(forKey: "tf.userSkillsDir")
 
         self.chartSplitView = ud.bool(forKey: "ui.chartSplitView")

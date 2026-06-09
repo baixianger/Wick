@@ -76,6 +76,11 @@ struct WickApp: App {
                     agentRuntime.reconfigure(with: agentSettings)
                     fredStore.apiKey = agentSettings.fredKey
                 }
+                // Toggling the BYO 雪球 source rebuilds the chain so the next
+                // run picks up (or drops) the off-by-default decorator.
+                .onChange(of: agentSettings.enableXueqiuSentiment) { _, _ in
+                    agentRuntime.reconfigure(with: agentSettings)
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)

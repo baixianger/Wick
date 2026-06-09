@@ -29,10 +29,21 @@ final class AgentRuntime {
     let tools: ToolRegistry
     let skills: SkillRegistry
 
+    /// App-scoped BYO-cookie browser session owner (雪球 Mode 1/2). Held here so
+    /// its lifecycle is view-independent and the off-by-default 雪球 decorator
+    /// can pull discussion lines from the same instance the UI logs in through.
+    /// `nil` below macOS 26 (the `WebPage` API floor) — wiring then no-ops.
+    @ObservationIgnored let browserSession: AnyObject?
+
     init() {
         self.tools = ToolRegistry()
         let userSkillsDir = Self.userSkillsDirectory()
         self.skills = SkillRegistry(userDirectory: userSkillsDir)
+        if #available(macOS 26.0, *) {
+            self.browserSession = BrowserSessionManager()
+        } else {
+            self.browserSession = nil
+        }
 
         // Initial registration with the Yahoo-only baseline. The host
         // calls `reconfigure(with:)` once `AgentSettings` is available
@@ -55,10 +66,27 @@ final class AgentRuntime {
     /// keyed by `tool.spec.name`, so re-registering with the same
     /// name overwrites the previous tool — no leak, no duplicate.
     func reconfigure(with settings: AgentSettings) {
-        let provider = Self.buildMarketData(from: settings)
+        let provider = buildMarketData(from: settings)
         Task { [tools] in
             await tools.register(MarketDataTool(data: provider))
         }
+    }
+
+    /// Instance wrapper around the static chain builder that splices in the
+    /// off-by-default 雪球 decorator when running on macOS 26 with the app-scoped
+    /// `BrowserSessionManager` available. Kept separate from the `static`
+    /// builder so the latter stays Foundation-only + reusable (and matches the
+    /// server tier's pure assembly).
+    func buildMarketData(from settings: AgentSettings) -> any MarketDataProvider {
+        if #available(macOS 26.0, *),
+           let manager = browserSession as? BrowserSessionManager
+        {
+            return Self.buildMarketData(
+                from: settings,
+                xueqiuScraper: manager,
+                xueqiuEnabled: settings.enableXueqiuSentiment)
+        }
+        return Self.buildMarketData(from: settings)
     }
 
     /// Build the full EastMoney(CN) → FMP(US) / Yahoo(intl) → Finnhub → FRED
@@ -66,7 +94,11 @@ final class AgentRuntime {
     /// missing keys degrade gracefully (Yahoo fallback for base, empty news /
     /// macro for the decorators). Caching wrapper sits at the outermost
     /// layer.
-    static func buildMarketData(from settings: AgentSettings) -> any MarketDataProvider {
+    static func buildMarketData(
+        from settings: AgentSettings,
+        xueqiuScraper: (any XueqiuScraping)? = nil,
+        xueqiuEnabled: Bool = false
+    ) -> any MarketDataProvider {
         // Base layer: split first by Chinese-market suffix (`.SS` / `.SZ` /
         // `.HK`) → EastMoney's open endpoints. Everything else falls through
         // to the US / international split that depends on whether the user
@@ -91,6 +123,17 @@ final class AgentRuntime {
         // EastMoney 资讯 + 公告. No key. Disjoint with Finnhub below (each
         // only fills an empty `news`), so order doesn't matter.
         data = EastMoneyNewsProvider(base: data)
+        // BYO-cookie 雪球 discussion decorator — OFF BY DEFAULT. Appends 雪球
+        // hot-post lines into `news` for CN/HK tickers ONLY when (a) the user
+        // opted in (`enableXueqiuSentiment`) AND (b) a scraper is injected AND
+        // (c) the session is valid. Best-effort: any failure / empty / expired
+        // / non-CN ticker → pass-through, so it can never break the chain. Sits
+        // right after the EastMoney news layer so the sentiment/news analysts
+        // see the lines, and inside the cache below so scrapes are amortised.
+        if let scraper = xueqiuScraper {
+            data = BYODiscussionNewsDecorator(
+                base: data, scraper: scraper, enabled: xueqiuEnabled)
+        }
         // Main-force capital flow — appends 资金流向 to technicals for
         // A-share tickers. No key.
         data = EastMoneyFundFlowDecorator(base: data)
