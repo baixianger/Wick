@@ -87,6 +87,13 @@ final class AgentRuntime {
         // tickers it merges the latest quarter's income-statement digest
         // into `fundamentals` (营收 YoY, ROE, 毛利率, EPS, 经营现金流, …).
         data = EastMoneyFinancialProvider(base: data)
+        // CN news + filings decorator — fills `news` for CN/HK tickers from
+        // EastMoney 资讯 + 公告. No key. Disjoint with Finnhub below (each
+        // only fills an empty `news`), so order doesn't matter.
+        data = EastMoneyNewsProvider(base: data)
+        // Main-force capital flow — appends 资金流向 to technicals for
+        // A-share tickers. No key.
+        data = EastMoneyFundFlowDecorator(base: data)
         // Finnhub news decorator.
         if !settings.finnhubKey.isEmpty {
             data = FinnhubNewsProvider(
@@ -105,6 +112,9 @@ final class AgentRuntime {
         // Broad-market index context — one line in macro per ticker
         // (CSI 300 / HSI / SPX), no key, sandbox-friendly.
         data = SectorContextDecorator(base: data)
+        // Per-stock industry/theme boards with day moves (所属板块) for
+        // CN/HK tickers. No key.
+        data = BoardContextDecorator(base: data)
         // Cross-asset (global climate): WTI / Gold / BTC / DXY / VIX.
         // Yahoo Finance free chart endpoint, no key, Foundation HTTP.
         data = CrossAssetContextDecorator(base: data)

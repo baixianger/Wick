@@ -25,6 +25,12 @@ struct WickServer {
         if config.enableChinaMarkets {
             // Financial-statements decorator. No-op for non-CN symbols.
             data = EastMoneyFinancialProvider(base: data)
+            // CN news + filings (资讯 + 公告) for CN/HK tickers; fills
+            // `news` only when empty, so it stacks with Finnhub. No key.
+            data = EastMoneyNewsProvider(base: data)
+            // Main-force capital flow (资金流向) appended to technicals
+            // for A-share tickers. No key.
+            data = EastMoneyFundFlowDecorator(base: data)
         }
         if let finnhub = config.finnhubKey {
             data = FinnhubNewsProvider(base: data, finnhub: FinnhubClient(apiKey: finnhub))
@@ -42,6 +48,9 @@ struct WickServer {
         // CSI 300 / HSI / SPX behaviour so the analyst sees regime
         // alongside the ticker. No key required.
         data = SectorContextDecorator(base: data)
+        // Per-stock industry/theme boards with day moves (所属板块)
+        // for CN/HK tickers. No key.
+        data = BoardContextDecorator(base: data)
         // Cross-asset context — WTI / Gold / BTC / DXY / VIX in one
         // line. Useful as a "global climate" indicator the LLM can
         // cross-reference against the stock's micro-climate. No key.
