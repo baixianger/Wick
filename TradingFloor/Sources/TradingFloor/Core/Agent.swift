@@ -42,10 +42,18 @@ public final class AgentState {
 public struct AgentContext: Sendable {
     public let llm: any LLMProvider
     public let config: TradingFloorConfig
+    /// Which desk this run belongs to — chosen per-ticker by
+    /// `TradingFloor.analyze` (English vs Chinese, A-share vs HK). Agents pass
+    /// it into `Prompts` so prompt language, report language, and the
+    /// market-microstructure note all switch together. Defaults to the English
+    /// desk so existing call sites compile unchanged.
+    public let desk: DeskProfile
 
-    public init(llm: any LLMProvider, config: TradingFloorConfig) {
+    public init(llm: any LLMProvider, config: TradingFloorConfig,
+                desk: DeskProfile = .english) {
         self.llm = llm
         self.config = config
+        self.desk = desk
     }
 }
 

@@ -1,10 +1,10 @@
 import Foundation
 
-/// Appends a 资金流向 (main-force capital flow) line to `technicals` for
+/// Appends a 资金流向 (main-force capital flow) line to `capitalFlow` for
 /// A-share tickers — today's 主力/超大单 net inflow with its share of
 /// turnover, plus the 5-day cumulative. A-share price action is heavily
-/// flow-narrated (主力净流入 is the first number a CN technical analyst
-/// quotes), and it has no analogue in the US data chain.
+/// flow-narrated (主力净流入 is the first number a CN trader quotes), and it
+/// has no analogue in the US data chain.
 ///
 /// Source: EastMoney `push2his …/stock/fflow/daykline/get` (no key) —
 /// daily rows of net inflow by order size. 主力 = 超大单 + 大单 by
@@ -12,9 +12,10 @@ import Foundation
 /// returns no data for market 116 (HK has no mainland-style order-size
 /// disclosure), so the guard is by-market rather than best-effort.
 ///
-/// Goes into `technicals` (not `macro`): flow is a per-stock trading
-/// signal the technical analyst should weigh next to RSI/MACD, not
-/// backdrop shared across tickers. Per-symbol-per-day cache.
+/// Goes into `capitalFlow` (not `technicals` or `macro`): on the Chinese
+/// desk a dedicated 资金面 (`capital`) analyst reads this field, so the
+/// flow signal gets its own voice rather than being buried in the
+/// technician's RSI/MACD block. Per-symbol-per-day cache.
 public actor EastMoneyFundFlowDecorator: MarketDataProvider {
     private let base: any MarketDataProvider
     private let session: URLSession
@@ -46,9 +47,9 @@ public actor EastMoneyFundFlowDecorator: MarketDataProvider {
             if !line.isEmpty { cache[key] = line }
         }
         if !line.isEmpty {
-            snap.technicals = snap.technicals.isEmpty
+            snap.capitalFlow = snap.capitalFlow.isEmpty
                 ? line
-                : snap.technicals + "\n" + line
+                : snap.capitalFlow + "\n" + line
         }
         return snap
     }

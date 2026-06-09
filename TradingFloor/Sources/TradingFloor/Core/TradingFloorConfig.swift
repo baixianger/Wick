@@ -40,4 +40,14 @@ public struct TradingFloorConfig: Sendable {
 
 public enum AnalystKind: String, Sendable, CaseIterable, Codable {
     case fundamental, technical, sentiment, news
+    /// CN-desk-only. 政策面 — policy / macro regime, with emphasis on how the
+    /// external backdrop (US equities, overnight markets, FX, US Treasuries)
+    /// transmits into A-shares, plus sector/theme regime. Routed in for
+    /// Chinese-desk tickers only (see `DeskProfile`); the per-ticker roster
+    /// intersection in `TradingFloor.analyze` keeps US runs from spawning it.
+    case policy
+    /// CN-desk-only (A-share, not HK). 资金面 — main-force fund flow (主力净流入
+    /// / 超大单 / 资金流向, later 北向 / 融资融券 / 龙虎榜). HK has no
+    /// mainland-style order-size disclosure, so the HK roster omits it.
+    case capital
 }

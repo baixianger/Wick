@@ -36,10 +36,12 @@ private func mockSession() -> URLSession {
 
 private struct StubBase: MarketDataProvider {
     var technicals: String = ""
+    var capitalFlow: String = ""
     func snapshot(symbol: String, asOf: Date) async throws -> MarketSnapshot {
         MarketSnapshot(symbol: symbol, asOf: asOf,
                        priceSummary: "", technicals: technicals,
-                       fundamentals: [:], news: [], macro: "")
+                       fundamentals: [:], news: [], macro: "",
+                       capitalFlow: capitalFlow)
     }
 }
 
@@ -64,24 +66,40 @@ struct EastMoneyFundFlowDecoratorTests {
 
         let dec = EastMoneyFundFlowDecorator(base: StubBase(), session: mockSession())
         let s = try await dec.snapshot(symbol: "600519.SS", asOf: Date())
-        #expect(s.technicals.contains("资金流向"))
+        #expect(s.capitalFlow.contains("资金流向"))
+        // Flow lands in its own field, not the technician's indicator block.
+        #expect(s.technicals.isEmpty)
         // Today = last row: 主力 -2.01亿 at -5.73% of turnover, 超大单 -1.27亿.
-        #expect(s.technicals.contains("今日主力净流入 -2.01亿"))
-        #expect(s.technicals.contains("占成交额 -5.73%"))
-        #expect(s.technicals.contains("超大单 -1.27亿"))
+        #expect(s.capitalFlow.contains("今日主力净流入 -2.01亿"))
+        #expect(s.capitalFlow.contains("占成交额 -5.73%"))
+        #expect(s.capitalFlow.contains("超大单 -1.27亿"))
         // Cumulative over the 3 seeded rows: -5.86亿.
-        #expect(s.technicals.contains("近3日主力累计 -5.86亿"))
+        #expect(s.capitalFlow.contains("近3日主力累计 -5.86亿"))
     }
 
-    @Test func appends_after_existing_technicals() async throws {
+    @Test func appends_after_existing_capital_flow() async throws {
         seedRows()
         defer { FundFlowMockURLProtocol.klines = nil }
 
+        let dec = EastMoneyFundFlowDecorator(base: StubBase(capitalFlow: "北向净买入 +1.2亿"),
+                                             session: mockSession())
+        let s = try await dec.snapshot(symbol: "600519.SS", asOf: Date())
+        #expect(s.capitalFlow.hasPrefix("北向净买入 +1.2亿\n"))
+        #expect(s.capitalFlow.contains("资金流向"))
+    }
+
+    @Test func leaves_technicals_untouched() async throws {
+        seedRows()
+        defer { FundFlowMockURLProtocol.klines = nil }
+
+        // Whatever the technician already wrote must survive — flow no longer
+        // routes there.
         let dec = EastMoneyFundFlowDecorator(base: StubBase(technicals: "RSI(14) 64"),
                                              session: mockSession())
         let s = try await dec.snapshot(symbol: "600519.SS", asOf: Date())
-        #expect(s.technicals.hasPrefix("RSI(14) 64\n"))
-        #expect(s.technicals.contains("资金流向"))
+        #expect(s.technicals == "RSI(14) 64")
+        #expect(!s.technicals.contains("资金流向"))
+        #expect(s.capitalFlow.contains("资金流向"))
     }
 
     @Test func skips_hk_and_non_cn_tickers() async throws {
@@ -91,16 +109,16 @@ struct EastMoneyFundFlowDecoratorTests {
         let dec = EastMoneyFundFlowDecorator(base: StubBase(), session: mockSession())
         for symbol in ["0700.HK", "NVDA"] {
             let s = try await dec.snapshot(symbol: symbol, asOf: Date())
-            #expect(!s.technicals.contains("资金流向"), "should skip \(symbol)")
+            #expect(!s.capitalFlow.contains("资金流向"), "should skip \(symbol)")
         }
     }
 
-    @Test func endpoint_failure_leaves_technicals_untouched() async throws {
+    @Test func endpoint_failure_leaves_capital_flow_untouched() async throws {
         FundFlowMockURLProtocol.klines = nil
-        let dec = EastMoneyFundFlowDecorator(base: StubBase(technicals: "RSI(14) 64"),
+        let dec = EastMoneyFundFlowDecorator(base: StubBase(capitalFlow: "北向净买入 +1.2亿"),
                                              session: mockSession())
         let s = try await dec.snapshot(symbol: "600519.SS", asOf: Date())
-        #expect(s.technicals == "RSI(14) 64")
+        #expect(s.capitalFlow == "北向净买入 +1.2亿")
     }
 
     @Test func cache_serves_same_symbol_same_day() async throws {
@@ -108,11 +126,11 @@ struct EastMoneyFundFlowDecoratorTests {
         let dec = EastMoneyFundFlowDecorator(base: StubBase(), session: mockSession())
         let day = Date()
         let first = try await dec.snapshot(symbol: "600519.SS", asOf: day)
-        #expect(first.technicals.contains("资金流向"))
+        #expect(first.capitalFlow.contains("资金流向"))
 
         FundFlowMockURLProtocol.klines = nil   // endpoint "down" — cache serves
         let second = try await dec.snapshot(symbol: "600519.SS", asOf: day)
-        #expect(second.technicals.contains("资金流向"))
+        #expect(second.capitalFlow.contains("资金流向"))
     }
 }
 
@@ -127,6 +145,6 @@ func fund_flow_live_smoke() async throws {
     }
     let dec = EastMoneyFundFlowDecorator(base: EmptyBase())
     let s = try await dec.snapshot(symbol: "600519.SS", asOf: Date())
-    print("[LIVE-FFLOW] \(s.technicals)")
-    #expect(s.technicals.contains("今日主力净流入"))
+    print("[LIVE-FFLOW] \(s.capitalFlow)")
+    #expect(s.capitalFlow.contains("今日主力净流入"))
 }

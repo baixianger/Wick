@@ -42,7 +42,12 @@ public struct TradingFloor: Sendable {
         asOf: Date = .now,
         onStage: (@Sendable (String) -> Void)? = nil
     ) async throws -> Report {
-        let ctx = AgentContext(llm: llm, config: config)
+        // Route the desk per-ticker, mirroring how the data layer already
+        // auto-routes by symbol. Chinese A-share / HK tickers run the Chinese
+        // desk (Chinese prompts + output, CN-specific analysts); everything
+        // else keeps the English desk. Same graph, different profile.
+        let desk = DeskProfile.forTicker(ticker)
+        let ctx = AgentContext(llm: llm, config: config, desk: desk)
 
         onStage?("Gathering market data")
         let snapshot = try await data.snapshot(symbol: ticker, asOf: asOf)
@@ -60,7 +65,11 @@ public struct TradingFloor: Sendable {
         // 1. Analysts — independent, so run concurrently, then append in a
         //    stable order for a deterministic transcript.
         onStage?("Analysts at work")
-        let kinds = AnalystKind.allCases.filter { config.analysts.contains($0) }
+        // Intersect the desk's eligible roster with the user's enabled
+        // analysts. The desk roster is the gate that keeps a US run from ever
+        // spawning the CN-only policy / capital analysts (the default config
+        // enables every AnalystKind); the user's set still trims within it.
+        let kinds = desk.analysts.filter { config.analysts.contains($0) }
         let analystMessages = try await withThrowingTaskGroup(
             of: (Int, AgentMessage).self
         ) { group in
@@ -115,7 +124,10 @@ public struct TradingFloor: Sendable {
             rating: rating,
             position: position,
             summary: tradeMsg.content,
-            transcript: state.transcript
+            transcript: state.transcript,
+            disclaimer: desk.locale == .chinese
+                ? Report.chineseDisclaimer
+                : Report.defaultDisclaimer
         )
     }
 }

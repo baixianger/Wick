@@ -634,11 +634,23 @@ private struct WorkflowTab: View {
     var body: some View {
         Form {
             Section("Analysts") {
-                ForEach(AnalystKind.allCases, id: \.self) { kind in
+                // The four shared analysts run on every ticker (US, intl, CN).
+                ForEach(Self.sharedAnalysts, id: \.self) { kind in
                     Toggle(kind.rawValue.capitalized,
                            isOn: bindingFor(kind))
                 }
                 Text("Disabled analysts are skipped — fewer LLM calls per report.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Chinese-market analysts") {
+                // policy / capital only run for A-share / HK tickers — the desk
+                // routes them in per-symbol, so these toggles are no-ops for US
+                // / intl names. Surfaced separately so the distinction is clear.
+                ForEach(Self.chineseOnlyAnalysts, id: \.self) { kind in
+                    Toggle(Self.chineseAnalystLabel(kind),
+                           isOn: bindingFor(kind))
+                }
+                Text("政策面 / 资金面 — only run for A-share (.SS/.SZ) and Hong Kong (.HK) tickers. 资金面 is A-share-only; HK has no main-force fund-flow data.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Debate") {
@@ -679,6 +691,20 @@ private struct WorkflowTab: View {
         .padding(20)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The four analysts that run on every desk, in canonical order.
+    private static let sharedAnalysts: [AnalystKind] =
+        [.fundamental, .technical, .sentiment, .news]
+    /// CN-desk-only analysts, surfaced under their own section.
+    private static let chineseOnlyAnalysts: [AnalystKind] = [.policy, .capital]
+
+    private static func chineseAnalystLabel(_ kind: AnalystKind) -> String {
+        switch kind {
+        case .policy:  return "Policy · 政策面"
+        case .capital: return "Capital · 资金面"
+        default:       return kind.rawValue.capitalized
+        }
     }
 
     private func bindingFor(_ kind: AnalystKind) -> Binding<Bool> {

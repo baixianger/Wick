@@ -19,13 +19,21 @@ public struct MarketSnapshot: Sendable, Codable {
     /// Recent headlines / social sentiment lines.
     public var news: [String]
     /// Macro backdrop (rates, inflation, yield curve, jobs) — same for every
-    /// ticker on a given day. Filled by a macro source like FRED.
+    /// ticker on a given day. Filled by a macro source like FRED. On the
+    /// Chinese desk this also carries CN macro + 板块 + 跨资产 + 隔夜外盘,
+    /// which the 政策面 (`policy`) analyst reads as its primary input.
     public var macro: String
+    /// Main-force capital flow narrative (资金流向: 主力净流入 / 超大单 /
+    /// 累计) for A-share tickers — the 资金面 (`capital`) analyst's input.
+    /// Empty for HK and non-CN symbols; filled by `EastMoneyFundFlowDecorator`.
+    /// Kept separate from `technicals` so the flow signal routes to its own
+    /// analyst instead of being buried in the technician's indicator block.
+    public var capitalFlow: String
 
     public init(symbol: String, asOf: Date, lastPrice: Double? = nil,
                 priceSummary: String = "", technicals: String = "",
                 fundamentals: [String: String] = [:], news: [String] = [],
-                macro: String = "") {
+                macro: String = "", capitalFlow: String = "") {
         self.symbol = symbol
         self.asOf = asOf
         self.lastPrice = lastPrice
@@ -34,6 +42,7 @@ public struct MarketSnapshot: Sendable, Codable {
         self.fundamentals = fundamentals
         self.news = news
         self.macro = macro
+        self.capitalFlow = capitalFlow
     }
 
     /// Render the slice an analyst of a given kind cares about, for prompting.
@@ -59,6 +68,13 @@ public struct MarketSnapshot: Sendable, Codable {
             return stubBanner + (technicals.isEmpty ? "No indicator data available." : technicals)
         case .sentiment, .news:
             return stubBanner + (news.isEmpty ? "No recent news available." : news.map { "- \($0)" }.joined(separator: "\n"))
+        case .policy:
+            // CN-desk-only analyst: reads the same `macro` block the context
+            // header summarises (CN macro + 板块 + 跨资产 + 隔夜外盘).
+            return stubBanner + (macro.isEmpty ? "No macro/policy backdrop available." : macro)
+        case .capital:
+            // CN-desk-only analyst (A-share): main-force fund flow.
+            return stubBanner + (capitalFlow.isEmpty ? "No capital-flow data available." : capitalFlow)
         }
     }
 }

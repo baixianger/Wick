@@ -233,6 +233,11 @@ public struct Report: Sendable, Codable {
         "AI-generated market analysis for informational purposes only. Not investment "
         + "advice and not a personal recommendation. Do your own research."
 
+    /// Chinese-desk disclaimer. Same MiFID/MAR posture, in 中文 so the CN
+    /// report reads end-to-end in one language.
+    public static let chineseDisclaimer =
+        "本报告由 AI 生成,仅供参考,不构成投资建议,也不构成个性化推荐。请自行研究。"
+
     public init(ticker: String, asOf: Date, rating: Rating,
                 position: PositionSize? = nil,
                 summary: String, transcript: [AgentMessage], generatedAt: Date = .now,

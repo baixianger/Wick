@@ -8,12 +8,12 @@ public struct AnalystAgent: Agent {
 
     public func run(_ state: AgentState, ctx: AgentContext) async throws -> AgentMessage {
         let user = """
-        \(Prompts.context(state))
+        \(Prompts.context(state, desk: ctx.desk))
 
         Data for your desk:
         \(state.market.brief(for: kind))
         """
-        let text = try await ask(system: Prompts.analyst(kind), user: user, ctx: ctx)
+        let text = try await ask(system: Prompts.analyst(kind, desk: ctx.desk), user: user, ctx: ctx)
         guard let parsed = parseEnvelope(text) else {
             return AgentMessage(role: role, content: text)
         }
@@ -37,9 +37,9 @@ public struct ResearcherAgent: Agent {
     public init(_ side: Side) { self.side = side }
 
     public func run(_ state: AgentState, ctx: AgentContext) async throws -> AgentMessage {
-        let system = side == .bull ? Prompts.bull : Prompts.bear
+        let system = side == .bull ? Prompts.bull(desk: ctx.desk) : Prompts.bear(desk: ctx.desk)
         let user = """
-        \(Prompts.context(state))
+        \(Prompts.context(state, desk: ctx.desk))
 
         Desk notes so far:
         \(state.transcriptText())
@@ -65,15 +65,15 @@ public struct TraderAgent: Agent {
     public init() {}
 
     public func run(_ state: AgentState, ctx: AgentContext) async throws -> AgentMessage {
-        let historyBlock = Prompts.history(state.history)
+        let historyBlock = Prompts.history(state.history, desk: ctx.desk)
         let historySection = historyBlock.isEmpty ? "" : "\n\n\(historyBlock)"
         let user = """
-        \(Prompts.context(state))\(historySection)
+        \(Prompts.context(state, desk: ctx.desk))\(historySection)
 
         Full desk discussion:
         \(state.transcriptText())
         """
-        let text = try await ask(system: Prompts.trader, user: user, ctx: ctx)
+        let text = try await ask(system: Prompts.trader(desk: ctx.desk), user: user, ctx: ctx)
         guard let parsed = parseEnvelope(text) else {
             return AgentMessage(role: role, content: text)
         }
@@ -97,12 +97,12 @@ public struct RiskAgent: Agent {
     public func run(_ state: AgentState, ctx: AgentContext) async throws -> AgentMessage {
         let decision = state.latest(from: "Trader") ?? "(no decision)"
         let user = """
-        \(Prompts.context(state))
+        \(Prompts.context(state, desk: ctx.desk))
 
         Trader's decision:
         \(decision)
         """
-        let text = try await ask(system: Prompts.risk, user: user, ctx: ctx)
+        let text = try await ask(system: Prompts.risk(desk: ctx.desk), user: user, ctx: ctx)
         guard let parsed = parseEnvelope(text) else {
             return AgentMessage(role: role, content: text)
         }
