@@ -1,0 +1,36 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="flameGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFB347" stop-opacity="0.42"/>
+      <stop offset="50%" stop-color="#FF8A1E" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#FF8A1E" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="flameOuter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD24A"/>
+      <stop offset="55%" stop-color="#FF9A23"/>
+      <stop offset="100%" stop-color="#F4731A"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF3C0"/>
+      <stop offset="100%" stop-color="#FFD050"/>
+    </linearGradient>
+  </defs>
+  <!-- subtle emissive glow (part of the flame light, not a drop shadow) -->
+  <ellipse cx="512" cy="270" rx="150" ry="190" fill="url(#flameGlow)"/>
+  <!-- outer flame -->
+  <path d="M 512 120
+           C 566 202, 596 248, 592 300
+           C 588 348, 553 378, 512 378
+           C 471 378, 436 348, 432 300
+           C 428 248, 458 202, 512 120 Z" fill="url(#flameOuter)"/>
+  <!-- inner flame -->
+  <path d="M 512 206
+           C 544 256, 562 282, 558 314
+           C 555 346, 535 364, 512 364
+           C 489 364, 469 346, 466 314
+           C 462 282, 480 256, 512 206 Z" fill="url(#flameInner)"/>
+  <!-- white-hot core -->
+  <path d="M 512 282 C 525 306, 528 322, 524 336 C 521 350 517 356 512 356
+           C 507 356 503 350 500 336 C 496 322 499 306 512 282 Z"
+        fill="#FFFDF4" opacity="0.92"/>
+</svg>

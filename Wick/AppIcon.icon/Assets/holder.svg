@@ -1,0 +1,21 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="holder" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F8DA86"/>
+      <stop offset="42%" stop-color="#E6B448"/>
+      <stop offset="100%" stop-color="#A9760F"/>
+    </linearGradient>
+    <linearGradient id="holderRim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#C8962B"/>
+      <stop offset="50%" stop-color="#FBE6A6"/>
+      <stop offset="100%" stop-color="#C8962B"/>
+    </linearGradient>
+  </defs>
+  <!-- candle holder / base -->
+  <path d="M 372 700 L 652 700 C 704 700 742 736 742 790 L 742 806
+           C 742 826 727 840 705 840 L 319 840 C 297 840 282 826 282 806
+           L 282 790 C 282 736 320 700 372 700 Z"
+        fill="url(#holder)"/>
+  <!-- top elliptical rim of the holder where the candle sits -->
+  <ellipse cx="512" cy="700" rx="140" ry="24" fill="url(#holderRim)"/>
+</svg>

@@ -73,6 +73,16 @@ targets:
     type: application
     platform: macOS
     sources:
+      # macOS 26 (Tahoe) Liquid Glass app icon, authored as an Icon
+      # Composer `.icon` package (layered candle: flame / wax body / gold
+      # holder over a dark gradient background). `type: folder` keeps the
+      # whole package as one opaque reference so actool compiles it on
+      # macOS 26. The AppIcon.appiconset in Assets.xcassets is the legacy
+      # fallback for earlier systems; both are named `AppIcon` so
+      # ASSETCATALOG_COMPILER_APPICON_NAME resolves either one.
+      - path: Wick/AppIcon.icon
+        type: folder
+        buildPhase: resources
       - path: Wick/App
       - path: Wick/Browser
       - path: Wick/Data
