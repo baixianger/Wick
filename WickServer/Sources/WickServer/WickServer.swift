@@ -25,6 +25,11 @@ struct WickServer {
         if config.enableChinaMarkets {
             // Financial-statements decorator. No-op for non-CN symbols.
             data = EastMoneyFinancialProvider(base: data)
+            // CCASS northbound (北向) shareholding — appends the latest
+            // QUARTER's foreign-ownership line to `fundamentals` for A-shares.
+            // Source: HKEX CCASS Stock Connect full-list (plain GET, no key);
+            // EastMoney's per-stock tables froze in mid-2024. Quarter-cache.
+            data = CCASSNorthboundDecorator(base: data)
             // CN news + filings (资讯 + 公告) for CN/HK tickers; fills
             // `news` only when empty, so it stacks with Finnhub. No key.
             data = EastMoneyNewsProvider(base: data)

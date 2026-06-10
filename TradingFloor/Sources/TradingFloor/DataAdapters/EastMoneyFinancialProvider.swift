@@ -223,4 +223,14 @@ enum Formatting {
         default:      return String(format: "%.0f", value)
         }
     }
+    /// Share counts in 亿/万股 buckets (no currency symbol, "股" unit) — used
+    /// by the CCASS northbound decorator. `58_733_069` → `"5873万股"`.
+    static func bigShares(_ value: Double) -> String {
+        let abs = Swift.abs(value)
+        switch abs {
+        case 1e8...:  return String(format: "%.2f亿股", value / 1e8)
+        case 1e4...:  return String(format: "%.0f万股", value / 1e4)
+        default:      return String(format: "%.0f股", value)
+        }
+    }
 }

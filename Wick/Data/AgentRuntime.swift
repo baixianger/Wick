@@ -119,6 +119,12 @@ final class AgentRuntime {
         // tickers it merges the latest quarter's income-statement digest
         // into `fundamentals` (营收 YoY, ROE, 毛利率, EPS, 经营现金流, …).
         data = EastMoneyFinancialProvider(base: data)
+        // CCASS northbound (北向) shareholding — appends the latest QUARTER's
+        // foreign-ownership line to `fundamentals` for A-shares (持股 % of
+        // float + share count + a 2026Qn label). Source: HKEX CCASS Stock
+        // Connect full-list (plain GET, no key); EastMoney's per-stock tables
+        // froze in mid-2024. Quarter-cache: one fetch per market serves all.
+        data = CCASSNorthboundDecorator(base: data)
         // CN news + filings decorator — fills `news` for CN/HK tickers from
         // EastMoney 资讯 + 公告. No key. Disjoint with Finnhub below (each
         // only fills an empty `news`), so order doesn't matter.
