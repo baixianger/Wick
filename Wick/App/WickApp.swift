@@ -93,6 +93,10 @@ struct WickApp: App {
         .commands {
             CommandMenu("Developer") {
                 XueqiuProbeMenuButton()
+                // Sibling to the 雪球 probe: the hard-case X (Twitter)
+                // data-reachability probe (DOM + API paths). Same DEBUG-only,
+                // hand-run, never-in-user-nav contract.
+                XProbeMenuButton()
             }
         }
         #endif
@@ -110,6 +114,21 @@ struct WickApp: App {
             }
         }
         .defaultSize(width: 1000, height: 640)
+        #endif
+
+        // The X (Twitter) probe's own window — sibling to the 雪球 one above.
+        // DEBUG-only, opened on demand by its Developer-menu command; never
+        // shows unless explicitly opened, never in user-facing nav.
+        #if DEBUG
+        Window("X (Twitter) 数据可达性 Probe (DEV)", id: XProbeWindow.id) {
+            if #available(macOS 26.0, *) {
+                XProbeView()
+            } else {
+                Text("X Probe 需要 macOS 26")
+                    .padding()
+            }
+        }
+        .defaultSize(width: 1040, height: 660)
         #endif
 
         // Native macOS Settings scene — reachable via ⌘, and the
