@@ -11,11 +11,22 @@ import WebKit
 /// the lifetime of the app (created in `WickApp`, injected via the environment
 /// + into `AgentRuntime`), NOT in any View.
 ///
+/// **In-WebKit JSON-API path (live-validated, probe `8a73738`).** The manager
+/// owns the visible login `WebPage`; the injected `XueqiuLiveScraping` owns the
+/// ONE persistent headless `WebPage` (same named store) loaded once at the light
+/// xueqiu.com root, against which every status/discussion query is a same-origin
+/// `callJavaScript(fetch('/api/…'))` — the cookie is inherited from the login.
+/// We never DOM-scrape and never extract cookies: we operate inside our own
+/// embedded WebKit, the equivalent of snowball-cli driving Chrome over CDP. The
+/// persistent page is NEVER re-navigated per call (the -999 / overlapping-nav
+/// fix lives in the live scraper).
+///
 /// **View-independent lifecycle (load-bearing):** the manager — not any View —
-/// owns the visible `loginPage: WebPage` and every headless scrape `Task`. A
-/// view may *display* `loginPage` via `WebView(manager.loginPage)`, but leaving
-/// that view never tears down the page or cancels an in-flight scrape, because
-/// the references live here. This is exactly the ownership the doc requires.
+/// owns the visible `loginPage: WebPage` and (via the live scraper) the headless
+/// data page. A view may *display* `loginPage` via `WebView(manager.loginPage)`,
+/// but leaving that view never tears down either page or cancels an in-flight
+/// query, because the references live here. This is exactly the ownership the
+/// doc requires.
 ///
 /// Conforms to the package's Foundation-only `XueqiuScraping` seam so the
 /// off-by-default decorator (`BYODiscussionNewsDecorator`) can pull discussion
@@ -104,16 +115,17 @@ final class BrowserSessionManager: XueqiuScraping {
 
     // MARK: - XueqiuScraping
 
-    /// Headless discussion scrape, best-effort. Returns `[]` (never throws) when
-    /// the session isn't scrapable, the symbol isn't CN/HK, or the extract is
-    /// empty / times out — so the decorator degrades to a pass-through.
+    /// Pre-formatted 雪球 discussion news lines, best-effort. Returns `[]` (never
+    /// throws) when the session isn't scrapable, the symbol isn't CN/HK, or the
+    /// in-WebKit `fetch` is empty / times out — so the decorator degrades to a
+    /// pass-through. The lines arrive already formatted (`[雪球·作者] … (赞n 评n)`)
+    /// from the live scraper's per-call `fetch('/statuses/search.json')`.
     func discussion(for symbol: String) async -> [String] {
         guard status.canScrape else { return [] }
         guard CNSymbol.isCN(symbol) else { return [] }
-        let lines = await live.extractDiscussion(symbol: symbol, timeout: timeout)
-        // A redirect-to-login during the scrape would yield no discussion text;
-        // if we got nothing, leave status untouched (a dedicated reactive-capture
-        // pass can be layered on later) — best-effort means just return [].
-        return lines
+        // An empty result (logged-out / no posts) leaves status untouched here —
+        // best-effort means just return []; a dedicated reactive-capture pass can
+        // be layered on later.
+        return await live.extractDiscussion(symbol: symbol, timeout: timeout)
     }
 }

@@ -2,9 +2,22 @@
 
 _Research deliverable — Wick (macOS 26 / SwiftUI), 2026-06-09._
 
+> ✅ **LIVE-VALIDATED, in-WebKit JSON-API path (probe `8a73738`).** The production
+> 雪球 path does **not** DOM-scrape and does **not** extract cookies into a
+> `URLSession`. It operates **inside our own embedded WebKit**: ONE persistent
+> headless `WebPage` on a named `WKWebsiteDataStore` (same UUID as the visible
+> login `WebView`), loaded ONCE at the LIGHT root `https://xueqiu.com/`, against
+> which every query is a same-origin `await fetch('/api/…')` driven by
+> `callJavaScript` — the inherited login cookie auto-attaches
+> (`credentials:'include'`). This is the equivalent of how snowball-cli drives
+> Chrome over CDP (`callJavaScript` = `Runtime.evaluate`). The probe proved
+> cross-store cookie visibility + same-origin authenticated `fetch`; the
+> production scraper (`Wick/Browser/XueqiuLiveScraper.swift`) reuses exactly that.
+> See §8 / §9 for the concrete endpoint + the -999 fix.
+
 ## TL;DR / Recommendation
 
-**Yes — this is feasible and a good fit for Wick**, with caveats. Apple's WWDC25 SwiftUI WebKit API gives us exactly the primitive we need: a `WebPage` is an `@Observable` class that **runs headless with no view attached**, and the *same* instance can be dropped into a `WebView(webPage)` to become a visible in-app browser. One code path, two presentations. We can drive `callJavaScript(...)` against the live DOM and read structured data out of it, all on-device, with no backend.
+**Yes — this is feasible and a good fit for Wick**, with caveats. Apple's WWDC25 SwiftUI WebKit API gives us exactly the primitive we need: a `WebPage` is an `@Observable` class that **runs headless with no view attached**, and the *same* instance can be dropped into a `WebView(webPage)` to become a visible in-app browser. One code path, two presentations. **The validated production technique is not DOM scraping but in-WebKit same-origin `fetch`:** we drive `callJavaScript(await fetch('/api/…'))` against 雪球's JSON API from inside a logged-in headless page, all on-device, with no backend. (DOM extraction and the cookie-extract + `URLSession` alternative were both **dropped** in favour of staying in-WebKit — see §8/§9.)
 
 The defensible model is: **the user signs in ONCE in a visible in-app `WebView`; the cookie/session is persisted in an app-isolated `WKWebsiteDataStore`; later, user-triggered headless `WebPage` calls reuse that session to read the user's OWN data** — their X/Reddit/雪球 timeline, or their own broker holdings — and hand clean text to the app's analysts. No password storage, no OAuth, no shared/pooled credentials.
 
@@ -366,15 +379,38 @@ There are **three user-facing states plus one implementation state**:
 
 ---
 
-## 8. Prototype plan — 雪球 (Xueqiu) BYO-cookie proof
+## 8. Production path — 雪球 (Xueqiu) BYO-cookie, in-WebKit JSON API (live-validated)
 
-Lowest-risk first target: we already ship a Xueqiu data skill, the value is clear (CN retail sentiment), and a stock page's hot-post section is plain HTML.
+Lowest-risk first target: we already ship a Xueqiu data skill, the value is clear (CN retail sentiment), and 雪球's web app is backed by same-origin JSON endpoints that a logged-in page can `fetch` directly — **no DOM scraping needed**.
 
-**Step 1 — connect (visible, once).** Show `WebView(page)` with a named persistent data store pointed at `https://xueqiu.com`. User logs in (and clears any captcha) themselves. Detect success (logged-in selector / cookie present) and dismiss.
+> ✅ **This section now describes the SHIPPED design, validated by probe `8a73738`** (`Wick/Prototypes/Xueqiu/XueqiuProbe.swift`), not a plan. DOM scraping was dropped because the JSON path is far more robust (no selector brittleness) and the cookie-extract + `URLSession` path was dropped because operating in-WebKit keeps the cookie inside the OS-managed store (the §6 privacy invariant) and reuses the genuine session/fingerprint.
 
-**Step 2 — later, headless extract (user-triggered).** New `WebPage` on the *same* data store loads the stock page (e.g. `https://xueqiu.com/S/SH600519`), awaits `finished`, and `callJavaScript` pulls the discussion/hot-post text.
+**Step 1 — connect (visible, once).** Show `WebView(loginPage)` with a named persistent data store pointed at `https://xueqiu.com`. User logs in (and clears any captcha) themselves. WebKit writes the auth cookie into the store keyed by the fixed `storeID` UUID.
 
-**Step 3 — analyze.** Map extracted posts → `SocialPost` / `SocialSentiment`, hand to the sentiment analyst. Discard raw text after.
+**Step 2 — ONE persistent headless page, loaded once at the LIGHT root.** `BrowserSessionManager` (via `XueqiuLiveScraper`) owns a single long-lived headless `WebPage` on the *same* named store, loaded ONCE at `https://xueqiu.com/` — **not** the heavy per-stock SPA. It is loaded lazily on first use and reused for the app's lifetime; it is only reloaded if missing/torn down.
+
+**Step 3 — every query is a same-origin `fetch` on that already-loaded page.** No per-call navigation. The status probe is:
+
+```js
+await fetch('/statuses/hots.json?…', { credentials:'include',
+    headers:{ 'Accept':'application/json','X-Requested-With':'XMLHttpRequest' } })
+```
+
+→ valid JSON without an `error_code` ⇒ session valid. The per-stock discussion feed is:
+
+```
+/statuses/search.json?q=<XQsymbol>&count=20&page=1&sort=time&source=all
+```
+
+(same-origin on `xueqiu.com`; snowball-cli's `searchPosts`). The response is `{ count, list: [ { description|text, user.screen_name, reply_count, like_count|fav_count, retweet_count, created_at, target } … ] }`. The raw body is handed to the package's pure `XueqiuPostParser` (HTML-strip + entity-decode the body, fall back `like_count → fav_count`), and each post is formatted to a self-tagged news line: `[雪球·<作者>] <text ~80 chars> (赞<n> 评<n>)`.
+
+> ⚠️ **The -999 fix (load-bearing).** The probe was initially unstable with `NSURLErrorDomain -999` (cancelled) because it built a FRESH `WebPage` and NAVIGATED to the heavy stock SPA on **every** call — overlapping navigations cancel one another. The fix is the persistent-page design above: navigate ONCE to the light root, then never re-navigate; every query is a `fetch` on the settled page. First-use load tolerates a single -999 (superseded) and retries once; concurrent first-use callers coalesce onto one load task.
+
+**Step 4 — analyze.** The formatted lines flow through the off-by-default `BYODiscussionNewsDecorator` into the snapshot's `news` for CN/HK tickers; the sentiment/news analysts read them. Discard raw post bodies after.
+
+### Symbol mapping (centralised)
+
+Canonical → 雪球 lives in the package's Foundation-only `CNSymbol.xueqiuSymbol` (unit-tested): `600519.SS → SH600519`, `000001.SZ → SZ000001`, `0700.HK → 00700` (5-digit). The app-side scraper just delegates to it.
 
 ### Swift sketch (illustrative, API-accurate)
 
@@ -437,8 +473,8 @@ final class XueqiuScraper {
 - **Broker MFA churn.** Some brokers expire sessions aggressively; re-login may be frequent. Acceptable for a user-triggered "refresh holdings."
 
 ### Open questions
-1. **(Linchpin B — headless SPA render.)** Does a fully **headless** `WebPage` (never wrapped in a `WebView`) reliably fire JS-render + navigation `.finished` for SPA pages, or does some content require an attached/visible view? **A runnable dev probe now exists** (commit `7283a5f`, `Wick/Prototypes/Xueqiu/`, behind a `#if DEBUG` Developer-menu window) — it awaits a manual login to validate; selectors are still pending live-DOM. This also bears directly on the X adapter (§6.1): if headless lacks genuine timing / `requestAnimationFrame` / visibility signals, X should be driven through an attached-but-hidden `WebView` rather than a never-rendered `WebPage`.
-2. **(Linchpin A — Mode 1 cross-store cookie visibility.)** Does a headless `WebPage` bound to a named `WKWebsiteDataStore(forIdentifier:)` **reliably see cookies written by the visible login `WebView`** that used the same identifier? (Should hold — same store — but it is the linchpin of Mode 1.) **The same `7283a5f` probe exercises exactly this** (visible login → headless reuse on one store identifier); awaiting a manual login run on macOS 26 to confirm.
+1. **(Linchpin B — headless SPA render.) ✅ MOOT, resolved by the in-WebKit JSON-API path.** We never need the SPA to paint: the production path issues same-origin `fetch`es from a headless page loaded at the light root and reads JSON, so `requestAnimationFrame`/visibility signals are irrelevant for 雪球. (The point still stands for X — §6.1 — which has no equivalent clean JSON surface and should use an attached-but-hidden `WebView`.)
+2. **(Linchpin A — Mode 1 cross-store cookie visibility.) ✅ VALIDATED (probe `8a73738`).** A headless `WebPage` bound to a named `WKWebsiteDataStore(forIdentifier:)` **does** inherit the cookie written by the visible login `WebView` on the same identifier — the probe's authenticated same-origin `fetch` returned logged-in JSON. The production scraper relies on exactly this. (Real end-to-end use still requires the user to be logged-in + the `enableXueqiuSentiment` opt-in flag on; both are off by default by design.)
 3. **(Mode 2 probe portability.)** Can the proactive logged-in probe be made **site-agnostic enough to reuse** across 雪球 / 推特 / brokers — i.e. is "login-form-present ⇒ logged out" + a per-site logged-in marker a reliable, low-maintenance contract — or does each site need a bespoke probe? Determines how much of Mode 2 is shared vs per-adapter.
 4. **(Mode 3 trigger fidelity.)** What signal cleanly distinguishes "endpoint blocked us, escalate to browser transport" from an ordinary transient error or a genuinely empty payload, so we don't pay the WebKit cost on every miss? (Empty body + prior-success heuristic; tune against the observed EastMoney IP-block behaviour.)
 5. Whether 雪球 / each broker serves hot-posts/holdings as real DOM text vs canvas (determines DOM-vs-OCR per adapter).

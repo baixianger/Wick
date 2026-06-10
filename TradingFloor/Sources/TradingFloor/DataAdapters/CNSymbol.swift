@@ -99,6 +99,24 @@ public enum CNSymbol {
         return "\(hkSecidCode(code)).HK"
     }
 
+    /// Canonical → 雪球 (Xueqiu) symbol form, the prefix/path shape 雪球's web
+    /// API + stock pages use:
+    ///   • Shanghai `600519.SS` → `SH600519`
+    ///   • Shenzhen `000001.SZ` → `SZ000001`
+    ///   • Hong Kong `0700.HK`  → `00700` (bare 5-digit, e.g. `/S/00700`)
+    /// Centralised here (Foundation-only, unit-testable) so the app-side
+    /// WebKit scraper doesn't re-derive it. Returns `nil` for non-CN inputs.
+    public static func xueqiuSymbol(_ canonical: String) -> String? {
+        guard let market = market(canonical) else { return nil }
+        let code = canonical.split(separator: ".").first.map(String.init) ?? ""
+        guard !code.isEmpty else { return nil }
+        switch market {
+        case .shanghai: return "SH\(code)"
+        case .shenzhen: return "SZ\(code)"
+        case .hongKong: return hkSecidCode(code)   // 雪球 HK uses the 5-digit form
+        }
+    }
+
     /// Convenience: is this canonical string a CN/HK symbol?
     public static func isCN(_ canonical: String) -> Bool {
         market(canonical) != nil
