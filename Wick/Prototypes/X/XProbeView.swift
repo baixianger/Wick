@@ -31,6 +31,12 @@ struct XProbeView: View {
     @State private var running = false
     @State private var reparking = false
 
+    /// Per-stock search query for the single-shot, ban-safe `searchStock`. Default
+    /// a stock cashtag so the dev can one-click verify.
+    @State private var searchQuery: String = "$TSLA"
+    @State private var searchResult: XProbe.XSearchResult?
+    @State private var searching = false
+
     var body: some View {
         HSplitView {
             // Left: the visible login browser. The user signs into X here once.
@@ -59,6 +65,14 @@ struct XProbeView: View {
 
                     if let result {
                         resultCard(result)
+                    }
+
+                    Divider()
+
+                    searchSection
+
+                    if let searchResult {
+                        searchResultCard(searchResult)
                     }
                 }
                 .padding(16)
@@ -178,6 +192,89 @@ struct XProbeView: View {
         .background(.background.secondary, in: .rect(cornerRadius: 10))
     }
 
+    // MARK: - Single-shot per-stock search
+
+    /// The ban-safe search probe: ONE navigation to X's normal search URL per
+    /// click, then a single DOM read. No raw GraphQL fetch, no polling, no retry.
+    private var searchSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("个股搜索验证 (导航式 DOM 读取)")
+                .font(.title3.bold())
+
+            Text("导航无头页**一次**到 X 正常搜索 URL，让 X 自己的 JS 发请求，我们只读渲染出的结果 — 不直接打搜索 GraphQL(缺 `x-client-transaction-id`、queryId 易过期、更像机器人)。最低机器人特征。")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            // On-screen CAUTION — ban-safety, in Chinese.
+            Label {
+                Text("单次请求/每次点按只发一次,请自行控制频率,避免触发 X 风控或封号;只读、不自动轮询。")
+                    .font(.callout.bold())
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
+            .foregroundStyle(.orange)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.orange.opacity(0.12), in: .rect(cornerRadius: 8))
+
+            HStack {
+                Text("搜索词")
+                TextField("如 $TSLA", text: $searchQuery)
+                    .frame(width: 220)
+                    .textFieldStyle(.roundedBorder)
+
+                Button {
+                    runSearch()
+                } label: {
+                    if searching {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("搜索中…")
+                        }
+                    } else {
+                        Text("验证个股搜索 (单次)")
+                    }
+                }
+                .disabled(running || reparking || searching || searchQuery.trimmingCharacters(in: .whitespaces).isEmpty)
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func searchResultCard(_ r: XProbe.XSearchResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("搜索结果")
+                .font(.headline)
+
+            row("推文数", "\(r.tweetCount) 条 article 节点")
+            row("导航结果", r.navOutcome,
+                tint: r.navOutcome.hasPrefix("finished") ? .green : .primary)
+            if let err = r.error {
+                row("错误", err, tint: .red)
+            }
+
+            if !r.samples.isEmpty {
+                Text("文本样本")
+                    .font(.subheadline.bold())
+                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(r.samples.enumerated()), id: \.offset) { _, s in
+                        Text(s)
+                            .font(.callout)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary, in: .rect(cornerRadius: 8))
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background.secondary, in: .rect(cornerRadius: 10))
+    }
+
     private func row(_ key: String, _ value: String, tint: Color = .primary) -> some View {
         HStack(alignment: .top) {
             Text(key)
@@ -219,6 +316,21 @@ struct XProbeView: View {
             await MainActor.run {
                 self.result = r
                 self.running = false
+            }
+        }
+    }
+
+    /// Fire the single-shot, ban-safe per-stock search: ONE navigation + ONE DOM
+    /// read per click. Guarded by `searching` so the button can't double-fire.
+    private func runSearch() {
+        let q = searchQuery
+        searching = true
+        searchResult = nil
+        Task {
+            let r = await probe.searchStock(query: q)
+            await MainActor.run {
+                self.searchResult = r
+                self.searching = false
             }
         }
     }

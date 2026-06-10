@@ -174,6 +174,159 @@ final class XProbe {
         var error: String?
     }
 
+    // MARK: - Per-stock search result
+
+    /// Result of ONE single-shot per-stock search (`searchStock`). Mirrors the
+    /// honest-self-report shape of `XProbeResult`: each field stands alone so the
+    /// dev UI can show what the ONE navigation + ONE DOM read yielded.
+    struct XSearchResult: Sendable {
+        /// Number of `<article data-testid="tweet">` nodes the rendered search
+        /// results painted. 0 ⇒ nothing rendered (not settled, empty results,
+        /// logged out, or X changed the selector).
+        var tweetCount: Int
+        /// Up to 5 sample tweet texts (author handle + text) for eyeballing that
+        /// real, query-relevant content was reached.
+        var samples: [String]
+        /// Readable navigation verdict (`"finished"`, `"failed: …"`,
+        /// `"timed out …"`, or a note that one `-999`/cancelled was tolerated as a
+        /// superseded nav) — so a bare empty result is explicable.
+        var navOutcome: String
+        /// Any error (nav fault that wasn't a tolerated supersede, DOM-read throw,
+        /// JS fault), surfaced verbatim.
+        var error: String?
+    }
+
+    // MARK: - Single-shot per-stock search (ban-safe, navigation-driven)
+
+    /// **LOW-FREQUENCY, BAN-SAFE per-stock search verification.** The lowest
+    /// bot-signal way to confirm X search is reachable: instead of raw-fetching
+    /// X's search GraphQL (which would need an unforgeable `x-client-transaction-id`
+    /// + a queryId that rotates, and reads far more bot-like), we NAVIGATE the
+    /// persistent headless page ONCE to the normal human search URL and let X's
+    /// OWN JS issue the underlying request — we just DOM-read what it renders.
+    /// This looks like a person typing a query and sidesteps the transaction-id /
+    /// queryId problem entirely.
+    ///
+    /// **HARD ban-safety contract — exactly ONE network-driving action per call:**
+    /// a single `load(_:)` to the search URL, then a single `callJavaScript` DOM
+    /// read. No loops, no polling, no auto-retry — the ONLY tolerance is that if
+    /// the nav reports ONE `-999`/cancelled (a superseded navigation, common when
+    /// the SPA redirects the search route), we treat it as "superseded, proceed"
+    /// and DOM-read anyway, rather than firing a second navigation.
+    ///
+    /// This deliberately navigates the persistent page AWAY from `/home` (one nav
+    /// per manual click is fine); callers can re-park via the existing
+    /// "重新加载无头页" button afterwards.
+    ///
+    /// - Parameter query: the raw search query (e.g. `$TSLA`); percent-encoded
+    ///   into the `q=` parameter here.
+    func searchStock(query: String) async -> XSearchResult {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        log.info("[XProbe] searchStock: single-shot, query=\(trimmed, privacy: .public)")
+
+        var result = XSearchResult(tweetCount: 0,
+                                   samples: [],
+                                   navOutcome: "not attempted",
+                                   error: nil)
+
+        guard !trimmed.isEmpty else {
+            result.error = "empty query"
+            result.navOutcome = "skipped"
+            return result
+        }
+
+        // Build the normal, human-looking live-search URL. `f=live` = Latest tab;
+        // `src=typed_query` mirrors what X sets when a person types into search.
+        // Percent-encode the query strictly for the `q=` VALUE: Foundation's
+        // `.urlQueryAllowed` still permits sub-delims (`&`, `=`, `+`, `$`, …) that
+        // would corrupt the param, so we subtract those and keep only what's safe
+        // inside a single query value (`$`, spaces, `#`, `&` all get escaped).
+        var valueAllowed = CharacterSet.urlQueryAllowed
+        valueAllowed.remove(charactersIn: "&=+$#?/;:,@")
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: valueAllowed) ?? trimmed
+        guard let url = URL(string: "https://x.com/search?q=\(encoded)&src=typed_query&f=live") else {
+            result.error = "could not build search URL for query"
+            result.navOutcome = "skipped"
+            return result
+        }
+        log.info("[XProbe] searchStock: navigating ONCE to \(url.absoluteString, privacy: .public)")
+
+        // ── The ONE network-driving navigation ─────────────────────────────
+        let events = headlessPage.load(URLRequest(url: url))
+        let outcome = await awaitNavigation(events, timeout: .seconds(20))
+
+        // Tolerate exactly ONE superseded/cancelled nav (-999) — proceed to read
+        // whatever rendered rather than re-navigating (NO retry). Any other fault
+        // is recorded and we still attempt the single DOM read (best-effort).
+        switch outcome {
+        case .finished:
+            result.navOutcome = "finished"
+        case .failed(let m) where Self.isCancelled(m):
+            result.navOutcome = "superseded (-999/cancelled tolerated; proceeding)"
+            log.info("[XProbe] searchStock: tolerated one -999/cancelled as superseded nav")
+        case .failed(let m):
+            result.navOutcome = "failed: \(m)"
+            if result.error == nil { result.error = "nav failed: \(m)" }
+        case .timedOut(let d):
+            result.navOutcome = "timed out after \(d)"
+            if result.error == nil { result.error = "nav timed out after \(d)" }
+        }
+
+        // ── The ONE DOM read of the rendered search results ────────────────
+        // Same selectors as Path A: `article[data-testid="tweet"]` → per node
+        // `[data-testid="tweetText"]` innerText + the `@handle` from the
+        // `[data-testid="User-Name"]` block. Self-reporting, null-guarded JS.
+        do {
+            let domObj = try await headlessPage.callJavaScript("""
+                try {
+                    const arts = document.querySelectorAll('article[data-testid="tweet"]');
+                    const samples = [];
+                    for (let i = 0; i < arts.length && samples.length < 5; i++) {
+                        const a = arts[i];
+                        const textEl = a.querySelector('[data-testid="tweetText"]');
+                        const text = textEl ? (textEl.innerText || '').trim() : '';
+                        let handle = '';
+                        const nameBlock = a.querySelector('[data-testid="User-Name"]');
+                        if (nameBlock) {
+                            const spans = nameBlock.querySelectorAll('span');
+                            for (const s of spans) {
+                                const t = (s.innerText || '').trim();
+                                if (t.startsWith('@')) { handle = t; break; }
+                            }
+                        }
+                        if (text || handle) {
+                            samples.push((handle ? handle + ' ' : '') + text.slice(0, 240));
+                        }
+                    }
+                    return { count: arts.length, samples: samples };
+                } catch (e) {
+                    return { error: ((e && e.message) ? e.message : String(e)) };
+                }
+            """) as? [String: Any]
+
+            if let jsErr = domObj?["error"] as? String {
+                if result.error == nil { result.error = "DOM read JSERR: \(jsErr)" }
+            } else {
+                result.tweetCount = (domObj?["count"] as? Int) ?? 0
+                result.samples = (domObj?["samples"] as? [Any])?.compactMap { $0 as? String } ?? []
+                log.info("[XProbe] searchStock DOM → \(result.tweetCount) tweet nodes, \(result.samples.count) samples")
+            }
+        } catch {
+            let detail = Self.errorDetail(error)
+            log.error("[XProbe] searchStock DOM read failed: \(detail, privacy: .public)")
+            if result.error == nil { result.error = "DOM read: \(detail)" }
+        }
+
+        return result
+    }
+
+    /// `true` when a navigation-failure message denotes a cancelled/superseded
+    /// load (`NSURLErrorDomain -999`). Used by `searchStock` to tolerate exactly
+    /// one superseded nav without firing a retry.
+    private static func isCancelled(_ message: String) -> Bool {
+        message.contains("-999") || message.localizedCaseInsensitiveContains("cancel")
+    }
+
     // MARK: - The probe (Path A + Path B on the persistent page)
 
     /// Run the session check, then Path A (DOM), then Path B (API) on the ONE
