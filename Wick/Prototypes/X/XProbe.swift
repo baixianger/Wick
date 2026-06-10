@@ -189,10 +189,22 @@ final class XProbe {
         var samples: [String]
         /// Readable navigation verdict (`"finished"`, `"failed: …"`,
         /// `"timed out …"`, or a note that one `-999`/cancelled was tolerated as a
-        /// superseded nav) — so a bare empty result is explicable.
+        /// superseded nav) — so a bare empty result is explicable. For the
+        /// element-driven path (`searchStockViaElement`) there is NO host
+        /// navigation, so this carries the in-JS poll verdict instead
+        /// (`"client-routed to /search"` / `"routed: false (no /search, …)"`).
         var navOutcome: String
+        /// **Element-path diagnostic** — `location.href` X's SPA ended on after the
+        /// in-page type+Enter (so the caller can confirm it client-side-routed to
+        /// `/search?q=…`). `nil` for the URL-nav path, which doesn't report it.
+        var finalURL: String?
+        /// **Element-path diagnostic** — which search-input selector matched
+        /// (`SearchBox_Search_Input`, `aria-label`, `combobox`, …), or
+        /// `"no-search-input"` when none was found. `nil` for the URL-nav path.
+        var usedSelector: String?
         /// Any error (nav fault that wasn't a tolerated supersede, DOM-read throw,
-        /// JS fault), surfaced verbatim.
+        /// JS fault, or — element path — `"no-search-input"` / `"JSERR: …"`),
+        /// surfaced verbatim.
         var error: String?
     }
 
@@ -227,6 +239,8 @@ final class XProbe {
         var result = XSearchResult(tweetCount: 0,
                                    samples: [],
                                    navOutcome: "not attempted",
+                                   finalURL: nil,
+                                   usedSelector: nil,
                                    error: nil)
 
         guard !trimmed.isEmpty else {
@@ -315,6 +329,174 @@ final class XProbe {
             let detail = Self.errorDetail(error)
             log.error("[XProbe] searchStock DOM read failed: \(detail, privacy: .public)")
             if result.error == nil { result.error = "DOM read: \(detail)" }
+        }
+
+        return result
+    }
+
+    // MARK: - Single-shot per-stock search (element-driven, no host navigation)
+
+    /// **ELEMENT-DRIVEN search — the more human-like sibling of `searchStock`.**
+    /// Where `searchStock` NAVIGATES the headless page to `x.com/search?q=…` (a
+    /// host load Wick triggers), this drives X's OWN search-box element so X's UI
+    /// triggers the search itself: focus the real `<input>`, type the query via
+    /// React's native value-setter, then dispatch a realistic Enter key sequence.
+    /// X's search box submits on Enter and CLIENT-SIDE-ROUTES to `/search?q=…&f=…`
+    /// — no page load, so no navigation events fire. That's closer to a person at
+    /// the keyboard and carries a lower bot-signal than synthesising the URL
+    /// ourselves; it also exercises the type/submit interaction primitive we'll
+    /// reuse elsewhere. `searchStock` (URL-nav) stays as the fallback.
+    ///
+    /// **HARD ban-safety contract — exactly ONE `callJavaScript` per click.** The
+    /// ENTIRE interaction (find input → type → Enter → wait-for-results → DOM read)
+    /// happens inside a SINGLE in-page script that self-reports a JSON object. No
+    /// Swift-side loop/retry, no host navigation, and the only wait is ONE bounded
+    /// in-JS poll (≤ ~8 s, re-checking every ~250 ms) — because a client-side route
+    /// fires no navigation event, the JS itself must wait for `article` nodes /
+    /// `/search` before reading. User-triggered, single-shot.
+    ///
+    /// If the current page has no search box (e.g. the headless page drifted to a
+    /// sub-route), the script reports `error: "no-search-input"` so the caller
+    /// knows to re-park at `/home` (the "重新加载无头页" button) first — this method
+    /// deliberately does NOT navigate to fix that itself.
+    ///
+    /// - Parameter query: the raw search query (e.g. `$TSLA`); passed as a JS
+    ///   argument (no URL building — X's own UI escapes it).
+    func searchStockViaElement(query: String) async -> XSearchResult {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        log.info("[XProbe] searchStockViaElement: single-shot, query=\(trimmed, privacy: .public)")
+
+        var result = XSearchResult(tweetCount: 0,
+                                   samples: [],
+                                   navOutcome: "not attempted",
+                                   finalURL: nil,
+                                   usedSelector: nil,
+                                   error: nil)
+
+        guard !trimmed.isEmpty else {
+            result.error = "empty query"
+            result.navOutcome = "skipped"
+            return result
+        }
+
+        // ── The ONE in-page interaction script ─────────────────────────────
+        // Self-reporting JSON object: { tweetCount, samples, finalURL,
+        // usedSelector, routed, error? }. Wrapped wholesale in try/catch so any
+        // thrown JS comes back as `error: "JSERR: <msg>"` rather than an opaque
+        // host exception. `q` is the only argument; everything else is in-page.
+        do {
+            let obj = try await headlessPage.callJavaScript("""
+                try {
+                    // (1) Find X's REAL search input, trying selectors in order.
+                    //     Last resort: an input[type=text] inside any container whose
+                    //     data-testid mentions "search" (case-insensitive).
+                    let el = null, usedSelector = '';
+                    const tryers = [
+                        ['SearchBox_Search_Input', () => document.querySelector('input[data-testid="SearchBox_Search_Input"]')],
+                        ['aria-label=Search query', () => document.querySelector('[aria-label="Search query"]')],
+                        ['role=combobox',           () => document.querySelector('input[role="combobox"]')],
+                        ['search-container input',  () => {
+                            const box = document.querySelector('[data-testid*="search" i]');
+                            return box ? box.querySelector('input[type="text"]') : null;
+                        }]
+                    ];
+                    for (const [name, fn] of tryers) {
+                        const found = fn();
+                        if (found) { el = found; usedSelector = name; break; }
+                    }
+                    if (!el) {
+                        // No search box on this route — caller should re-park /home.
+                        return { tweetCount: 0, samples: [], finalURL: location.href,
+                                 usedSelector: 'no-search-input', routed: false,
+                                 error: 'no-search-input' };
+                    }
+
+                    // (2) Type the query into the React-controlled input. A plain
+                    //     `el.value = q` won't update React's internal state — go
+                    //     through the prototype's native value setter, then fire a
+                    //     bubbling 'input' event so React reconciles.
+                    el.focus();
+                    const proto = Object.getPrototypeOf(el);
+                    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                    if (desc && desc.set) { desc.set.call(el, q); }
+                    else { el.value = q; }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    // (3) Submit via a realistic Enter key sequence. X's search box
+                    //     listens for Enter and client-side-routes to /search.
+                    const keyInit = { key: 'Enter', code: 'Enter', keyCode: 13,
+                                      which: 13, bubbles: true, cancelable: true };
+                    el.dispatchEvent(new KeyboardEvent('keydown',  keyInit));
+                    el.dispatchEvent(new KeyboardEvent('keypress', keyInit));
+                    el.dispatchEvent(new KeyboardEvent('keyup',    keyInit));
+
+                    // (4) Wait for the client-side route to land. NO navigation
+                    //     event fires for an SPA route, so poll in-JS: success =
+                    //     tweet articles painted OR location became /search.
+                    //     Bounded: up to ~8s, re-checking every ~250ms.
+                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                    let routed = false;
+                    for (let i = 0; i < 32; i++) {
+                        const onSearch = location.pathname.indexOf('/search') === 0;
+                        const haveTweets = document.querySelectorAll('article[data-testid="tweet"]').length > 0;
+                        if (haveTweets || onSearch) { routed = onSearch; if (haveTweets) break; }
+                        await sleep(250);
+                    }
+
+                    // (5) DOM-read up to 5 results — same shape as the nav path:
+                    //     per `article[data-testid="tweet"]`, the `tweetText`
+                    //     innerText + the author `@handle` from `User-Name`.
+                    const arts = document.querySelectorAll('article[data-testid="tweet"]');
+                    const samples = [];
+                    for (let i = 0; i < arts.length && samples.length < 5; i++) {
+                        const a = arts[i];
+                        const textEl = a.querySelector('[data-testid="tweetText"]');
+                        const text = textEl ? (textEl.innerText || '').trim() : '';
+                        let handle = '';
+                        const nameBlock = a.querySelector('[data-testid="User-Name"]');
+                        if (nameBlock) {
+                            const spans = nameBlock.querySelectorAll('span');
+                            for (const s of spans) {
+                                const t = (s.innerText || '').trim();
+                                if (t.startsWith('@')) { handle = t; break; }
+                            }
+                        }
+                        if (text || handle) {
+                            samples.push((handle ? handle + ' ' : '') + text.slice(0, 240));
+                        }
+                    }
+
+                    return { tweetCount: arts.length, samples: samples,
+                             finalURL: location.href, usedSelector: usedSelector,
+                             routed: (routed || location.pathname.indexOf('/search') === 0) };
+                } catch (e) {
+                    return { error: 'JSERR: ' + ((e && e.message) ? e.message : String(e)) };
+                }
+            """, arguments: ["q": trimmed]) as? [String: Any]
+
+            // Map the self-reported JSON into XSearchResult.
+            result.finalURL = obj?["finalURL"] as? String
+            result.usedSelector = obj?["usedSelector"] as? String
+
+            if let jsErr = obj?["error"] as? String {
+                result.error = jsErr
+                result.navOutcome = (jsErr == "no-search-input")
+                    ? "no search box on page — re-park /home first"
+                    : "JS fault"
+            } else {
+                result.tweetCount = (obj?["tweetCount"] as? Int) ?? 0
+                result.samples = (obj?["samples"] as? [Any])?.compactMap { $0 as? String } ?? []
+                let routed = (obj?["routed"] as? Bool) ?? false
+                result.navOutcome = routed
+                    ? "client-routed to /search"
+                    : "routed: false (no /search route detected within ~8s)"
+                log.info("[XProbe] searchStockViaElement → selector=\(result.usedSelector ?? "nil", privacy: .public), routed=\(routed), \(result.tweetCount) tweet nodes, \(result.samples.count) samples")
+            }
+        } catch {
+            let detail = Self.errorDetail(error)
+            log.error("[XProbe] searchStockViaElement failed: \(detail, privacy: .public)")
+            if result.error == nil { result.error = "element search: \(detail)" }
+            result.navOutcome = "threw"
         }
 
         return result

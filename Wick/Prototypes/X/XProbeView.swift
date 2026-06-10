@@ -36,6 +36,10 @@ struct XProbeView: View {
     @State private var searchQuery: String = "$TSLA"
     @State private var searchResult: XProbe.XSearchResult?
     @State private var searching = false
+    /// In-flight guard for the element-driven search (`searchStockViaElement`),
+    /// kept separate from `searching` so neither search button double-fires while
+    /// the other runs.
+    @State private var searchingViaElement = false
 
     var body: some View {
         HSplitView {
@@ -205,6 +209,10 @@ struct XProbeView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
+            Text("**元素搜索 (单次)**：不导航 URL，而是驱动 X 自己的搜索框元素 — focus → 用 React 原生 value setter 输入 → 派发 Enter 键序列，由 X 自己 UI 触发搜索并**客户端路由**到 `/search`(无页面加载、不触发导航事件，故脚本内有界轮询等结果)。更像真人、机器人特征更低。**需当前无头页在 /home 或 /explore(搜索框存在)**；若提示 `no-search-input`，先点「重新加载无头页」回到 /home。")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
             // On-screen CAUTION — ban-safety, in Chinese.
             Label {
                 Text("单次请求/每次点按只发一次,请自行控制频率,避免触发 X 风控或封号;只读、不自动轮询。")
@@ -235,8 +243,27 @@ struct XProbeView: View {
                         Text("验证个股搜索 (单次)")
                     }
                 }
-                .disabled(running || reparking || searching || searchQuery.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(running || reparking || searching || searchingViaElement || searchQuery.trimmingCharacters(in: .whitespaces).isEmpty)
                 .buttonStyle(.borderedProminent)
+
+                // Element-driven sibling: drives X's REAL search box (focus +
+                // native-setter type + Enter) instead of navigating to a search
+                // URL — more human-like, lower bot-signal. Same single-shot
+                // contract; guarded by its own in-flight flag.
+                Button {
+                    runSearchViaElement()
+                } label: {
+                    if searchingViaElement {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("搜索中…")
+                        }
+                    } else {
+                        Text("元素搜索 (单次)")
+                    }
+                }
+                .disabled(running || reparking || searching || searchingViaElement || searchQuery.trimmingCharacters(in: .whitespaces).isEmpty)
+                .buttonStyle(.bordered)
             }
         }
     }
@@ -248,7 +275,16 @@ struct XProbeView: View {
 
             row("推文数", "\(r.tweetCount) 条 article 节点")
             row("导航结果", r.navOutcome,
-                tint: r.navOutcome.hasPrefix("finished") ? .green : .primary)
+                tint: (r.navOutcome.hasPrefix("finished") || r.navOutcome.hasPrefix("client-routed")) ? .green : .primary)
+            // Element-path diagnostics (nil for the URL-nav path — hidden then).
+            if let selector = r.usedSelector {
+                row("命中选择器", selector,
+                    tint: selector == "no-search-input" ? .red : .primary)
+            }
+            if let finalURL = r.finalURL {
+                row("最终 URL", finalURL,
+                    tint: finalURL.contains("/search") ? .green : .primary)
+            }
             if let err = r.error {
                 row("错误", err, tint: .red)
             }
@@ -331,6 +367,23 @@ struct XProbeView: View {
             await MainActor.run {
                 self.searchResult = r
                 self.searching = false
+            }
+        }
+    }
+
+    /// Fire the single-shot, ban-safe ELEMENT-DRIVEN search: ONE in-page script
+    /// (find search box → native-setter type → Enter → bounded poll → DOM read)
+    /// per click — no host navigation. Guarded by `searchingViaElement` so the
+    /// button can't double-fire (and disabled while the URL-nav search runs).
+    private func runSearchViaElement() {
+        let q = searchQuery
+        searchingViaElement = true
+        searchResult = nil
+        Task {
+            let r = await probe.searchStockViaElement(query: q)
+            await MainActor.run {
+                self.searchResult = r
+                self.searchingViaElement = false
             }
         }
     }
