@@ -172,72 +172,99 @@ final class XueqiuProbe {
 
         result.finalURL = page.url?.absoluteString
 
-        // 2) Logged-in probe (linchpin A). Look for a logged-in-only marker vs
-        //    a login prompt. 雪球 shows account/avatar chrome when logged in and
-        //    a "登录 / 注册" affordance when not. We test a small basket of
-        //    selectors + a text-content heuristic so a single redesign doesn't
-        //    flip the verdict silently.
+        // 2) Session probe (linchpin A) — via the JSON API, NOT the DOM.
+        //    Per the user's snowball-cli research, 雪球 exposes same-origin JSON
+        //    endpoints that auto-attach the session cookie. We `fetch` a small
+        //    authenticated endpoint from inside the loaded xueqiu.com page: a
+        //    well-formed JSON body with no `error_code` ⇒ the headless page
+        //    inherited a working session from the visible login (A holds). This
+        //    drops brittle SPA DOM selectors entirely — and makes the old
+        //    linchpin B ("does the SPA paint headless?") MOOT, because the API
+        //    path never needs the SPA rendered, only origin + cookie + `fetch`.
+        //    The JS self-reports ("yes…"/"no…"/"JSERR: …") so a runtime fault
+        //    surfaces as a readable value, not the opaque host exception.
         do {
-            let value = try await page.callJavaScript("""
-                // Logged-in markers (avatar / account menu live in the nav).
-                const loggedInSel = [
-                    '.nav__user',           // user dropdown in the top nav
-                    '.user__name',          // rendered display name
-                    'a[href*="/u/"] img',   // avatar linking to own profile
-                    '.avatar'
-                ];
-                const loginWallSel = [
-                    '.login',               // login modal / panel
-                    'a[href*="login"]',
-                    '.nav__login'
-                ];
-                const has = sels => sels.some(s => document.querySelector(s) != null);
-                const bodyText = (document.body && document.body.innerText) || "";
-                const looksLoggedIn = has(loggedInSel);
-                const looksWalled =
-                    has(loginWallSel) ||
-                    bodyText.includes("登录") && !looksLoggedIn;
-                if (looksLoggedIn) return true;
-                if (looksWalled)   return false;
-                return null;     // genuinely ambiguous
-            """) as? Bool
-            result.loggedIn = value
-            log.info("[XueqiuProbe] loggedIn probe → \(String(describing: value), privacy: .public)")
+            let verdict = try await page.callJavaScript("""
+                try {
+                    const r = await fetch('/statuses/hots.json?a=1&count=1&page=1&scope=day&type=status&meigu=0', {
+                        credentials: 'include',
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const text = await r.text();
+                    let json = null; try { json = JSON.parse(text); } catch (e) {}
+                    if (!json)       return 'no:non-json(http ' + r.status + ')';
+                    if (json.error_code && json.error_code != 0)
+                                     return 'no:error_code=' + json.error_code;
+                    return 'yes:http ' + r.status;
+                } catch (e) {
+                    return 'JSERR: ' + ((e && e.message) ? e.message : String(e));
+                }
+            """) as? String
+            switch verdict {
+            case .some(let v) where v.hasPrefix("yes"): result.loggedIn = true
+            case .some(let v) where v.hasPrefix("no"):  result.loggedIn = false
+            case .none:                                 result.loggedIn = nil
+            default:                                    // "JSERR: …"
+                result.loggedIn = nil
+                if result.error == nil { result.error = "session probe \(verdict ?? "nil")" }
+            }
+            log.info("[XueqiuProbe] session probe → \(verdict ?? "nil", privacy: .public)")
         } catch {
-            log.error("[XueqiuProbe] loggedIn probe failed: \(error.localizedDescription, privacy: .public)")
-            // Leave loggedIn = nil; record only if no prior error.
-            if result.error == nil { result.error = "loggedIn probe: \(error.localizedDescription)" }
+            let detail = Self.errorDetail(error)
+            log.error("[XueqiuProbe] session probe failed: \(detail, privacy: .public)")
+            if result.error == nil { result.error = "session probe: \(detail)" }
         }
 
-        // 3) Discussion-text extract (linchpin B). Pull innerText of the
-        //    timeline / status items. Selectors are placeholders to be
-        //    finalized against the live DOM in a real adapter — the probe only
-        //    needs *some* non-empty text to prove the SPA rendered headless.
+        // 3) Stock-specific data fetch — proves end-to-end retrieval of THIS
+        //    stock's data through the BYO session. Same-origin JSON API again:
+        //    the stock's hot discussion users (`stock_hot_user.json`), keyed by
+        //    the 雪球 symbol. A non-empty, non-error body confirms the cookie
+        //    reaches a symbol-keyed endpoint. The production scraper later picks
+        //    the richest sentiment endpoint (post timeline / search); the probe
+        //    just needs to prove the path works. JS self-reports errors.
         do {
-            let texts = try await page.callJavaScript("""
-                const sel = [
-                    '.timeline__item__content',  // hot-post body
-                    '.status-content',
-                    '.timeline__item .content',
-                    'article'
-                ].join(',');
-                const nodes = document.querySelectorAll(sel);
-                return [...nodes]
-                    .slice(0, limit)
-                    .map(n => (n.innerText || "").trim())
-                    .filter(t => t.length > 0);
-            """, arguments: ["limit": 30]) as? [String]
+            let obj = try await page.callJavaScript("""
+                try {
+                    const r = await fetch('/recommend/user/stock_hot_user.json?symbol=' + encodeURIComponent(sym) + '&start=0&count=10', {
+                        credentials: 'include',
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const text = await r.text();
+                    return { status: r.status, len: text.length, sample: text.slice(0, 600) };
+                } catch (e) {
+                    return { error: ((e && e.message) ? e.message : String(e)) };
+                }
+            """, arguments: ["sym": symbol]) as? [String: Any]
 
-            let joined = (texts ?? []).joined(separator: "\n\n— — —\n\n")
-            result.textLength = joined.count
-            result.textSample = String(joined.prefix(600))
-            log.info("[XueqiuProbe] extracted \(result.textLength) chars across \(texts?.count ?? 0) nodes")
+            if let jsErr = obj?["error"] as? String {
+                if result.error == nil { result.error = "data fetch JSERR: \(jsErr)" }
+            } else {
+                let sample = (obj?["sample"] as? String) ?? ""
+                let len = (obj?["len"] as? Int) ?? sample.count
+                let status = (obj?["status"] as? Int) ?? -1
+                result.textLength = len
+                result.textSample = sample
+                log.info("[XueqiuProbe] data fetch http \(status, privacy: .public), \(len) chars")
+            }
         } catch {
-            log.error("[XueqiuProbe] text extract failed: \(error.localizedDescription, privacy: .public)")
-            if result.error == nil { result.error = "text extract: \(error.localizedDescription)" }
+            let detail = Self.errorDetail(error)
+            log.error("[XueqiuProbe] data fetch failed: \(detail, privacy: .public)")
+            if result.error == nil { result.error = "data fetch: \(detail)" }
         }
 
         return result
+    }
+
+    /// Pull the underlying JS exception message (+ line) out of a thrown
+    /// WebKit error so the opaque "A JavaScript exception occurred" becomes
+    /// actionable. Falls back to `localizedDescription`.
+    private static func errorDetail(_ error: Error) -> String {
+        let ns = error as NSError
+        if let msg = ns.userInfo["WKJavaScriptExceptionMessage"] as? String, !msg.isEmpty {
+            let line = ns.userInfo["WKJavaScriptExceptionLineNumber"] as? Int
+            return "JS: \(msg)" + (line.map { " (line \($0))" } ?? "")
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Navigation awaiting
