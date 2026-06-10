@@ -36,7 +36,7 @@ public enum XueqiuSessionStatus: String, Sendable, Equatable, Codable {
 /// the live WebKit scraper (`BrowserSessionManager` / `XueqiuLiveScraper`) feeds
 /// the in-WebKit `fetch(...)` JSON through `XueqiuPostParser` and emits the
 /// formatted `newsLine`s into `discussion(for:)`.
-public struct XueqiuPost: Sendable, Equatable {
+public struct XueqiuPost: Sendable, Equatable, Identifiable {
     /// Author screen name (`user.screen_name`); empty when 雪球 omits it.
     public let author: String
     /// Plain-text post body — HTML already stripped + whitespace-collapsed.
@@ -45,12 +45,36 @@ public struct XueqiuPost: Sendable, Equatable {
     public let likeCount: Int
     /// 评 count (`reply_count`).
     public let replyCount: Int
+    /// Post creation time (`created_at`, 雪球 emits epoch **milliseconds**).
+    /// `nil` when 雪球 omits / can't be decoded — the Social card then just
+    /// drops the relative-time line rather than guessing.
+    public let createdAt: Date?
+    /// Permalink to the post on xueqiu.com (`target` / `target_url`,
+    /// resolved to an absolute `https://xueqiu.com/…` URL). `nil` when 雪球
+    /// omits it — the Social card then renders a non-tappable card.
+    public let url: URL?
 
-    public init(author: String, text: String, likeCount: Int, replyCount: Int) {
+    /// Stable identity for `ForEach` / `Identifiable`. Composed from the URL
+    /// when present (the natural unique key) and otherwise from the content
+    /// fields, so two distinct posts never collide and SwiftUI diffing is
+    /// stable across refreshes.
+    public var id: String {
+        url?.absoluteString ?? "\(author)|\(likeCount)|\(replyCount)|\(text)"
+    }
+
+    public init(author: String,
+                text: String,
+                likeCount: Int,
+                replyCount: Int,
+                createdAt: Date? = nil,
+                url: URL? = nil)
+    {
         self.author = author
         self.text = text
         self.likeCount = likeCount
         self.replyCount = replyCount
+        self.createdAt = createdAt
+        self.url = url
     }
 
     /// Render to the canonical news line, e.g.
@@ -123,7 +147,30 @@ public enum XueqiuPostParser {
         let likes = (raw["like_count"] as? Int) ?? (raw["fav_count"] as? Int) ?? 0
         let replies = (raw["reply_count"] as? Int) ?? 0
         return XueqiuPost(author: author, text: text,
-                          likeCount: likes, replyCount: replies)
+                          likeCount: likes, replyCount: replies,
+                          createdAt: createdAt(from: raw),
+                          url: permalink(from: raw))
+    }
+
+    /// `created_at` is 雪球's epoch **milliseconds** (a large `Int`/`Double`);
+    /// convert to a `Date`. `nil` when absent or non-numeric.
+    private static func createdAt(from raw: [String: Any]) -> Date? {
+        let ms: Double
+        if let v = raw["created_at"] as? Double { ms = v }
+        else if let v = raw["created_at"] as? Int { ms = Double(v) }
+        else { return nil }
+        guard ms > 0 else { return nil }
+        return Date(timeIntervalSince1970: ms / 1000)
+    }
+
+    /// Resolve the post permalink. 雪球 search posts carry a relative `target`
+    /// (e.g. `/1234/567890`); some timelines use `target_url`. Either is
+    /// resolved against `https://xueqiu.com`. `nil` when neither is present.
+    private static func permalink(from raw: [String: Any]) -> URL? {
+        let path = (raw["target_url"] as? String) ?? (raw["target"] as? String)
+        guard let path, !path.isEmpty else { return nil }
+        if path.hasPrefix("http") { return URL(string: path) }
+        return URL(string: "https://xueqiu.com" + (path.hasPrefix("/") ? path : "/" + path))
     }
 
     /// Strip HTML tags + decode the handful of entities 雪球 emits, then collapse

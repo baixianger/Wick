@@ -8,6 +8,7 @@ enum DetailTab: String, CaseIterable, Identifiable, Hashable {
     case overview = "Overview"
     case chart    = "Chart"
     case news     = "News"
+    case social   = "Social"
     case ai       = "AI"
     var id: String { rawValue }
 }
@@ -106,6 +107,8 @@ struct DetailView: View {
                                      holdings: holdings)
                         case .news:
                             NewsTab(ticker: ticker)
+                        case .social:
+                            SocialView(ticker: ticker)
                         case .ai:
                             AITab(ticker: ticker,
                                   range: range,
@@ -195,7 +198,9 @@ struct DetailView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 280)
+                // Widened from 280 → 340 to absorb the fifth tab (Social)
+                // without crowding the segment labels.
+                .frame(width: 340)
                 .labelsHidden()
             }
             // Title sub row — exchange + source badge on left,

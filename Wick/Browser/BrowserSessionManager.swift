@@ -128,4 +128,21 @@ final class BrowserSessionManager: XueqiuScraping {
         // be layered on later.
         return await live.extractDiscussion(symbol: symbol, timeout: timeout)
     }
+
+    // MARK: - Structured posts (Social tab)
+
+    /// STRUCTURED 雪球 discussion posts for the per-stock **Social** tab, parsed
+    /// into `XueqiuPost` (author, text, 赞/评 counts, time, url) rather than the
+    /// decorator's flat news lines. Same best-effort contract as
+    /// `discussion(for:)`: returns `[]` (never throws) when the session isn't
+    /// scrapable, the symbol isn't CN/HK, or the in-WebKit `fetch` is empty /
+    /// times out — so the Social UI degrades to its empty state.
+    ///
+    /// Distinct from `discussion(for:)` (which the sentiment decorator owns and
+    /// must keep its `[String]` shape): this is the UI-facing structured seam.
+    func posts(for symbol: String) async -> [XueqiuPost] {
+        guard status.canScrape else { return [] }
+        guard CNSymbol.isCN(symbol) else { return [] }
+        return await live.extractPosts(symbol: symbol, timeout: timeout)
+    }
 }

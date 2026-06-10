@@ -229,6 +229,21 @@ private func makeDecorator(
         #expect(posts[0].author == "甲")
     }
 
+    @Test func parses_created_at_millis_and_permalink() {
+        // 雪球 search posts carry `created_at` (epoch ms) + a relative `target`.
+        let json = #"{ "list": [ { "text": "结构化", "user": { "screen_name": "甲" }, "created_at": 1700000000000, "target": "/1234/5678" } ] }"#
+        let posts = XueqiuPostParser.parse(jsonString: json)
+        #expect(posts.count == 1)
+        #expect(posts[0].createdAt == Date(timeIntervalSince1970: 1_700_000_000))
+        #expect(posts[0].url?.absoluteString == "https://xueqiu.com/1234/5678")
+    }
+
+    @Test func missing_time_and_url_are_nil_not_a_failure() {
+        let posts = XueqiuPostParser.parse(jsonString: sampleJSON)
+        #expect(posts[0].createdAt == nil)
+        #expect(posts[0].url == nil)
+    }
+
     @Test func skips_empty_text_posts_but_keeps_others() {
         let json = #"{ "list": [ { "description": "<img src=\"x\">", "user": { "screen_name": "甲" } }, { "text": "有内容", "user": { "screen_name": "乙" } } ] }"#
         let posts = XueqiuPostParser.parse(jsonString: json)

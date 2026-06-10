@@ -48,6 +48,12 @@ protocol XueqiuLiveScraping: Sendable {
     /// on the same persistent page. Best-effort: `[]` on no-session / empty /
     /// timeout / error; never throws.
     func extractDiscussion(symbol: String, timeout: Duration) async -> [String]
+    /// STRUCTURED discussion posts for a canonical CN/HK symbol — the same
+    /// same-origin `/statuses/search.json` fetch as `extractDiscussion`, but
+    /// returning the parsed `XueqiuPost` values (author, text, 赞/评, time, url)
+    /// for the Social tab's card UI instead of the decorator's flat news lines.
+    /// Best-effort: `[]` on no-session / empty / timeout / error; never throws.
+    func extractPosts(symbol: String, timeout: Duration) async -> [XueqiuPost]
 }
 
 /// Live, WebKit-backed implementation. Owns the ONE persistent headless
@@ -177,6 +183,13 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
     // MARK: - Discussion extract (per-call fetch on the persistent page)
 
     func extractDiscussion(symbol: String, timeout: Duration) async -> [String] {
+        // Reuse the structured path then flatten to the decorator's news lines —
+        // one fetch shape, one parse, two projections (lines here, cards in the
+        // Social tab). Keeps the formatting authoritative in `XueqiuPost`.
+        await extractPosts(symbol: symbol, timeout: timeout).map { $0.newsLine() }
+    }
+
+    func extractPosts(symbol: String, timeout: Duration) async -> [XueqiuPost] {
         guard let xq = Self.xueqiuSymbol(forCanonical: symbol) else { return [] }
         guard let page = await readyPage(timeout: timeout) else { return [] }
 
@@ -184,8 +197,8 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
             // SAME-ORIGIN per-stock posts: `/statuses/search.json?q=<symbol>` —
             // the simplest single same-origin call returning recent posts for a
             // symbol (snowball-cli `searchPosts`, sorted newest-first). Returns
-            // the raw JSON body as a string; parsing + formatting happen in the
-            // package's pure `XueqiuPostParser` so they're unit-testable.
+            // the raw JSON body as a string; parsing happens in the package's
+            // pure `XueqiuPostParser` so it's unit-testable.
             let body = try await page.callJavaScript("""
                 try {
                     const url = '/statuses/search.json?q=' + encodeURIComponent(q)
@@ -201,13 +214,12 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
             """, arguments: ["q": xq, "count": Self.postCount]) as? String
 
             guard let body, !body.hasPrefix("JSERR:") else {
-                if let body { log.error("[Xueqiu] discussion fetch → \(body, privacy: .public)") }
+                if let body { log.error("[Xueqiu] posts fetch → \(body, privacy: .public)") }
                 return []
             }
-            let posts = XueqiuPostParser.parse(jsonString: body)
-            return posts.map { $0.newsLine() }
+            return XueqiuPostParser.parse(jsonString: body)
         } catch {
-            log.error("[Xueqiu] discussion extract failed: \(Self.errorDetail(error), privacy: .public)")
+            log.error("[Xueqiu] posts extract failed: \(Self.errorDetail(error), privacy: .public)")
             return []
         }
     }
