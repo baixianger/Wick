@@ -59,6 +59,14 @@ struct SettingsView: View {
             // Settings' big-title look with no empty space above it.
             detail(for: selection)
                 .navigationTitle(selection.title)
+                // BREATHING ROOM: the grouped `Form` is a scroll view, so its
+                // first Section card otherwise butts straight up against the
+                // native large-title bar — cramped. A top scroll-content margin
+                // pushes the first card down to System Settings' airy margin
+                // WITHOUT leaving an empty band (the title bar still fills the
+                // very top). Applied here on the shared detail content so it's
+                // identical across all 7 category tabs in one place.
+                .contentMargins(.top, 18, for: .scrollContent)
         }
         // RESIZABLE: a min keeps the first card un-clipped + an ideal sets
         // the opening size, but `maxWidth/Height: .infinity` lets the user
