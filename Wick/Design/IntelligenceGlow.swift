@@ -307,17 +307,27 @@ private struct IntelligenceGlow: View {
         strokeOpacity: 0.48,
         saturation: 1.2,
         sweepPeak: 0.75)
+    /// **Light-mode visibility fix:** earlier this theme followed
+    /// border-beam's "pre-darken + desaturate for light" preset, which
+    /// is backwards for OUR surfaces. A semi-transparent, low-saturation
+    /// coloured glow painted over a near-white composer/app background
+    /// melts toward white and the breathing effect becomes invisible by
+    /// day (looked fine on dark). On a light backdrop you need MORE colour
+    /// presence, not less — so opacity + saturation are raised close to
+    /// the dark theme, and the black travelling sweep is strengthened so
+    /// the highlight reads against white. Blur stays modest so the band
+    /// still hugs the corners.
     private static let lightTheme = Theme(
         bloomStrokeWidth: 2,
         innerStrokeWidth: 1.5,
         crispStrokeWidth: 1,
         bloomBlur: 10,
         innerBlur: 3.5,
-        bloomOpacity: 0.54,
-        innerOpacity: 0.46,
-        strokeOpacity: 0.33,
-        saturation: 0.70,
-        sweepPeak: 0.40)
+        bloomOpacity: 0.82,
+        innerOpacity: 0.68,
+        strokeOpacity: 0.52,
+        saturation: 1.05,
+        sweepPeak: 0.62)
 }
 
 // MARK: - Helpers
