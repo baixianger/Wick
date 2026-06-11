@@ -92,6 +92,9 @@ struct SocialView: View {
     @available(macOS 26.0, *)
     @ViewBuilder
     private func content(session: BrowserSessionManager) -> some View {
+        // `xueqiuSymbol` parse-normalizes internally, so any CN/HK form the user
+        // can store (`0700.HK`, `00700`, `HK0700`, `700`) clears the gate — only
+        // genuinely non-CN tickers fall through to the unsupported state.
         if CNSymbol.xueqiuSymbol(ticker.symbol) == nil {
             unsupportedSymbolState
         } else if !session.status.canScrape {

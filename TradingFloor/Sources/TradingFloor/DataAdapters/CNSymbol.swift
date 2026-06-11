@@ -99,14 +99,25 @@ public enum CNSymbol {
         return "\(hkSecidCode(code)).HK"
     }
 
-    /// Canonical → 雪球 (Xueqiu) symbol form, the prefix/path shape 雪球's web
-    /// API + stock pages use:
+    /// Any CN/HK symbol form → 雪球 (Xueqiu) symbol form, the prefix/path shape
+    /// 雪球's web API + stock pages use:
     ///   • Shanghai `600519.SS` → `SH600519`
     ///   • Shenzhen `000001.SZ` → `SZ000001`
     ///   • Hong Kong `0700.HK`  → `00700` (bare 5-digit, e.g. `/S/00700`)
-    /// Centralised here (Foundation-only, unit-testable) so the app-side
-    /// WebKit scraper doesn't re-derive it. Returns `nil` for non-CN inputs.
-    public static func xueqiuSymbol(_ canonical: String) -> String? {
+    /// The input is parse-normalized first, so non-canonical forms the user can
+    /// enter (`HK0700`, `00700`, `700`, `600519.SH`) all map correctly — not just
+    /// the canonical `*.SS/.SZ/.HK` string. Centralised here (Foundation-only,
+    /// unit-tested) so every call site (the Social tab gate, the WebKit scraper,
+    /// the sentiment decorator) gets the same forgiving mapping. Returns `nil`
+    /// for non-CN inputs.
+    ///
+    /// The 5-digit HK form matches what snowball-cli sends to the same
+    /// `/statuses/search.json?q=` endpoint (it detects HK by `/^\d{5}$/`), so
+    /// `0700.HK → 00700` is the query 雪球 expects for HK discussion.
+    public static func xueqiuSymbol(_ input: String) -> String? {
+        // Accept any user-entered form by normalizing to canonical first; the
+        // canonical fast-path (`market != nil`) still short-circuits unchanged.
+        let canonical = market(input) != nil ? input : (parse(input) ?? input)
         guard let market = market(canonical) else { return nil }
         let code = canonical.split(separator: ".").first.map(String.init) ?? ""
         guard !code.isEmpty else { return nil }

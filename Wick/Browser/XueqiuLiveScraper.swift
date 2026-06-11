@@ -137,11 +137,13 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
 
     // MARK: - Symbol mapping
 
-    /// Map a canonical CN/HK symbol (`600519.SS` / `0700.HK`) to the 雪球 path
+    /// Map any CN/HK symbol form (`600519.SS` / `0700.HK`, but also bare /
+    /// prefixed / 5-digit inputs like `HK0700`, `00700`, `700`) to the 雪球 path
     /// form (`SH600519` / `00700`). Delegates to the package's centralised
-    /// `CNSymbol.xueqiuSymbol` (Foundation-only, unit-tested there).
-    static func xueqiuSymbol(forCanonical canonical: String) -> String? {
-        CNSymbol.xueqiuSymbol(canonical)
+    /// `CNSymbol.xueqiuSymbol`, which parse-normalizes internally (Foundation-only,
+    /// unit-tested there) — so HK tickers that aren't already canonical still map.
+    static func xueqiuSymbol(forCanonical symbol: String) -> String? {
+        CNSymbol.xueqiuSymbol(symbol)
     }
 
     // MARK: - Status probe (per-call fetch on the persistent page)

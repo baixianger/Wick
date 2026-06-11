@@ -61,6 +61,25 @@ import Foundation
     #expect(CNSymbol.eastMoneySecid("NVDA") == nil)
 }
 
+@Test func cn_symbol_to_xueqiu_form() {
+    // A-shares → SH/SZ-prefixed; HK → bare 5-digit (the form snowball-cli sends
+    // to /statuses/search.json and the Social tab's discussion query expects).
+    #expect(CNSymbol.xueqiuSymbol("600519.SS") == "SH600519")
+    #expect(CNSymbol.xueqiuSymbol("600519.SH") == "SH600519")   // akshare suffix
+    #expect(CNSymbol.xueqiuSymbol("000001.SZ") == "SZ000001")
+    #expect(CNSymbol.xueqiuSymbol("0700.HK") == "00700")
+    #expect(CNSymbol.xueqiuSymbol("9988.HK") == "09988")
+    // Non-canonical HK forms a user can enter must all parse-normalize to the
+    // same 5-digit query — this is the Social-tab 港股 bug's regression guard.
+    #expect(CNSymbol.xueqiuSymbol("00700") == "00700")
+    #expect(CNSymbol.xueqiuSymbol("HK0700") == "00700")
+    #expect(CNSymbol.xueqiuSymbol("700") == "00700")
+    // Non-CN inputs map to nil so the Social tab still shows "unsupported".
+    #expect(CNSymbol.xueqiuSymbol("NVDA") == nil)
+    #expect(CNSymbol.xueqiuSymbol("BRK.B") == nil)
+    #expect(CNSymbol.xueqiuSymbol("7203.T") == nil)
+}
+
 @Test func cn_symbol_is_cn_predicate() {
     #expect(CNSymbol.isCN("600519.SS"))
     #expect(CNSymbol.isCN("000001.SZ"))
