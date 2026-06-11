@@ -41,16 +41,37 @@ struct SocialView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            xueqiuSection
-            Divider().opacity(0.4)
+            // 雪球 is shown ONLY for A-share / HK tickers; US / other markets get
+            // the X section alone (no 雪球 section, no "暂不支持" state).
+            if isXueqiuEligible {
+                xueqiuSection
+                Divider().opacity(0.4)
+            }
             xPlaceholderSection
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: ticker.id) {
             // First-appear fetch ONLY if a valid session already exists — never
-            // surface a login prompt or hit the network unprompted.
+            // surface a login prompt or hit the network unprompted. Skip for
+            // ineligible (US / other) markets, which never render 雪球.
+            guard isXueqiuEligible else { return }
             await model.loadIfSessionReady(symbol: ticker.symbol,
                                            session: sessionManager)
+        }
+    }
+
+    /// Whether this ticker's market carries a 雪球 section at all. 雪球 discussion
+    /// is gated **by market** — A-share (.SS/.SZ) and Hong Kong (.HK) only. US /
+    /// other tickers omit 雪球 entirely (no section, no "暂不支持" state) and show
+    /// the X placeholder alone. `parse` normalizes any stored CN/HK form
+    /// (`0700.HK`, `00700`, `HK0700`, `700`) to canonical before we read its
+    /// `Market`; non-CN inputs fail `parse` and fall back to the raw symbol,
+    /// which then has no `Market` → ineligible.
+    private var isXueqiuEligible: Bool {
+        let canonical = CNSymbol.parse(ticker.symbol) ?? ticker.symbol
+        switch CNSymbol.market(canonical) {
+        case .shanghai, .shenzhen, .hongKong: return true
+        case .none: return false
         }
     }
 
@@ -88,16 +109,13 @@ struct SocialView: View {
     }
 
     /// State machine inside the 雪球 section (macOS 26 only). Order of
-    /// precedence: unsupported-symbol → not-connected → loading → empty → cards.
+    /// precedence: not-connected → loading → empty → cards. Market eligibility
+    /// (A-share / HK) is gated upstream in `body`, so this section only ever
+    /// renders for tickers 雪球 covers.
     @available(macOS 26.0, *)
     @ViewBuilder
     private func content(session: BrowserSessionManager) -> some View {
-        // `xueqiuSymbol` parse-normalizes internally, so any CN/HK form the user
-        // can store (`0700.HK`, `00700`, `HK0700`, `700`) clears the gate — only
-        // genuinely non-CN tickers fall through to the unsupported state.
-        if CNSymbol.xueqiuSymbol(ticker.symbol) == nil {
-            unsupportedSymbolState
-        } else if !session.status.canScrape {
+        if !session.status.canScrape {
             notConnectedState(session: session)
         } else if model.isLoading {
             loadingState
@@ -170,13 +188,6 @@ struct SocialView: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 40)
-    }
-
-    /// 雪球 / our-mapping doesn't cover this ticker (non-CN/HK).
-    private var unsupportedSymbolState: some View {
-        emptyCard(icon: "globe.asia.australia",
-                  title: "雪球暂不支持该标的",
-                  message: "雪球讨论目前覆盖 A 股与港股标的（如 600519.SS、0700.HK）。") { EmptyView() }
     }
 
     /// Below macOS 26 the `WebPage` API floor isn't met → explain rather than
