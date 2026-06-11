@@ -18,6 +18,17 @@ public actor ToolRegistry {
         for tool in tools { register(tool) }
     }
 
+    /// Remove a tool by name. No-op if it isn't registered. Used by the host to
+    /// retract opt-in tool families (e.g. Wicker's `web.*` browser tools) when
+    /// the feature is toggled off, without rebuilding the whole registry.
+    public func unregister(name: String) {
+        tools[name] = nil
+    }
+
+    public func unregisterAll(names: [String]) {
+        for name in names { tools[name] = nil }
+    }
+
     public func all() -> [any AgentTool] {
         Array(tools.values).sorted { $0.spec.name < $1.spec.name }
     }

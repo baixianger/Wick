@@ -4,6 +4,9 @@ import CoreCharts
 import MarkdownUI
 import TradingFloor
 import UniformTypeIdentifiers
+#if canImport(WebKit)
+import WebKit
+#endif
 
 /// Wicker — the global chat / analysis agent. Layout cribs from the new
 /// macOS 26 Mail.app: a session column (Mail's message list) on the left
@@ -429,14 +432,26 @@ private struct ConversationView: View {
         //   - NORMAL : transcript above, composer pinned at bottom.
         // Same `submit()` powers both — only the spatial framing
         // around the composer differs.
-        Group {
-            if showHero {
-                heroLayout
-            } else {
-                VStack(spacing: 0) {
-                    transcript
-                    composer
+        VStack(spacing: 0) {
+            Group {
+                if showHero {
+                    heroLayout
+                } else {
+                    VStack(spacing: 0) {
+                        transcript
+                        composer
+                    }
                 }
+            }
+            .frame(maxHeight: .infinity)
+            // Live browser panel — only on macOS 26 AND only when the user has
+            // opted into Wicker's browser tools. It auto-reveals while the agent
+            // is driving the page and collapses when idle. Gated entirely so the
+            // flag-OFF / pre-26 experience is byte-for-byte unchanged.
+            if #available(macOS 26.0, *), settings.enableWickerBrowser,
+               let manager = runtime.browserSession as? BrowserSessionManager
+            {
+                WickerBrowserPanel(manager: manager)
             }
         }
         // Auto-continue: if the session opens with an unanswered user
@@ -1333,6 +1348,80 @@ private struct TypingIndicator: View {
             intensity: 0.85
         )
         .onReceive(timer) { _ in phase = (phase + 1) % 3 }
+    }
+}
+
+// MARK: - Live agent-browser panel
+
+/// The auto-revealing live WebView panel inside Wicker's workspace. It hosts the
+/// SAME `agentPage` the `web.*` tools drive (via `BrowserSessionManager`), so
+/// every navigation / click / type the agent performs renders here in real time
+/// — and because the WebView is interactive, the panel doubles as the
+/// login / human-intervention surface (sign in to a gated site, solve a captcha,
+/// etc.) without tearing down the page the tools own.
+///
+/// Reveal logic: the panel slides in from the bottom whenever
+/// `manager.isAgentBrowsing` flips true (a tool is mid-flight). When the agent
+/// goes idle it collapses to a slim status bar rather than vanishing, so the
+/// user can re-expand it to intervene; a manual pin keeps it open. Hosted only
+/// under `#if available(macOS 26)` + the opt-in flag (the caller gates both).
+@available(macOS 26.0, *)
+private struct WickerBrowserPanel: View {
+    let manager: BrowserSessionManager
+    /// User pin — once the user expands the panel we keep it open even after the
+    /// agent goes idle, so they can finish a login / inspect the result.
+    @State private var pinnedOpen = false
+
+    private var expanded: Bool { manager.isAgentBrowsing || pinnedOpen }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            header
+            if expanded {
+                #if canImport(WebKit)
+                WebView(manager.agentPage)
+                    .frame(height: 320)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                #endif
+            }
+        }
+        .background(.regularMaterial)
+        .animation(.snappy(duration: 0.25), value: expanded)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "globe")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(manager.isAgentBrowsing
+                                 ? AnyShapeStyle(Color.accentColor)
+                                 : AnyShapeStyle(HierarchicalShapeStyle.secondary))
+                .symbolEffect(.pulse, isActive: manager.isAgentBrowsing)
+            Text(manager.isAgentBrowsing ? "Wicker is browsing…" : "Agent browser")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            if let url = manager.agentCurrentURL {
+                Text(url.host ?? url.absoluteString)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            Button {
+                withAnimation(.snappy(duration: 0.22)) { pinnedOpen.toggle() }
+            } label: {
+                Image(systemName: expanded ? "chevron.down" : "chevron.up")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(expanded ? "Collapse browser panel" : "Show browser panel")
+            .accessibilityIdentifier("WickerBrowserPanelToggle")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
     }
 }
 

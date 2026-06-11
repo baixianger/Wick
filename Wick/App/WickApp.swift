@@ -81,6 +81,12 @@ struct WickApp: App {
                 .onChange(of: agentSettings.enableXueqiuSentiment) { _, _ in
                     agentRuntime.reconfigure(with: agentSettings)
                 }
+                // Opting Wicker's browser tools on/off registers or retracts
+                // the 7 `web.*` tools so the next chat turn (and the live
+                // panel's gate) reflect the change immediately.
+                .onChange(of: agentSettings.enableWickerBrowser) { _, _ in
+                    agentRuntime.reconfigureWebTools(with: agentSettings)
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)

@@ -70,6 +70,41 @@ final class AgentRuntime {
         Task { [tools] in
             await tools.register(MarketDataTool(data: provider))
         }
+        reconfigureWebTools(with: settings)
+    }
+
+    /// Register or retract Wicker's `web.*` browser-operation tools based on the
+    /// opt-in `enableWickerBrowser` flag. When ON (and we're on macOS 26 with a
+    /// live `BrowserSessionManager`), the 7 `WebTools` are registered into the
+    /// SAME `ToolRegistry` the model already dispatches through — each forwarding
+    /// to the manager's `@MainActor` driver methods via a `@Sendable` closure
+    /// bridge (`WebToolDriver`), so WebKit stays app-side and the macOS-26
+    /// availability is confined to this site. When OFF, the tools are
+    /// unregistered (idempotent — keyed by `spec.name`), so toggling the flag at
+    /// runtime takes effect on the very next chat turn with no rebuild.
+    ///
+    /// Host calls this on launch + on every `enableWickerBrowser` change.
+    func reconfigureWebTools(with settings: AgentSettings) {
+        guard settings.enableWickerBrowser,
+              #available(macOS 26.0, *),
+              let manager = browserSession as? BrowserSessionManager
+        else {
+            Task { [tools] in await tools.unregisterAll(names: WebTools.names) }
+            return
+        }
+        // Build the main-actor bridge over the live manager. The closures hop to
+        // `@MainActor` (the manager's isolation) on each call; the AgentTool
+        // itself stays `Sendable` and never captures the non-Sendable manager.
+        let driver = WebToolDriver(
+            navigate:  { @Sendable url in await manager.navigate(to: url) },
+            readText:  { @Sendable sel in await manager.readText(selector: sel) },
+            snapshot:  { @Sendable in await manager.snapshotOutline() },
+            click:     { @Sendable sel in await manager.click(selector: sel) },
+            type:      { @Sendable sel, txt, enter in await manager.type(selector: sel, text: txt, enter: enter) },
+            eval:      { @Sendable js in await manager.eval(js: js) },
+            fetchJSON: { @Sendable url in await manager.fetchJSON(url: url) })
+        let webTools = WebTools.all(driver: driver)
+        Task { [tools] in await tools.registerAll(webTools) }
     }
 
     /// Instance wrapper around the static chain builder that splices in the

@@ -61,15 +61,343 @@ final class BrowserSessionManager: XueqiuScraping {
     /// In-flight status refresh, so concurrent callers coalesce.
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
+    // MARK: - Wicker agent browser (general, driveable)
+
+    /// **FIXED** persistent store identifier for the general "Wicker browser"
+    /// profile — distinct from 雪球's jar so agent browsing can't read or
+    /// pollute the 雪球 login (and vice-versa). Hardcoded once, by hand; a fresh
+    /// UUID per launch would orphan the cookie jar (losing any logins the user
+    /// established in the live panel) and break the panel-WebView ↔ tool cookie
+    /// sharing. **MVP scope:** one shared profile for ALL sites the agent
+    /// visits. Per-site isolation (a store per origin, so e.g. a broker login
+    /// and a forum don't share cookies) is a hardening follow-up.
+    static let agentStoreID = UUID(uuidString: "C4A7E218-6B93-4F0D-9E31-1A8D5C20F7B6")!
+
+    /// The general-purpose driveable `WebPage` the `web.*` tools operate on and
+    /// the live panel renders. Navigable to ANY url (unlike the 雪球 `loginPage`,
+    /// pinned to xueqiu.com). Built once, held so the same instance backs both
+    /// the tools and `WebView(agentPage)` across redraws. `@ObservationIgnored`
+    /// for the same reason as `loginPage`: the reference never changes and the
+    /// macro can't synthesise an init-accessor for a non-trivial stored prop.
+    @ObservationIgnored private(set) var agentPage: WebPage
+
+    /// `true` while a `web.*` tool is mid-flight (a navigation, read, click,
+    /// type, eval, or fetch). Drives the WickerView live panel: it slides in
+    /// when this flips true and collapses when idle. Set true at the start of
+    /// every tool's work and false (best-effort, via `defer`) when it returns.
+    private(set) var isAgentBrowsing: Bool = false
+
+    /// The agent page's current URL (best-effort — updated after each
+    /// navigation). Surfaced so the live panel can show an address label.
+    private(set) var agentCurrentURL: URL?
+
+    /// Bounds every navigation / JS settle so a hung load still returns a
+    /// verdict rather than stranding `isAgentBrowsing == true`.
+    @ObservationIgnored private let agentTimeout: Duration = .seconds(25)
+
     init(live: any XueqiuLiveScraping = XueqiuLiveScraper(),
          timeout: Duration = .seconds(20))
     {
         self.live = live
         self.timeout = timeout
         self.loginPage = live.makeLoginPage()
+        self.agentPage = Self.makeAgentPage()
         // Start as needsLogin until the first probe says otherwise; the host
         // can call `refreshStatus()` after the user connects.
         self.status = .needsLogin
+    }
+
+    /// Build the general agent `WebPage` on the named "Wicker browser" store.
+    /// We do NOT navigate it here — it parks on `about:blank` until the agent's
+    /// first `navigate(...)`, so opting into the feature doesn't fire a load.
+    /// `static` so `init` can call it before `self` is formed.
+    static func makeAgentPage() -> WebPage {
+        var config = WebPage.Configuration()
+        config.websiteDataStore = WKWebsiteDataStore(forIdentifier: agentStoreID)
+        return WebPage(configuration: config)
+    }
+
+    // MARK: - Wicker agent browser: driver methods (tools call these)
+    //
+    // All `@MainActor` (inherited from the type), all best-effort: every method
+    // returns a readable result string and NEVER throws / crashes, because a web
+    // tool fault must surface to the model as a value it can recover from, not an
+    // opaque host exception. Each method brackets its work with
+    // `isAgentBrowsing` so the live panel reveals/collapses around the activity.
+    // Returned text is bounded by the CALLER (the `web.*` tool) via
+    // `ToolResultBounding`, so these can return rich strings.
+
+    /// Run `body` with `isAgentBrowsing` held true for its duration. Re-entrant-
+    /// safe via a simple depth counter so overlapping tool calls (the agent
+    /// firing two in one turn) don't prematurely collapse the panel.
+    @ObservationIgnored private var browsingDepth = 0
+    private func withBrowsing<T>(_ body: () async -> T) async -> T {
+        browsingDepth += 1
+        isAgentBrowsing = true
+        defer {
+            browsingDepth -= 1
+            if browsingDepth <= 0 { browsingDepth = 0; isAgentBrowsing = false }
+        }
+        return await body()
+    }
+
+    /// Navigate the agent page to `urlString` and report the outcome (final URL
+    /// + page title once settled). Tolerates one superseded (-999) nav.
+    func navigate(to urlString: String) async -> String {
+        await withBrowsing {
+            guard let url = Self.normalizedURL(urlString) else {
+                return "ERROR: not a valid URL: \(urlString)"
+            }
+            log.info("[AgentBrowser] navigate → \(url.absoluteString, privacy: .public)")
+            let events = agentPage.load(URLRequest(url: url))
+            let outcome = await awaitAgentNavigation(events)
+            agentCurrentURL = url
+            let title = (try? await agentPage.callJavaScript("return document.title")) as? String
+            switch outcome {
+            case .finished:
+                return "Navigated to \(url.absoluteString)\nTitle: \(title ?? "(none)")"
+            case .superseded:
+                return "Navigated to \(url.absoluteString) (superseded nav tolerated)\nTitle: \(title ?? "(none)")"
+            case .failed(let m):
+                return "Navigation to \(url.absoluteString) reported: \(m). Page may still have partially loaded."
+            case .timedOut:
+                return "Navigation to \(url.absoluteString) timed out after \(agentTimeout); reading whatever rendered is still possible."
+            }
+        }
+    }
+
+    /// Read visible text from the page (or from `selector`'s first match).
+    /// Returns the innerText, whitespace-collapsed. Best-effort.
+    func readText(selector: String?) async -> String {
+        await withBrowsing {
+            do {
+                let text = try await agentPage.callJavaScript("""
+                    try {
+                        const sel = (s && s.length) ? s : null;
+                        const root = sel ? document.querySelector(sel) : (document.body || document.documentElement);
+                        if (!root) return sel ? ('NO_MATCH: ' + sel) : 'NO_BODY';
+                        const t = (root.innerText || root.textContent || '').replace(/\\n{3,}/g, '\\n\\n').trim();
+                        return t;
+                    } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                """, arguments: ["s": selector ?? ""]) as? String
+                return text ?? "(no text)"
+            } catch {
+                return "ERROR: \(Self.agentErrorDetail(error))"
+            }
+        }
+    }
+
+    /// A compact DOM outline — interactive + structural elements with their
+    /// role, accessible name, and a stable selector hint — for the LLM to plan
+    /// clicks/types against. Deliberately lossy: headings, links, buttons,
+    /// inputs, and landmark roles only, capped in count.
+    func snapshotOutline() async -> String {
+        await withBrowsing {
+            do {
+                let outline = try await agentPage.callJavaScript("""
+                    try {
+                        const out = [];
+                        const max = 120;
+                        const sel = 'a,button,input,textarea,select,[role="button"],[role="link"],[role="textbox"],h1,h2,h3,[data-testid]';
+                        const nodes = document.querySelectorAll(sel);
+                        for (let i = 0; i < nodes.length && out.length < max; i++) {
+                            const n = nodes[i];
+                            const tag = n.tagName.toLowerCase();
+                            const role = n.getAttribute('role') || tag;
+                            let name = (n.getAttribute('aria-label') || n.getAttribute('placeholder') || n.innerText || n.value || '').trim();
+                            name = name.replace(/\\s+/g, ' ').slice(0, 80);
+                            if (!name && tag !== 'input' && tag !== 'textarea' && tag !== 'select') continue;
+                            // Stable-ish locator hint: prefer id, then data-testid, then name attr.
+                            let loc = '';
+                            if (n.id) loc = '#' + n.id;
+                            else if (n.getAttribute('data-testid')) loc = '[data-testid="' + n.getAttribute('data-testid') + '"]';
+                            else if (n.getAttribute('name')) loc = tag + '[name="' + n.getAttribute('name') + '"]';
+                            const type = (tag === 'input' && n.type) ? (':' + n.type) : '';
+                            out.push('- ' + role + type + (name ? ' "' + name + '"' : '') + (loc ? '  → ' + loc : ''));
+                        }
+                        const title = document.title || '';
+                        const url = location.href;
+                        return 'URL: ' + url + '\\nTitle: ' + title + '\\nElements (' + out.length + '):\\n' + out.join('\\n');
+                    } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                """) as? String
+                return outline ?? "(empty outline)"
+            } catch {
+                return "ERROR: \(Self.agentErrorDetail(error))"
+            }
+        }
+    }
+
+    /// Click the first element matching `selector`. Reports whether a match was
+    /// found and clicked. Best-effort; no navigation is awaited (SPA clicks
+    /// often route client-side) — follow with `snapshotOutline`/`readText`.
+    func click(selector: String) async -> String {
+        await withBrowsing {
+            do {
+                let res = try await agentPage.callJavaScript("""
+                    try {
+                        const el = document.querySelector(sel);
+                        if (!el) return 'NO_MATCH';
+                        el.scrollIntoView({block:'center'});
+                        el.click();
+                        return 'CLICKED';
+                    } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                """, arguments: ["sel": selector]) as? String
+                switch res {
+                case "CLICKED":  return "Clicked \(selector)."
+                case "NO_MATCH": return "No element matched \(selector)."
+                default:         return "Click \(selector): \(res ?? "no result")"
+                }
+            } catch {
+                return "ERROR: \(Self.agentErrorDetail(error))"
+            }
+        }
+    }
+
+    /// Type `text` into the first element matching `selector` via the React-safe
+    /// native value-setter (the XProbe idiom), optionally pressing Enter after.
+    func type(selector: String, text: String, enter: Bool) async -> String {
+        await withBrowsing {
+            do {
+                let res = try await agentPage.callJavaScript("""
+                    try {
+                        const el = document.querySelector(sel);
+                        if (!el) return 'NO_MATCH';
+                        el.focus();
+                        const proto = Object.getPrototypeOf(el);
+                        const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                        if (desc && desc.set) { desc.set.call(el, txt); } else { el.value = txt; }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (doEnter) {
+                            const k = { key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true };
+                            el.dispatchEvent(new KeyboardEvent('keydown', k));
+                            el.dispatchEvent(new KeyboardEvent('keypress', k));
+                            el.dispatchEvent(new KeyboardEvent('keyup', k));
+                        }
+                        return 'TYPED';
+                    } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                """, arguments: ["sel": selector, "txt": text, "doEnter": enter]) as? String
+                switch res {
+                case "TYPED":    return "Typed into \(selector)\(enter ? " and pressed Enter" : "")."
+                case "NO_MATCH": return "No element matched \(selector)."
+                default:         return "Type \(selector): \(res ?? "no result")"
+                }
+            } catch {
+                return "ERROR: \(Self.agentErrorDetail(error))"
+            }
+        }
+    }
+
+    /// Evaluate arbitrary JavaScript on the page and return its result coerced
+    /// to a readable string. The script may `return` a value (string / number /
+    /// bool / JSON-serialisable object). Best-effort.
+    func eval(js: String) async -> String {
+        await withBrowsing {
+            do {
+                // Wrap so callers can pass either an expression or statements;
+                // serialise non-string results to JSON for readability.
+                let wrapped = """
+                    try {
+                        const __r = (function(){ \(js) })();
+                        if (__r === undefined || __r === null) return String(__r);
+                        if (typeof __r === 'string') return __r;
+                        try { return JSON.stringify(__r); } catch (e) { return String(__r); }
+                    } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                """
+                let res = try await agentPage.callJavaScript(wrapped)
+                if let s = res as? String { return s }
+                if let n = res { return String(describing: n) }
+                return "(no result)"
+            } catch {
+                return "ERROR: \(Self.agentErrorDetail(error))"
+            }
+        }
+    }
+
+    /// Same-origin (or CORS-permitting) `fetch(url)` driven from the agent
+    /// page, returning the response status + body. Because it runs INSIDE the
+    /// page, the page's cookies ride along (`credentials:'include'`) — the
+    /// same in-WebKit API path the 雪球 scraper uses. Best-effort.
+    func fetchJSON(url: String) async -> String {
+        await withBrowsing {
+            do {
+                let obj = try await agentPage.callJavaScript("""
+                    try {
+                        const r = await fetch(u, { method: 'GET', credentials: 'include' });
+                        const text = await r.text();
+                        return { status: r.status, len: text.length, body: text };
+                    } catch (e) { return { error: ((e && e.message) ? e.message : String(e)) }; }
+                """, arguments: ["u": url]) as? [String: Any]
+                if let err = obj?["error"] as? String { return "FETCH ERROR: \(err)" }
+                let status = (obj?["status"] as? Int) ?? -1
+                let len = (obj?["len"] as? Int) ?? 0
+                let body = (obj?["body"] as? String) ?? ""
+                return "HTTP \(status) (\(len) chars)\n\(body)"
+            } catch {
+                return "ERROR: \(Self.agentErrorDetail(error))"
+            }
+        }
+    }
+
+    // MARK: - Agent-browser helpers
+
+    /// Coerce a user/agent-supplied URL string into a `URL`, defaulting the
+    /// scheme to https when omitted (so `example.com` works). Returns nil for
+    /// anything that still can't be parsed.
+    static func normalizedURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let u = URL(string: trimmed), u.scheme != nil { return u }
+        return URL(string: "https://\(trimmed)")
+    }
+
+    /// Compact navigation outcome for the agent driver (mirrors the probe's
+    /// idiom but folds -999/cancelled into an explicit `.superseded`).
+    private enum AgentNav: Equatable {
+        case finished, superseded, failed(String), timedOut
+    }
+
+    /// Drive `WebPage.load(_:)`'s event sequence to a verdict, racing
+    /// `agentTimeout`. Verbatim shape of the XProbe idiom.
+    private func awaitAgentNavigation<S: AsyncSequence>(_ events: S) async -> AgentNav
+        where S.Element == WebPage.NavigationEvent
+    {
+        let iterate = Task { @MainActor () -> AgentNav in
+            do {
+                for try await event in events {
+                    switch event {
+                    case .finished: return .finished
+                    case .startedProvisionalNavigation, .receivedServerRedirect, .committed: continue
+                    @unknown default: continue
+                    }
+                }
+                return Task.isCancelled ? .timedOut : .failed("stream ended without finishing")
+            } catch is CancellationError {
+                return .timedOut
+            } catch {
+                let m = error.localizedDescription
+                if m.contains("-999") || m.localizedCaseInsensitiveContains("cancel") { return .superseded }
+                return .failed(m)
+            }
+        }
+        let watchdog = Task { @MainActor in
+            try? await Task.sleep(for: agentTimeout)
+            iterate.cancel()
+        }
+        let outcome = await iterate.value
+        watchdog.cancel()
+        return outcome
+    }
+
+    /// Pull the underlying JS exception out of a thrown WebKit error (the
+    /// XProbe `errorDetail` idiom) so faults are actionable, not opaque.
+    private static func agentErrorDetail(_ error: Error) -> String {
+        let ns = error as NSError
+        if let msg = ns.userInfo["WKJavaScriptExceptionMessage"] as? String, !msg.isEmpty {
+            let line = ns.userInfo["WKJavaScriptExceptionLineNumber"] as? Int
+            return "JS: \(msg)" + (line.map { " (line \($0))" } ?? "")
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Login / logout

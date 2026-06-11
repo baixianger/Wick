@@ -15,6 +15,38 @@ public protocol AgentTool: Sendable {
     func call(arguments: Data) async throws -> String
 }
 
+/// Token-/length-bounding for tool results handed back to the model. Tool
+/// outputs (especially web reads — a page's text, a DOM outline, a JSON
+/// response) can be arbitrarily large; feeding the whole thing back blows the
+/// context window and drowns the signal. `ToolResultBounding.bound` clamps a
+/// string to a character budget, cutting on a UTF-8-safe boundary and appending
+/// a clear, machine-readable `…[truncated N chars]` marker so the model knows
+/// the result was cut (and roughly by how much) rather than silently ending.
+///
+/// Lives here (Foundation-only package) rather than app-side so the bounding
+/// logic is unit-testable without WebKit; the app-side `web.*` tools call it on
+/// every result. The character budget is a coarse proxy for tokens (~4 chars/
+/// token for English; CJK runs denser, so the budget is conservative).
+public enum ToolResultBounding {
+    /// Default per-result character budget. ~8k chars ≈ 2k tokens — generous
+    /// enough for a page outline or a trimmed JSON body, small enough that a
+    /// handful of tool calls in one turn don't exhaust the window.
+    public static let defaultLimit = 8_000
+
+    /// Clamp `text` to `limit` characters. Returns `text` unchanged when it
+    /// already fits; otherwise the first `limit` characters plus a
+    /// `…[truncated N chars]` suffix noting how many were dropped. Never splits
+    /// a Swift `Character` (grapheme) — `String.prefix(_:)` is grapheme-safe —
+    /// so the result is always valid text.
+    public static func bound(_ text: String, limit: Int = defaultLimit) -> String {
+        guard limit > 0 else { return "" }
+        if text.count <= limit { return text }
+        let kept = String(text.prefix(limit))
+        let dropped = text.count - kept.count
+        return kept + "\n…[truncated \(dropped) chars]"
+    }
+}
+
 /// Describes a tool to the model: name, what it does, and a JSON Schema for
 /// its parameters. Kept as a raw schema string so it maps onto any runtime's
 /// function-calling format without a dependency.

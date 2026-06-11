@@ -212,6 +212,19 @@ final class AgentSettings {
         didSet { UserDefaults.standard.set(enableXueqiuSentiment, forKey: "tf.enableXueqiuSentiment") }
     }
 
+    /// Give Wicker (the chat agent) browser-operation tools over the embedded
+    /// WebKit — navigate / read / snapshot / click / type / eval / fetchJSON
+    /// against ANY url, with a LIVE WebView panel that auto-appears in Wicker's
+    /// UI while it's driving the page. **Default FALSE** — opt-in. With the flag
+    /// OFF, none of the `web.*` tools are registered and the live panel never
+    /// shows, so behaviour is exactly as before. The visible live panel + this
+    /// flag are the MVP guardrail for the action tools (click / type / eval);
+    /// per-action write-confirmation is a hardening follow-up (see `WebTools`).
+    /// macOS 26+ only (the `WebPage` API floor) — inert below that even when on.
+    var enableWickerBrowser: Bool {
+        didSet { UserDefaults.standard.set(enableWickerBrowser, forKey: "tf.enableWickerBrowser") }
+    }
+
     // MARK: - Skills (user-supplied playbooks)
 
     var userSkillsDirectoryPath: String? {
@@ -337,6 +350,9 @@ final class AgentSettings {
         // Off by default — the BYO 雪球 scraping path is inert until the user
         // opts in (and signs in to 雪球 in the in-app browser).
         self.enableXueqiuSentiment = ud.bool(forKey: "tf.enableXueqiuSentiment")
+        // Off by default — Wicker's browser-operation tools + live panel stay
+        // inert until the user opts in (and the app is on macOS 26+).
+        self.enableWickerBrowser = ud.bool(forKey: "tf.enableWickerBrowser")
         self.userSkillsDirectoryPath = ud.string(forKey: "tf.userSkillsDir")
 
         self.chartSplitView = ud.bool(forKey: "ui.chartSplitView")
