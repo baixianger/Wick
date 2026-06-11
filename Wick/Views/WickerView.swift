@@ -22,6 +22,7 @@ import WebKit
 struct WickerView: View {
     @Bindable var store: ChatStore
     @Environment(AgentSettings.self) private var settings
+    @Environment(AgentRuntime.self) private var runtime
     @Environment(\.colorScheme) private var colorScheme
     /// Shared namespace for the session-row glass selection capsule.
     /// `glassEffectID` keyed to "sessionSelection" makes the capsule
@@ -39,6 +40,32 @@ struct WickerView: View {
     /// redesign. User toggles via the `sidebar.trailing` icon in the
     /// top-right of the conversation pane or ⌘⇧H.
     @State private var showHistoryDrawer: Bool = false
+    /// User pin for the right-side agent-browser panel. Hoisted here (out
+    /// of `WickerBrowserPanel`) so the reveal condition in `body` survives
+    /// the agent going idle — once pinned, the panel stays mounted and
+    /// open until the user collapses it, instead of unmounting and losing
+    /// per-view state the moment `isAgentBrowsing` flips false.
+    @State private var browserPinnedOpen: Bool = false
+
+    /// True while a `web.*` tool is mid-flight (macOS 26 + flag on +
+    /// a live `BrowserSessionManager`). Drives the right-region hand-off:
+    /// when this flips true we collapse the history drawer. Returns false
+    /// in every gated-off / pre-26 path so the legacy layout is untouched.
+    private var agentBrowserActive: Bool {
+        if #available(macOS 26.0, *), settings.enableWickerBrowser,
+           let manager = runtime.browserSession as? BrowserSessionManager {
+            return manager.isAgentBrowsing
+        }
+        return false
+    }
+
+    /// Whether the right-side browser panel should occupy the trailing
+    /// region: the agent is actively browsing, OR the user has pinned it
+    /// open to finish a login / inspect a result.
+    @available(macOS 26.0, *)
+    private func browserPanelRevealed(_ manager: BrowserSessionManager) -> Bool {
+        manager.isAgentBrowsing || browserPinnedOpen
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -59,14 +86,40 @@ struct WickerView: View {
                         .padding(.top, 12)
                         .padding(.trailing, 14)
                 }
-            if showHistoryDrawer {
+            // Right region is shared: the live agent browser (Option A
+            // slide-in) takes priority over the history drawer. Both are
+            // 280–360pt trailing panels; showing both at once would crush
+            // the conversation, so the browser auto-collapses the history
+            // drawer when it reveals (see `.onChange` below).
+            if #available(macOS 26.0, *), settings.enableWickerBrowser,
+               let manager = runtime.browserSession as? BrowserSessionManager,
+               browserPanelRevealed(manager)
+            {
+                Divider()
+                WickerBrowserPanel(manager: manager, pinnedOpen: $browserPinnedOpen)
+                    .frame(width: 380)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if showHistoryDrawer {
                 Divider()
                 sessionDrawer
                     .frame(width: 280)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        // Animate the right-side reveal when the agent starts/stops
+        // browsing (that flip comes from the manager, outside any
+        // `withAnimation` block, so the transition needs this value-keyed
+        // animation to slide rather than pop).
+        .animation(.snappy(duration: 0.25), value: agentBrowserActive)
         .background(appleBackground(for: colorScheme))
+        .onChange(of: agentBrowserActive) { _, active in
+            // When the agent starts browsing, hand the right region to the
+            // browser by collapsing the history drawer. The history toggle
+            // still works whenever the browser is closed.
+            if active, showHistoryDrawer {
+                withAnimation(.snappy(duration: 0.22)) { showHistoryDrawer = false }
+            }
+        }
         .onAppear { ensureSession() }
         .onChange(of: store.sessions.count) { _, _ in ensureSession() }
         .alert("Rename session",
@@ -432,28 +485,21 @@ private struct ConversationView: View {
         //   - NORMAL : transcript above, composer pinned at bottom.
         // Same `submit()` powers both — only the spatial framing
         // around the composer differs.
-        VStack(spacing: 0) {
-            Group {
-                if showHero {
-                    heroLayout
-                } else {
-                    VStack(spacing: 0) {
-                        transcript
-                        composer
-                    }
+        // The live agent-browser panel used to mount here, at the bottom
+        // of the conversation pane. It now lives at `WickerView.body` as a
+        // RIGHT-side slide-in (Option A) so it shares the right region with
+        // the history drawer instead of stacking under the composer.
+        Group {
+            if showHero {
+                heroLayout
+            } else {
+                VStack(spacing: 0) {
+                    transcript
+                    composer
                 }
             }
-            .frame(maxHeight: .infinity)
-            // Live browser panel — only on macOS 26 AND only when the user has
-            // opted into Wicker's browser tools. It auto-reveals while the agent
-            // is driving the page and collapses when idle. Gated entirely so the
-            // flag-OFF / pre-26 experience is byte-for-byte unchanged.
-            if #available(macOS 26.0, *), settings.enableWickerBrowser,
-               let manager = runtime.browserSession as? BrowserSessionManager
-            {
-                WickerBrowserPanel(manager: manager)
-            }
         }
+        .frame(maxHeight: .infinity)
         // Auto-continue: if the session opens with an unanswered user
         // turn (typical when the FloatingWickerComposer kicked off a
         // chat from outside Wicker), dispatch the agent loop on
@@ -1068,7 +1114,16 @@ private struct ConversationView: View {
     private func handleAgentEvent(_ event: ChatEvent) {
         switch event {
         case .toolCall(let name, _):
-            pendingLabel = "calling \(name)…"
+            // `web.*` tool calls (navigate / read / click / type …) drive
+            // the live agent browser — surface them as a friendly
+            // "Browsing" label with a globe glyph rather than the raw tool
+            // name, matching the right-side browser panel's affordance.
+            if name.hasPrefix("web.") {
+                let action = name.dropFirst("web.".count)
+                pendingLabel = "🌐 Browsing: \(action.isEmpty ? name : String(action))…"
+            } else {
+                pendingLabel = "calling \(name)…"
+            }
         case .toolResult:
             pendingLabel = "thinking…"
         case .userTurn, .assistantRaw, .finalReply:
@@ -1360,34 +1415,34 @@ private struct TypingIndicator: View {
 /// login / human-intervention surface (sign in to a gated site, solve a captcha,
 /// etc.) without tearing down the page the tools own.
 ///
-/// Reveal logic: the panel slides in from the bottom whenever
-/// `manager.isAgentBrowsing` flips true (a tool is mid-flight). When the agent
-/// goes idle it collapses to a slim status bar rather than vanishing, so the
-/// user can re-expand it to intervene; a manual pin keeps it open. Hosted only
-/// under `#if available(macOS 26)` + the opt-in flag (the caller gates both).
+/// Reveal logic: the panel slides in from the RIGHT (Option A) whenever
+/// `manager.isAgentBrowsing` flips true (a tool is mid-flight), pushing the
+/// conversation pane left. When the agent goes idle the panel stays only if the
+/// user pinned it (`pinnedOpen`) — otherwise the caller's reveal condition drops
+/// it and it slides back out. The pin is owned by `WickerView` and passed in as
+/// a binding so that pinned state outlives the agent's idle/active flips (the
+/// view itself unmounts when unpinned + idle). Hosted only under
+/// `#if available(macOS 26)` + the opt-in flag (the caller gates both).
 @available(macOS 26.0, *)
 private struct WickerBrowserPanel: View {
     let manager: BrowserSessionManager
-    /// User pin — once the user expands the panel we keep it open even after the
-    /// agent goes idle, so they can finish a login / inspect the result.
-    @State private var pinnedOpen = false
-
-    private var expanded: Bool { manager.isAgentBrowsing || pinnedOpen }
+    /// User pin, owned by `WickerView`. Once set, the panel stays open even
+    /// after the agent goes idle, so the user can finish a login / inspect the
+    /// result. Toggling it off while idle collapses the panel out of the right
+    /// region entirely (the caller stops mounting it).
+    @Binding var pinnedOpen: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
             header
-            if expanded {
-                #if canImport(WebKit)
-                WebView(manager.agentPage)
-                    .frame(height: 320)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                #endif
-            }
+            Divider()
+            #if canImport(WebKit)
+            WebView(manager.agentPage)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #endif
         }
+        .frame(maxHeight: .infinity)
         .background(.regularMaterial)
-        .animation(.snappy(duration: 0.25), value: expanded)
     }
 
     private var header: some View {
@@ -1409,15 +1464,22 @@ private struct WickerBrowserPanel: View {
                     .truncationMode(.middle)
             }
             Spacer()
+            // Pin keeps the panel open after the agent goes idle. Toggling
+            // it off while idle slides the panel back out (the caller drops
+            // it from the right region). While the agent is actively
+            // browsing the panel stays regardless, so the control reads as a
+            // pure pin rather than a hide button.
             Button {
-                withAnimation(.snappy(duration: 0.22)) { pinnedOpen.toggle() }
+                withAnimation(.snappy(duration: 0.25)) { pinnedOpen.toggle() }
             } label: {
-                Image(systemName: expanded ? "chevron.down" : "chevron.up")
+                Image(systemName: pinnedOpen ? "pin.fill" : "pin")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(pinnedOpen
+                                     ? AnyShapeStyle(Color.accentColor)
+                                     : AnyShapeStyle(HierarchicalShapeStyle.secondary))
             }
             .buttonStyle(.plain)
-            .help(expanded ? "Collapse browser panel" : "Show browser panel")
+            .help(pinnedOpen ? "Unpin browser panel" : "Keep browser panel open")
             .accessibilityIdentifier("WickerBrowserPanelToggle")
         }
         .padding(.horizontal, 14)
