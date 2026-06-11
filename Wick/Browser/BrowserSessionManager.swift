@@ -339,6 +339,79 @@ final class BrowserSessionManager: XueqiuScraping {
         }
     }
 
+    // MARK: - Wicker agent browser: USER-driven navigation (address bar)
+    //
+    // The live panel's address bar + back/forward/reload buttons call these. They
+    // drive the SAME `agentPage` the `web.*` tools read/operate — that is the whole
+    // point: a page the user opens by hand becomes the page the agent then sees via
+    // `web.read`/`web.snapshot`/etc. We deliberately do NOT spin up a second page.
+    //
+    // Unlike the tool drivers above these are NOT bracketed by `withBrowsing`: a
+    // user typing a URL isn't the *agent* browsing, so we don't want the panel's
+    // "Wicker is browsing…" affordance to flash. We still keep `agentCurrentURL`
+    // current so the address field reflects the live location.
+
+    /// Load `agentPage` to `url` on the user's behalf (address-bar submit). Mirrors
+    /// the `navigate(to:)` idiom — `load(URLRequest:)`, drive the returned event
+    /// sequence to a verdict (tolerating a superseded -999 nav), then refresh
+    /// `agentCurrentURL` from the page so the bar tracks redirects. Best-effort and
+    /// non-throwing, like every other driver here.
+    func userNavigate(_ url: URL) async {
+        log.info("[AgentBrowser] userNavigate → \(url.absoluteString, privacy: .public)")
+        let events = agentPage.load(URLRequest(url: url))
+        _ = await awaitAgentNavigation(events)
+        syncAgentURL(fallback: url)
+    }
+
+    /// Reload the current page (address-bar reload button). Uses `WebPage`'s native
+    /// `reload()`, which returns the same (non-optional) `NavigationEvent` sequence
+    /// `load` does — settle it through the shared helper, then re-sync the URL.
+    func reload() async {
+        log.info("[AgentBrowser] reload")
+        let events = agentPage.reload()
+        _ = await awaitAgentNavigation(events)
+        syncAgentURL(fallback: agentCurrentURL)
+    }
+
+    /// Step back in `agentPage`'s history (address-bar back button). The macOS 26
+    /// `WebPage` surface exposes no `goBack()`, so we drive it the way the rest of
+    /// this file drives the page — in-page JS (`history.back()`). The hop routes
+    /// client-side (no `load` event sequence to await), so we let the page settle
+    /// briefly, then re-sync the URL. Best-effort.
+    func goBack() async {
+        log.info("[AgentBrowser] goBack")
+        _ = try? await agentPage.callJavaScript("history.back()")
+        await settleAndSyncURL()
+    }
+
+    /// Step forward in `agentPage`'s history (address-bar forward button). Same
+    /// rationale as `goBack()`: no native `goForward()`, so drive `history.forward()`
+    /// in-page, settle, and re-sync the URL. Best-effort.
+    func goForward() async {
+        log.info("[AgentBrowser] goForward")
+        _ = try? await agentPage.callJavaScript("history.forward()")
+        await settleAndSyncURL()
+    }
+
+    /// Give a JS-driven history hop a brief moment to commit, then re-sync the
+    /// address bar from the page's authoritative URL. The wait is bounded and
+    /// best-effort — a missed update just leaves the prior URL showing.
+    private func settleAndSyncURL() async {
+        try? await Task.sleep(for: .milliseconds(150))
+        syncAgentURL(fallback: agentCurrentURL)
+    }
+
+    /// Pull the page's authoritative current URL into `agentCurrentURL` so the
+    /// address bar mirrors redirects / history hops, falling back to the supplied
+    /// value when the page hasn't published one yet (e.g. about:blank).
+    private func syncAgentURL(fallback: URL?) {
+        if let live = agentPage.url {
+            agentCurrentURL = live
+        } else if let fallback {
+            agentCurrentURL = fallback
+        }
+    }
+
     // MARK: - Agent-browser helpers
 
     /// Coerce a user/agent-supplied URL string into a `URL`, defaulting the

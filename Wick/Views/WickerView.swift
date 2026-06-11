@@ -1443,6 +1443,12 @@ private struct WickerBrowserPanel: View {
     /// region entirely (the caller stops mounting it).
     @Binding var pinnedOpen: Bool
 
+    /// Address-bar text. Locally owned (the user types into it) but kept in lock-
+    /// step with `manager.agentCurrentURL` so it reflects wherever the SHARED
+    /// `agentPage` actually is — whether the user typed it or the agent navigated
+    /// there. Seeded on appear and re-synced via `.onChange` below.
+    @State private var urlText: String = ""
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -1456,25 +1462,40 @@ private struct WickerBrowserPanel: View {
         .background(.regularMaterial)
     }
 
+    /// One compact toolbar row: status glyph, back / forward / reload, the address
+    /// `TextField` (drives the SHARED `agentPage` on submit — the whole point: a
+    /// page the user opens by hand becomes the page the agent then reads), and the
+    /// pin toggle. The `WebView` fills the area below.
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: "globe")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(manager.isAgentBrowsing
                                  ? AnyShapeStyle(Color.accentColor)
                                  : AnyShapeStyle(HierarchicalShapeStyle.secondary))
                 .symbolEffect(.pulse, isActive: manager.isAgentBrowsing)
-            Text(manager.isAgentBrowsing ? "Wicker is browsing…" : "Agent browser")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-            if let url = manager.agentCurrentURL {
-                Text(url.host ?? url.absoluteString)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer()
+                .help(manager.isAgentBrowsing ? "Wicker is browsing…" : "Agent browser")
+
+            // History / reload, all driving the shared agentPage.
+            navButton("chevron.left", help: "Back") { await manager.goBack() }
+            navButton("chevron.right", help: "Forward") { await manager.goForward() }
+            navButton("arrow.clockwise", help: "Reload") { await manager.reload() }
+
+            // Address bar — type a URL, press Enter (or the Go arrow) to load the
+            // SHARED agentPage. Normalisation (scheme defaulting) is done on submit.
+            TextField("Address", text: $urlText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .onSubmit(submitAddress)
+                .accessibilityIdentifier("WickerBrowserAddressField")
+
+            navButton("arrow.right.circle.fill", help: "Go", action: { submitAddress() })
+
             // Pin keeps the panel open after the agent goes idle. Toggling
             // it off while idle slides the panel back out (the caller drops
             // it from the right region). While the agent is actively
@@ -1493,8 +1514,39 @@ private struct WickerBrowserPanel: View {
             .help(pinnedOpen ? "Unpin browser panel" : "Keep browser panel open")
             .accessibilityIdentifier("WickerBrowserPanelToggle")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        // Seed the field from the live page on first appearance, then track every
+        // navigation (user- OR agent-driven) so the bar always shows where the
+        // shared agentPage actually is.
+        .onAppear { urlText = manager.agentCurrentURL?.absoluteString ?? "" }
+        .onChange(of: manager.agentCurrentURL) { _, newValue in
+            urlText = newValue?.absoluteString ?? ""
+        }
+    }
+
+    /// A small plain SF-Symbol toolbar button wrapping an async manager action.
+    private func navButton(_ symbol: String,
+                           help: String,
+                           action: @escaping () async -> Void) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    /// Normalise the typed address (default the scheme to https when omitted) and
+    /// load the SHARED `agentPage`. A blank / unparseable entry is a no-op.
+    private func submitAddress() {
+        guard let url = BrowserSessionManager.normalizedURL(urlText) else { return }
+        Task { await manager.userNavigate(url) }
     }
 }
 
