@@ -96,8 +96,13 @@ struct WickerView: View {
                browserPanelRevealed(manager)
             {
                 Divider()
+                // Browser gets the LARGER share of the workspace when open —
+                // the user is logging in / watching a real page, so the
+                // conversation narrows to give the live page room. The main
+                // window is ≥1180pt wide, so a 560pt browser still leaves a
+                // usable ≥620pt for chat.
                 WickerBrowserPanel(manager: manager, pinnedOpen: $browserPinnedOpen)
-                    .frame(width: 380)
+                    .frame(width: 560)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if showHistoryDrawer {
                 Divider()
