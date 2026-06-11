@@ -182,9 +182,14 @@ private struct IntelligenceGlow: View {
                 // the cycling colour at once.
                 shape
                     .inset(by: layer.width / 2)
-                    .stroke(style: StrokeStyle(lineWidth: layer.width * intensity,
-                                               lineCap: .round))
-                    .mask(flow)
+                    // Fill the stroke WITH the flowing gradient (not mask it).
+                    // `.stroke(style:).mask(flow)` was the bug: a plain stroke
+                    // defaults to the black foreground, and an opaque gradient
+                    // used as an alpha mask leaves it black — a dark ring with
+                    // no colour. `.stroke(content:style:)` paints the stroke in
+                    // the gradient itself, so the hues actually show + flow.
+                    .stroke(flow, style: StrokeStyle(lineWidth: layer.width * intensity,
+                                                     lineCap: .round))
                     .blur(radius: layer.blur * intensity)
                     .opacity(layer.opacity)
             }
