@@ -113,11 +113,17 @@ struct WickerView: View {
         .animation(.snappy(duration: 0.25), value: agentBrowserActive)
         .background(appleBackground(for: colorScheme))
         .onChange(of: agentBrowserActive) { _, active in
-            // When the agent starts browsing, hand the right region to the
-            // browser by collapsing the history drawer. The history toggle
-            // still works whenever the browser is closed.
-            if active, showHistoryDrawer {
-                withAnimation(.snappy(duration: 0.22)) { showHistoryDrawer = false }
+            if active {
+                // AUTO-PIN the panel the instant the agent starts browsing, so
+                // it STAYS open after the (often sub-second) tool call finishes
+                // — otherwise the page just flashes by and the user can't log
+                // in / watch / take over. They dismiss it with the panel's pin
+                // toggle. Also hand the right region to the browser by
+                // collapsing the history drawer (it still toggles when closed).
+                withAnimation(.snappy(duration: 0.22)) {
+                    browserPinnedOpen = true
+                    showHistoryDrawer = false
+                }
             }
         }
         .onAppear { ensureSession() }
