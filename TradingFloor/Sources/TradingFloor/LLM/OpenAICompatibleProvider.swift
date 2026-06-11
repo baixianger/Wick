@@ -71,14 +71,27 @@ public struct OpenAICompatibleProvider: LLMProvider {
         }
         do {
             let decoded = try JSONDecoder().decode(Reply.self, from: data)
-            guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
+            let msg = decoded.choices.first?.message
+            // `content` is OPTIONAL: reasoning models (DeepSeek, etc.) often
+            // return `content: null` and put the answer in `reasoning_content`,
+            // and some turns legitimately have null content. Decoding it as a
+            // non-optional `String` threw a Codable "data missing" error that
+            // surfaced to the user as a raw decode failure. Resolve content,
+            // then fall back to reasoning, before deciding it's truly empty.
+            let text = (msg?.content?.isEmpty == false ? msg?.content : nil)
+                ?? msg?.reasoning_content
+            guard let text, !text.isEmpty else {
                 throw LLMError.empty
             }
             return text
         } catch let error as LLMError {
             throw error
         } catch {
-            throw LLMError.decoding(error.localizedDescription)
+            // Include a snippet of the raw body so a shape mismatch (e.g. an
+            // error JSON returned with HTTP 200) is diagnosable instead of an
+            // opaque "data couldn't be read".
+            let snippet = String(data: data.prefix(300), encoding: .utf8) ?? ""
+            throw LLMError.decoding("\(error.localizedDescription) — body: \(snippet)")
         }
     }
 
@@ -93,7 +106,15 @@ public struct OpenAICompatibleProvider: LLMProvider {
     }
 
     private struct Reply: Decodable {
-        struct Choice: Decodable { struct Message: Decodable { let content: String }; let message: Message }
+        struct Choice: Decodable {
+            struct Message: Decodable {
+                // Both OPTIONAL: reasoning models return `content: null` with
+                // the answer in `reasoning_content`; either may be absent.
+                let content: String?
+                let reasoning_content: String?
+            }
+            let message: Message
+        }
         let choices: [Choice]
     }
 }
