@@ -60,10 +60,13 @@ struct SettingsView: View {
             detail(for: selection)
                 .navigationTitle(selection.title)
         }
-        // Grouped forms are taller (cards + headers) and scroll, so a
-        // comfortable min keeps the first card un-clipped while the
-        // window still opens compact.
-        .frame(minWidth: 820, idealWidth: 860, minHeight: 580, idealHeight: 680)
+        // RESIZABLE: a min keeps the first card un-clipped + an ideal sets
+        // the opening size, but `maxWidth/Height: .infinity` lets the user
+        // drag the window larger (System Settings is resizable). Without the
+        // `.infinity` maxes the ideal pinned the window and the resize
+        // handles did nothing.
+        .frame(minWidth: 720, idealWidth: 860, maxWidth: .infinity,
+               minHeight: 540, idealHeight: 680, maxHeight: .infinity)
     }
 
     /// Hosts the existing per-tab view for `category` as detail content.
