@@ -139,12 +139,11 @@ struct WickApp: App {
 
         // Native macOS Settings scene — reachable via ⌘, and the
         // standard "Wick › Settings…" menu item. SwiftUI auto-wires
-        // the menu item to this Scene's content and supplies the
-        // standard Preferences chrome (icon-above-label tab strip,
-        // window auto-resizes to the active tab's `.frame(width:)`).
-        // No explicit frame here — each tab in `SettingsView` sets
-        // its own width via `.fixedSize`, à la Apple's first-party
-        // apps (Mail.app, lingu).
+        // the menu item to this Scene's content. `SettingsView` is a
+        // two-column `NavigationSplitView` (category sidebar + detail,
+        // the System Settings look) and carries its own fixed window
+        // size via `.frame(minWidth:…)` on the split-view root — so no
+        // explicit frame is needed here.
         Settings {
             SettingsView(settings: agentSettings)
                 .environment(dataStore)

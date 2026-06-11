@@ -2,47 +2,96 @@ import SwiftUI
 import TradingFloor
 import UniformTypeIdentifiers
 
-/// Native macOS Preferences pane. Renders as the standard
-/// icon-above-label tab strip Apple's first-party apps use (Mail,
-/// Notes, Calendar) — that chrome comes free from putting a `TabView`
-/// inside the App's `Settings { ... }` Scene.
+/// Native macOS Settings pane. Renders as the modern two-column
+/// sidebar Apple's System Settings (macOS 13+) and pro apps use: a
+/// category `List` on the LEFT, the selected category's `Form` on the
+/// RIGHT — replacing the older icon-above-label tab strip.
 ///
-/// Pattern mirrors the user's lingu app for consistency:
-///   - `TabView` with one `.tabItem { Label(name, systemImage: icon) }`
-///     per tab — macOS supplies the icon-above-label tab strip and
-///     auto-titles the window to the active tab.
-///   - Each tab is a `Form` with `.formStyle(.columns)` for the
-///     `"Label:  control"` Mail.app row pattern.
-///   - Per-tab `.frame(width: 440)` + `.fixedSize(horizontal: false,
-///     vertical: true)` lets the Preferences window auto-resize to
-///     the active tab's natural height.
+/// Structure:
+///   - `NavigationSplitView` with a `List(selection:)` sidebar over
+///     `SettingsCategory` (one case per former tab — same titles +
+///     SF Symbol icons) in `.sidebar` style. Selection drives a
+///     `switch` in the detail pane that hosts the EXISTING per-tab
+///     `View` structs verbatim (`ProviderTab`, `DataSourcesTab`, …).
+///   - Each tab is still a `Form` with `.formStyle(.columns)` for the
+///     `"Label:  control"` Mail.app row pattern; the per-tab
+///     `.frame(width:)` / `.fixedSize` that TabView used for window
+///     sizing are gone — the detail pane fills the right column and
+///     the split-view root carries one fixed window size instead.
 ///   - No `NavigationStack`, no Done button — the close-window red
 ///     dot dismisses, matching System Settings.
 struct SettingsView: View {
     @Bindable var settings: AgentSettings
 
+    /// Default-selects Provider so the window never opens to an empty
+    /// detail pane. Persisted only for the session — Settings is modal
+    /// enough that re-opening to Provider each time is the expected
+    /// macOS behaviour.
+    @State private var selection: SettingsCategory = .provider
+
     var body: some View {
-        TabView {
-            ProviderTab(settings: settings)
-                .tabItem { Label("Provider", systemImage: "key.fill") }
+        NavigationSplitView {
+            List(SettingsCategory.allCases, selection: $selection) { category in
+                Label(category.title, systemImage: category.systemImage)
+                    .tag(category)
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+        } detail: {
+            detail(for: selection)
+        }
+        .frame(minWidth: 780, idealWidth: 820, minHeight: 540, idealHeight: 600)
+    }
 
-            DataSourcesTab(settings: settings)
-                .tabItem { Label("Data", systemImage: "chart.line.uptrend.xyaxis") }
+    /// Hosts the existing per-tab view for `category` as detail content.
+    /// Each struct already wraps itself in a `Form`, so it fills the
+    /// right pane directly.
+    @ViewBuilder
+    private func detail(for category: SettingsCategory) -> some View {
+        switch category {
+        case .provider:  ProviderTab(settings: settings)
+        case .data:      DataSourcesTab(settings: settings)
+        case .workflow:  WorkflowTab(settings: settings)
+        case .freeAgent: FreeAgentTab(settings: settings)
+        case .skills:    SkillsTab(settings: settings)
+        case .display:   AppearanceTab(settings: settings)
+        case .mcp:       MCPTab()
+        }
+    }
+}
 
-            WorkflowTab(settings: settings)
-                .tabItem { Label("Workflow", systemImage: "list.bullet.indent") }
+// MARK: - Sidebar categories
 
-            FreeAgentTab(settings: settings)
-                .tabItem { Label("Free Agent", systemImage: "bubble.left.and.bubble.right") }
+/// One case per former Settings tab. Carries the SAME title + SF Symbol
+/// the `.tabItem` Label used, so the sidebar reads identically to the
+/// old tab strip. `CaseIterable` order is the sidebar order (Provider
+/// first, matching the default selection).
+private enum SettingsCategory: String, CaseIterable, Identifiable {
+    case provider, data, workflow, freeAgent, skills, display, mcp
 
-            SkillsTab(settings: settings)
-                .tabItem { Label("Skills", systemImage: "book.closed") }
+    var id: String { rawValue }
 
-            AppearanceTab(settings: settings)
-                .tabItem { Label("Display", systemImage: "paintpalette") }
+    var title: String {
+        switch self {
+        case .provider:  return "Provider"
+        case .data:      return "Data"
+        case .workflow:  return "Workflow"
+        case .freeAgent: return "Free Agent"
+        case .skills:    return "Skills"
+        case .display:   return "Display"
+        case .mcp:       return "MCP"
+        }
+    }
 
-            MCPTab()
-                .tabItem { Label("MCP", systemImage: "puzzlepiece.extension") }
+    var systemImage: String {
+        switch self {
+        case .provider:  return "key.fill"
+        case .data:      return "chart.line.uptrend.xyaxis"
+        case .workflow:  return "list.bullet.indent"
+        case .freeAgent: return "bubble.left.and.bubble.right"
+        case .skills:    return "book.closed"
+        case .display:   return "paintpalette"
+        case .mcp:       return "puzzlepiece.extension"
         }
     }
 }
@@ -163,8 +212,6 @@ private struct MCPTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Locate the helper relative to the current bundle. In a production
@@ -356,8 +403,6 @@ private struct DataSourcesTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -441,8 +486,6 @@ private struct ProviderTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 540)
-        .fixedSize(horizontal: false, vertical: true)
         // Auto-fetch the provider's /models list whenever the user
         // switches provider OR pastes a new key. Debounced ~700ms
         // so we don't hammer the endpoint on every keystroke; the
@@ -697,8 +740,6 @@ private struct WorkflowTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// The four analysts that run on every desk, in canonical order.
@@ -751,8 +792,6 @@ private struct FreeAgentTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -807,8 +846,6 @@ private struct SkillsTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
         .task(id: settings.userSkillsDirectoryPath) { await refresh() }
         .fileImporter(isPresented: $picking,
                       allowedContentTypes: [.folder],
@@ -866,7 +903,5 @@ private struct AppearanceTab: View {
         }
         .formStyle(.columns)
         .padding(20)
-        .frame(width: 460)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
