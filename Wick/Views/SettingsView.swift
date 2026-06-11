@@ -13,8 +13,12 @@ import UniformTypeIdentifiers
 ///     SF Symbol icons) in `.sidebar` style. Selection drives a
 ///     `switch` in the detail pane that hosts the EXISTING per-tab
 ///     `View` structs verbatim (`ProviderTab`, `DataSourcesTab`, …).
-///   - Each tab is still a `Form` with `.formStyle(.columns)` for the
-///     `"Label:  control"` Mail.app row pattern; the per-tab
+///   - Each tab is a `Form` with `.formStyle(.grouped)` so its
+///     sections render as inset rounded-rectangle cards with bold
+///     headers — the System Settings look. A large-title category
+///     header (`SettingsDetailHeader`) crowns the pane via a top
+///     safe-area inset; high-value rows adopt the icon-tile + title +
+///     subtitle + trailing-control cell (`SettingsRow`). The per-tab
 ///     `.frame(width:)` / `.fixedSize` that TabView used for window
 ///     sizing are gone — the detail pane fills the right column and
 ///     the split-view root carries one fixed window size instead.
@@ -33,14 +37,29 @@ struct SettingsView: View {
         NavigationSplitView {
             List(SettingsCategory.allCases, selection: $selection) { category in
                 Label(category.title, systemImage: category.systemImage)
+                    // A consistent symbol frame keeps the leading icons
+                    // optically aligned (some SF Symbols are wider than
+                    // others), so the labels line up like System Settings.
+                    .labelStyle(SidebarLabelStyle())
                     .tag(category)
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
         } detail: {
+            // A large bold category header crowns each pane (the
+            // System Settings look), with the grouped `Form` below.
+            // The non-functional `‹ ›` chevrons are decorative chrome
+            // that mirrors the reference — disabled so they read as
+            // affordance-shaped ornament, not a live control.
             detail(for: selection)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    SettingsDetailHeader(title: selection.title)
+                }
         }
-        .frame(minWidth: 780, idealWidth: 820, minHeight: 540, idealHeight: 600)
+        // Grouped forms are taller (cards + headers) and scroll, so a
+        // comfortable min keeps the first card un-clipped while the
+        // window still opens compact.
+        .frame(minWidth: 820, idealWidth: 860, minHeight: 580, idealHeight: 660)
     }
 
     /// Hosts the existing per-tab view for `category` as detail content.
@@ -56,6 +75,91 @@ struct SettingsView: View {
         case .skills:    SkillsTab(settings: settings)
         case .display:   AppearanceTab(settings: settings)
         case .mcp:       MCPTab()
+        }
+    }
+}
+
+// MARK: - Shared chrome
+
+/// Large bold title strip that crowns every detail pane — the System
+/// Settings "big page title with ‹ › chevrons" header. The chevrons are
+/// decorative (disabled), present only to match the reference; the
+/// title text is the live, category-driven content. Sits in a top
+/// safe-area inset above the grouped `Form` so the form's scroll never
+/// rides over it.
+private struct SettingsDetailHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 2) {
+                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.right")
+            }
+            .font(.title3.weight(.medium))
+            .foregroundStyle(.tertiary)
+
+            Text(title)
+                .font(.largeTitle.bold())
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 10)
+        .background(.bar)
+    }
+}
+
+/// Sidebar `Label` style with a fixed-width symbol slot so every row's
+/// title starts at the same x regardless of glyph width — the calm,
+/// aligned look of the System Settings sidebar.
+private struct SidebarLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.icon
+                .frame(width: 20, alignment: .center)
+            configuration.title
+        }
+    }
+}
+
+/// Reusable "icon-tile + title + subtitle + trailing control" row — the
+/// rich System Settings cell. A rounded `tint`-filled tile carries the
+/// SF Symbol on the leading edge, a `title` + secondary `subtitle`
+/// stack fills the middle, and any `control` (toggle, field, button)
+/// pins to the trailing edge. Used for the highest-value rows; plain
+/// `Toggle`/`TextField` rows stay as-is so the density matches the ref.
+private struct SettingsRow<Control: View>: View {
+    let systemImage: String
+    let tint: Color
+    let title: String
+    var subtitle: String? = nil
+    @ViewBuilder var control: () -> Control
+
+    var body: some View {
+        LabeledContent {
+            control()
+        } label: {
+            HStack(spacing: 11) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(tint.gradient)
+                    .frame(width: 26, height: 26)
+                    .overlay {
+                        Image(systemName: systemImage)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    if let subtitle {
+                        Text(.init(subtitle))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
     }
 }
@@ -130,27 +234,24 @@ private struct MCPTab: View {
     var body: some View {
         Form {
             Section("Helper") {
-                HStack {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
-                    Text("`wick-mcp` ships inside Wick.app")
-                    Spacer()
+                // Rich status row: a green/orange icon-tile signals
+                // whether the App Group bridge is live, with the
+                // bundle/provisioning detail as the subtitle.
+                SettingsRow(
+                    systemImage: SharedStore.isAppGroupAvailable
+                        ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
+                    tint: SharedStore.isAppGroupAvailable ? .green : .orange,
+                    title: "`wick-mcp` ships inside Wick.app",
+                    subtitle: SharedStore.isAppGroupAvailable
+                        ? "Sharing holdings + watchlist with helper (App Group active)"
+                        : "App Group not provisioned — helper will see empty holdings"
+                ) {
+                    EmptyView()
                 }
                 Text(helperPath)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                HStack {
-                    Image(systemName: SharedStore.isAppGroupAvailable
-                                       ? "link.circle.fill"
-                                       : "exclamationmark.triangle.fill")
-                        .foregroundStyle(SharedStore.isAppGroupAvailable
-                                          ? Color.green : Color.orange)
-                    Text(SharedStore.isAppGroupAvailable
-                          ? "Sharing holdings + watchlist with helper (App Group active)"
-                          : "App Group not provisioned — helper will see empty holdings")
-                        .font(.caption)
-                }
                 HStack {
                     Button {
                         Task { await runTest() }
@@ -210,8 +311,7 @@ private struct MCPTab: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
     }
 
     /// Locate the helper relative to the current bundle. In a production
@@ -384,25 +484,47 @@ private struct DataSourcesTab: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
+                // Each data source is its own card: an icon-tiled
+                // header row naming the source, the key field below it,
+                // and the provider/fallback note as caption. The tile
+                // colour codes the source so the three cards scan apart
+                // at a glance.
                 Section("Fundamentals & price (FMP)") {
+                    SettingsRow(systemImage: "chart.bar.doc.horizontal",
+                                tint: .blue,
+                                title: "Financial Modeling Prep",
+                                subtitle: "price history, fundamentals, profile") {
+                        EmptyView()
+                    }
                     SecureField("FMP API key:", text: $settings.fmpKey)
                     Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("News & sentiment (Finnhub)") {
+                    SettingsRow(systemImage: "newspaper",
+                                tint: .indigo,
+                                title: "Finnhub",
+                                subtitle: "company headlines, sentiment") {
+                        EmptyView()
+                    }
                     SecureField("Finnhub API key:", text: $settings.finnhubKey)
                     Text("[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \"no data\".")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Macro backdrop (FRED)") {
+                    SettingsRow(systemImage: "building.columns",
+                                tint: .teal,
+                                title: "FRED · St. Louis Fed",
+                                subtitle: "rates, spreads, unemployment, CPI") {
+                        EmptyView()
+                    }
                     SecureField("FRED API key:", text: $settings.fredKey)
                     Text("[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · Fed funds, 10y, 10y-2y spread, unemployment, CPI YoY. Free; commercial-OK with attribution. Empty = no macro context in reports.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
     }
 }
 
@@ -439,7 +561,17 @@ private struct ProviderTab: View {
                 }
             } else {
                 Section("Provider") {
-                    providerPicker
+                    // Rich provider row: a keyed icon-tile + the live
+                    // provider name as subtitle, with the dropdown on
+                    // the trailing edge.
+                    SettingsRow(systemImage: "cpu",
+                                tint: .purple,
+                                title: "LLM provider",
+                                subtitle: settings.providerKind.displayName) {
+                        providerPicker
+                            .labelsHidden()
+                            .frame(maxWidth: 220)
+                    }
                     if settings.providerKind == .claudeCode {
                         // No URL / key — Claude Code uses local OAuth.
                         // Just let the user override the binary path if
@@ -484,8 +616,7 @@ private struct ProviderTab: View {
                 }
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
         // Auto-fetch the provider's /models list whenever the user
         // switches provider OR pastes a new key. Debounced ~700ms
         // so we don't hammer the endpoint on every keystroke; the
@@ -730,16 +861,26 @@ private struct WorkflowTab: View {
                 }
             }
             Section("BYO 浏览器（实验）") {
-                Toggle("启用 Wicker 浏览器工具", isOn: $settings.enableWickerBrowser)
-                Text("让 Wicker 通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Toggle("雪球 BYO 讨论(情绪源)", isOn: $settings.enableXueqiuSentiment)
-                Text("把你登录的雪球个股讨论纳入情绪分析。默认关;需先在个股 Social tab 连接雪球登录。")
-                    .font(.caption).foregroundStyle(.secondary)
+                // Rich toggle rows: icon-tile + the existing long
+                // descriptions promoted to subtitle, control on the
+                // trailing edge.
+                SettingsRow(systemImage: "globe",
+                            tint: .blue,
+                            title: "启用 Wicker 浏览器工具",
+                            subtitle: "让 Wicker 通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。") {
+                    Toggle("", isOn: $settings.enableWickerBrowser)
+                        .labelsHidden()
+                }
+                SettingsRow(systemImage: "bubble.left.and.text.bubble.right",
+                            tint: .green,
+                            title: "雪球 BYO 讨论(情绪源)",
+                            subtitle: "把你登录的雪球个股讨论纳入情绪分析。默认关;需先在个股 Social tab 连接雪球登录。") {
+                    Toggle("", isOn: $settings.enableXueqiuSentiment)
+                        .labelsHidden()
+                }
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
     }
 
     /// The four analysts that run on every desk, in canonical order.
@@ -790,8 +931,7 @@ private struct FreeAgentTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
     }
 }
 
@@ -844,8 +984,7 @@ private struct SkillsTab: View {
                 }
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
         .task(id: settings.userSkillsDirectoryPath) { await refresh() }
         .fileImporter(isPresented: $picking,
                       allowedContentTypes: [.folder],
@@ -901,7 +1040,6 @@ private struct AppearanceTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .formStyle(.columns)
-        .padding(20)
+        .formStyle(.grouped)
     }
 }
