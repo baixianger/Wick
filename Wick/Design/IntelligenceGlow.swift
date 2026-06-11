@@ -1,33 +1,70 @@
 import SwiftUI
 
-/// Apple-Intelligence-style border glow — faithful SwiftUI port of
-/// the React `border-beam` library
-/// (https://github.com/Jakubantalik/border-beam).
+/// Apple-Intelligence-style edge glow — a smooth flowing multicolor
+/// sheen that travels around a rounded-rectangle outline.
 ///
-/// Three structural ingredients, all from `styles.ts` verbatim:
+/// ## Why this was redesigned
 ///
-/// 1. **Nine fixed-position radial ellipses** painted in element-local
-///    space (positions in % of bounds, sizes in points). This gives
-///    the *localised* purple / pink / blue / red / orange "spike"
-///    feel you see on the reference demo — emphatically not a
-///    uniform rainbow ring.
-/// 2. **A rotating conic sweep** of white (dark mode) or black
-///    (light mode), additively brightening one arc of the perimeter
-///    at a time. This is the "highlight that travels along the
-///    border" element of the effect.
-/// 3. **A ring-donut mask** that confines all of the above to the
-///    rounded-rectangle outline at the requested cornerRadius.
+/// The previous implementation was a faithful port of the React
+/// `border-beam` library: **nine fixed-position saturated radial
+/// ellipses** + a rotating conic sweep + a ring mask. It looked good on
+/// dark, but **muddy / dirty on white**. The reason is colour theory,
+/// not opacity: nine semi-transparent, heavily-saturated radials
+/// (deep blue, deep green, magenta, violet…) composited over a
+/// near-white background each pull the result *toward grey*. Adjacent
+/// spikes overlap additively and the overlaps average to a dull
+/// brownish haze — the classic "rainbow mud over white". Raising
+/// opacity / saturation (the earlier patch) only deepens the mud.
 ///
-/// On top of the composite we apply:
-/// - **±30° hue oscillation** over 12 s (slow colour drift, à la
-///   border-beam's `beam-hue-shift` keyframes).
-/// - **Per-theme saturation + stroke opacity** straight from
-///   `sizeThemePresets.md.dark` / `.light`.
+/// Apple's actual Apple-Intelligence / Siri glow is the opposite of a
+/// hard static rainbow: a small set of **luminous, high-value pastel
+/// hues** arranged in **one smooth gradient** that *flows* along the
+/// edge, elegant and translucent. So this rewrite drops to that
+/// vocabulary.
 ///
-/// No public Apple API exists for this effect as of WWDC25 — confirmed
-/// by [[apple-api-research-first]]. The hand-rolled implementation
-/// matches Apple's surface visual via a totally separate technique
-/// (positional ellipses + sweep) — same illusion, no Metal needed.
+/// ## Technique (AngularGradient, not a 9-spike canvas)
+///
+/// A single `AngularGradient` of six luminous pastels (the
+/// community-standard Apple-Intelligence palette — purple `BC82F3`,
+/// pink `F5B9EA`, blue `8D9FFF`, violet `AA6EEE`, red `FF6778`,
+/// orange `FFBA71`) is rotated continuously around the rect and masked
+/// to its outline. Because it's *one* gradient, neighbouring hues melt
+/// into each other instead of compositing as overlapping saturated
+/// blobs — no additive mud. It's stroked at two scales:
+///
+///   1. **Halo** — a fatter, heavily-blurred stroke that bleeds a soft
+///      coloured bloom just outside the outline.
+///   2. **Edge** — a hairline stroke, lightly blurred, that draws the
+///      crisp luminous line on the outline itself.
+///
+/// The whole thing rotates (smooth travel) and breathes (a slow opacity
+/// pulse) so it reads as "thinking", not as a static frame.
+///
+/// ## Light vs dark — a deliberate, documented choice
+///
+/// The muddiness on white is a *compositing* problem, so the fix is a
+/// per-scheme **blend mode**, not just different numbers:
+///
+/// - **Light mode** composites the glow with `.plusLighter`. Over a
+///   white surface this means the glow can only ever *add light* — it
+///   can never darken a pixel toward grey, which is precisely what
+///   produced the dirty look. Pastel hues at high value + plusLighter
+///   give a clean, faintly iridescent sheen that sits *on* the white
+///   rather than smudging it. Saturation is held slightly below 1 and
+///   the colours are already high-value pastels, so nothing reads as a
+///   harsh primary. Translucency is higher (lower base opacity) — the
+///   effect should whisper on white, not shout.
+/// - **Dark mode** composites normally (`.normal`) and runs the same
+///   palette a touch more saturated and more opaque. Luminous pastels
+///   over a dark surface already pop, so no blend trick is needed; the
+///   halo simply blooms against the dark backing.
+///
+/// Reduce-Motion freezes both the rotation and the breathing pulse (the
+/// glow holds a static, still-pretty frame), matching the previous
+/// behaviour. No private Apple API is used — this is the documented,
+/// shader-free SwiftUI approach (confirmed by [[apple-api-research-first]]).
+///
+/// Public API is unchanged: `intelligenceGlow(active:cornerRadius:intensity:)`.
 
 extension View {
 
@@ -72,23 +109,6 @@ private struct IntelligenceGlowModifier: ViewModifier {
     }
 }
 
-// MARK: - Spike spec
-
-/// One radial-gradient ellipse from the `colorful.border` stack in
-/// border-beam's `styles.ts` (lines 90-101). Positions are normalised
-/// (multiply by bounds.width / bounds.height). Sizes are in points
-/// (rx, ry — half-extents of the ellipse).
-private struct Spike {
-    let color: Color
-    /// 0…1 (or beyond, including negative — CSS allows that) along
-    /// the element's width / height.
-    let x: Double
-    let y: Double
-    /// Half-extents in points.
-    let rx: CGFloat
-    let ry: CGFloat
-}
-
 // MARK: - The glow itself
 
 private struct IntelligenceGlow: View {
@@ -98,236 +118,137 @@ private struct IntelligenceGlow: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    /// Verbatim from `colorPalettes.colorful.border` in styles.ts —
-    /// `<x%> <y%>` positions, `<rx>px <ry>px` sizes. Same stack used
-    /// for both dark and light themes; only the overall opacity /
-    /// saturation differ between themes (per `sizeThemePresets.md`).
-    private static let spikes: [Spike] = [
-        Spike(color: rgb(255,  50, 100), x: 0.330, y: -0.074, rx: 35, ry: 20),
-        Spike(color: rgb( 40, 140, 255), x: 0.120, y: -0.050, rx: 30, ry: 17.5),
-        Spike(color: rgb( 50, 200,  80), x: 0.021, y:  0.683, rx: 20, ry: 35),
-        Spike(color: rgb( 30, 185, 170), x: 0.021, y:  0.683, rx: 10, ry: 17.5),
-        Spike(color: rgb(100,  70, 255), x: 0.744, y:  1.000, rx: 90, ry: 16),
-        Spike(color: rgb( 40, 140, 255), x: 0.550, y:  1.000, rx: 42.5, ry: 13),
-        Spike(color: rgb(255, 120,  40), x: 0.939, y:  0.000, rx: 37, ry: 16),
-        Spike(color: rgb(240,  50, 180), x: 1.000, y:  0.271, rx: 13, ry: 21),
-        Spike(color: rgb(180,  40, 240), x: 1.000, y:  0.271, rx: 26, ry: 24),
+    /// The luminous Apple-Intelligence pastel palette. These are
+    /// **high-value** colours (bright, lightly-saturated) — the single
+    /// most important choice for reading cleanly on white. Deep,
+    /// fully-saturated hues (the old palette) darken toward grey when
+    /// composited translucently over a light surface; high-value
+    /// pastels stay bright. The list wraps (last == first) so the
+    /// `AngularGradient` is seamless across 0°/360°.
+    private static let palette: [Color] = [
+        rgb(188, 130, 243),   // BC82F3 purple
+        rgb(245, 185, 234),   // F5B9EA pink
+        rgb(141, 159, 255),   // 8D9FFF blue
+        rgb(170, 110, 238),   // AA6EEE violet
+        rgb(255, 103, 120),   // FF6778 red
+        rgb(255, 186, 113),   // FFBA71 orange
+        rgb(198, 134, 255),   // C686FF violet
+        rgb(188, 130, 243),   // wrap back to BC82F3 → seamless ring
     ]
 
-    /// Beam sweep rotation period. `border-beam` defaults to ~1.96 s
-    /// for `md`; that's punchy but visually fine on the demo. Kept
-    /// here as a tunable.
-    private static let sweepPeriod: Double = 2.4
+    /// Rotation period for the travelling sheen (full turn). Slow and
+    /// elegant — Apple's glow drifts rather than races.
+    private static let rotationPeriod: Double = 8.0
 
-    /// Spike sizes in styles.ts (rx/ry) are absolute pixels designed
-    /// for a button-sized element (~256pt wide, ~56pt tall — the demo
-    /// box on beam.jakubantalik.com). When our host view is wider (the
-    /// 720pt hero composer) or taller, painting those fixed-size
-    /// ellipses leaves huge dead zones on the long edges — the glow
-    /// degenerates into four faint corner blobs. We scale each spike's
-    /// rx by width/refW and ry by height/refH so the ellipses keep
-    /// pace with the bounds, restoring the "every part of the
-    /// perimeter is alive" feel of the React reference at any aspect
-    /// ratio. Floor of 1.0 — never shrink below the styles.ts spec
-    /// for small targets like the typing indicator.
-    private static let referenceWidth: CGFloat = 256
-    private static let referenceHeight: CGFloat = 56
-
-    /// Hue oscillation period (12 s) and ±range (30°) — matches
-    /// `beam-hue-shift` keyframes in styles.ts (lines 918-925).
-    private static let hueCyclePeriod: Double = 12.0
-    private static let hueRangeDegrees: Double = 30.0
+    /// Breathing (opacity pulse) period and depth. A gentle ±swell so
+    /// the glow reads as alive / "thinking".
+    private static let breathPeriod: Double = 3.2
+    private static let breathDepth: Double = 0.18
 
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { ctx in
             let now = ctx.date.timeIntervalSinceReferenceDate
-            let sweepAngle: Double = reduceMotion
+
+            // Continuous rotation of the gradient = the sheen travelling
+            // around the edge. Frozen under Reduce Motion.
+            let angle: Double = reduceMotion
                 ? 0.0
-                : (now.truncatingRemainder(dividingBy: Self.sweepPeriod)
-                    / Self.sweepPeriod) * 360.0
-            // Sin-wave oscillation, NOT a linear sweep — matches the
-            // `0% → 50% → 100%` symmetric keyframes (back-and-forth
-            // around the neutral colour).
-            let hueT: Double = reduceMotion
-                ? 0.0
-                : sin(now / Self.hueCyclePeriod * 2.0 * .pi)
-            let hueDegrees = hueT * Self.hueRangeDegrees
-            render(sweepAngle: sweepAngle, hueDegrees: hueDegrees)
+                : (now.truncatingRemainder(dividingBy: Self.rotationPeriod)
+                    / Self.rotationPeriod) * 360.0
+
+            // Slow breathing pulse around 1.0 (1 − depth … 1). Frozen
+            // (held at full) under Reduce Motion.
+            let breath: Double = reduceMotion
+                ? 1.0
+                : 1.0 - Self.breathDepth
+                    * (0.5 - 0.5 * cos(now / Self.breathPeriod * 2.0 * .pi))
+
+            render(angle: angle, breath: breath)
         }
     }
 
     @ViewBuilder
-    private func render(sweepAngle: Double, hueDegrees: Double) -> some View {
+    private func render(angle: Double, breath: Double) -> some View {
         let theme = (scheme == .dark) ? Self.darkTheme : Self.lightTheme
-        let sweepColor: Color = (scheme == .dark) ? .white : .black
         let shape = RoundedRectangle(cornerRadius: cornerRadius,
                                       style: .continuous)
+        let gradient = AngularGradient(
+            gradient: Gradient(colors: Self.palette),
+            center: .center,
+            angle: .degrees(angle))
 
-        // border-beam composites THREE stroke layers, not one. Without
-        // all three the effect collapses into a "rainbow frame" instead
-        // of "the rounded rect is glowing":
-        //
-        //   1. Outer BLOOM — fattest stroke + heavy blur. Bleeds well
-        //      outside the rect's outline; this is the dominant visual
-        //      element on the demo site (bloomOpacity is the highest
-        //      of the three — 0.8 dark / 0.54 light per `sizeThemePresets`).
-        //   2. Inner GLOW — medium stroke + light blur. Carries colour
-        //      onto the inner edge of the rect.
-        //   3. Crisp STROKE — thin stroke + the rotating conic sweep.
-        //      The actual hard edge with the travelling highlight.
-        //
-        // All three reuse the same 9-spike canvas; only stroke width,
-        // blur radius, and opacity differ.
+        let alpha = theme.baseOpacity * intensity * breath
+
+        // Two stroked layers sharing the *same* single gradient:
+        //   • Halo — fat + blurred → soft coloured bloom outside edge.
+        //   • Edge — hairline + light blur → crisp luminous line.
+        // One gradient (not 9 overlapping radials) is what keeps the
+        // colour transitions smooth and mud-free.
         ZStack {
-            spikesCanvas
-                .mask { shape.stroke(lineWidth: theme.bloomStrokeWidth) }
-                .blur(radius: theme.bloomBlur)
-                .opacity(theme.bloomOpacity * intensity)
+            shape
+                .stroke(gradient, lineWidth: theme.haloWidth)
+                .blur(radius: theme.haloBlur)
+                .opacity(theme.haloOpacity)
 
-            spikesCanvas
-                .mask { shape.stroke(lineWidth: theme.innerStrokeWidth) }
-                .blur(radius: theme.innerBlur)
-                .opacity(theme.innerOpacity * intensity)
-
-            ZStack {
-                spikesCanvas
-                AngularGradient(
-                    stops: theme.sweepStops(color: sweepColor),
-                    center: .center,
-                    angle: .degrees(sweepAngle))
-            }
-            .mask { shape.stroke(lineWidth: theme.crispStrokeWidth) }
-            .opacity(theme.strokeOpacity * intensity)
+            shape
+                .stroke(gradient, lineWidth: theme.edgeWidth)
+                .blur(radius: theme.edgeBlur)
         }
         .saturation(theme.saturation)
-        .hueRotation(.degrees(hueDegrees))
-    }
-
-    /// The 9 radial-gradient ellipses, painted into a Canvas. Reused
-    /// by all three stroke layers (bloom / inner / crisp); only the
-    /// mask + blur + opacity downstream differ.
-    private var spikesCanvas: some View {
-        GeometryReader { geo in
-            Canvas(opaque: false) { ctx, size in
-                // Scale spike radii with the bounds so wide / tall
-                // containers (hero composer, banners) keep the whole
-                // perimeter painted. `max(1, …)` preserves the
-                // original styles.ts feel for small targets.
-                let sx = max(1.0, size.width  / Self.referenceWidth)
-                let sy = max(1.0, size.height / Self.referenceHeight)
-                for spike in Self.spikes {
-                    let rx = spike.rx * sx
-                    let ry = spike.ry * sy
-                    let center = CGPoint(x: size.width * spike.x,
-                                         y: size.height * spike.y)
-                    let rect = CGRect(x: center.x - rx,
-                                      y: center.y - ry,
-                                      width: rx * 2,
-                                      height: ry * 2)
-                    let gradient = Gradient(colors: [
-                        spike.color, spike.color.opacity(0.0)
-                    ])
-                    ctx.fill(
-                        Path(ellipseIn: rect),
-                        with: .radialGradient(
-                            gradient,
-                            center: center,
-                            startRadius: 0,
-                            endRadius: max(rx, ry)))
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
+        .opacity(alpha)
+        // Light: plusLighter so the glow can only ADD light over white,
+        // never darken it toward grey (the source of the old muddiness).
+        // Dark: normal — luminous pastels already bloom on a dark backing.
+        .blendMode(theme.blendMode)
+        .compositingGroup()   // contain the blend mode to this overlay
     }
 
     // MARK: - Themes
 
     private struct Theme {
-        // Stroke widths per layer. Bloom is fat → extends well outside
-        // the rect outline once blurred; inner is medium; crisp is a
-        // thin hairline.
-        let bloomStrokeWidth: CGFloat
-        let innerStrokeWidth: CGFloat
-        let crispStrokeWidth: CGFloat
-        // Per-layer blur (only bloom + inner get blurred; crisp stays
-        // pixel-sharp so the edge has a real visible line).
-        let bloomBlur: CGFloat
-        let innerBlur: CGFloat
-        // Opacities verbatim from border-beam's `sizeThemePresets.md`.
-        let bloomOpacity: Double
-        let innerOpacity: Double
-        let strokeOpacity: Double
-        // Saturation + sweep peak alpha — tuned per mode.
+        /// Fat blurred bloom stroke (outside the outline).
+        let haloWidth: CGFloat
+        let haloBlur: CGFloat
+        /// Halo carries less weight than the crisp edge so the bloom
+        /// stays soft and translucent rather than a thick coloured band.
+        let haloOpacity: Double
+        /// Hairline edge stroke (the crisp luminous line) + its light blur.
+        let edgeWidth: CGFloat
+        let edgeBlur: CGFloat
+        /// Global alpha for the whole effect (before intensity / breath).
+        let baseOpacity: Double
+        /// Saturation trim. Kept ≤ 1 on light so pastels don't read as
+        /// harsh primaries against white.
         let saturation: Double
-        let sweepPeak: Double
-
-        /// Conic-sweep stops matching `styles.ts:929-953`. Scaled by
-        /// `sweepPeak` so per-theme tone is a global alpha multiplier,
-        /// not a re-shaping of the falloff curve.
-        func sweepStops(color: Color) -> [Gradient.Stop] {
-            let p = sweepPeak
-            return [
-                .init(color: .clear, location: 0.00),
-                .init(color: .clear, location: 0.54),
-                .init(color: color.opacity(p * 0.133), location: 0.57),
-                .init(color: color.opacity(p * 0.400), location: 0.60),
-                .init(color: color.opacity(p * 0.800), location: 0.63),
-                .init(color: color.opacity(p * 1.000), location: 0.66),
-                .init(color: color.opacity(p * 0.800), location: 0.69),
-                .init(color: color.opacity(p * 0.400), location: 0.72),
-                .init(color: color.opacity(p * 0.133), location: 0.75),
-                .init(color: .clear, location: 0.78),
-                .init(color: .clear, location: 1.00),
-            ]
-        }
+        /// Per-scheme compositing — the real fix for white-mode muddiness.
+        let blendMode: BlendMode
     }
 
-    /// Dark = vibrant; light = pre-darkened/desaturated.
-    ///
-    /// **Critical correction (round 5):** all three rings are now
-    /// HAIRLINES. border-beam ships `borderWidth: 1px` — every layer's
-    /// pre-blur ring is one pixel wide. The visible glow is almost
-    /// entirely the BLUR output of those hairlines (the bloom layer's
-    /// `filter: blur(8px)` spreads a 1-px painted line into a ~16-pt
-    /// soft halo). Earlier iterations stroked thick rings (22pt) and
-    /// blurred them lightly — which produced a "rainbow frame" with
-    /// visibly offset inner / outer corner curvatures, exactly the
-    /// "the corners are wrong" the user flagged. Thin strokes mean the
-    /// inner and outer edges of the visible band are effectively the
-    /// same path → corners follow the rounded-rect's curvature
-    /// exactly.
+    /// Dark: vivid and a touch more opaque; normal compositing lets the
+    /// halo bloom against the dark backing.
     private static let darkTheme = Theme(
-        bloomStrokeWidth: 2,       // tiny ring → blur does the work
-        innerStrokeWidth: 1.5,
-        crispStrokeWidth: 1,       // hairline edge line
-        bloomBlur: 12,             // wide halo
-        innerBlur: 4,
-        bloomOpacity: 0.8,
-        innerOpacity: 0.7,
-        strokeOpacity: 0.48,
-        saturation: 1.2,
-        sweepPeak: 0.75)
-    /// **Light-mode visibility fix:** earlier this theme followed
-    /// border-beam's "pre-darken + desaturate for light" preset, which
-    /// is backwards for OUR surfaces. A semi-transparent, low-saturation
-    /// coloured glow painted over a near-white composer/app background
-    /// melts toward white and the breathing effect becomes invisible by
-    /// day (looked fine on dark). On a light backdrop you need MORE colour
-    /// presence, not less — so opacity + saturation are raised close to
-    /// the dark theme, and the black travelling sweep is strengthened so
-    /// the highlight reads against white. Blur stays modest so the band
-    /// still hugs the corners.
-    private static let lightTheme = Theme(
-        bloomStrokeWidth: 2,
-        innerStrokeWidth: 1.5,
-        crispStrokeWidth: 1,
-        bloomBlur: 10,
-        innerBlur: 3.5,
-        bloomOpacity: 0.82,
-        innerOpacity: 0.68,
-        strokeOpacity: 0.52,
+        haloWidth: 3.5,
+        haloBlur: 11,
+        haloOpacity: 0.7,
+        edgeWidth: 1.2,
+        edgeBlur: 1.5,
+        baseOpacity: 0.9,
         saturation: 1.05,
-        sweepPeak: 0.62)
+        blendMode: .normal)
+
+    /// Light: lower base opacity (whisper, don't shout) + `plusLighter`
+    /// so the glow only ever brightens the white surface — this is what
+    /// makes it read clean instead of dirty. Saturation held just below
+    /// 1 to keep the high-value pastels airy.
+    private static let lightTheme = Theme(
+        haloWidth: 3.0,
+        haloBlur: 9,
+        haloOpacity: 0.6,
+        edgeWidth: 1.0,
+        edgeBlur: 1.0,
+        baseOpacity: 0.7,
+        saturation: 0.95,
+        blendMode: .plusLighter)
 }
 
 // MARK: - Helpers
