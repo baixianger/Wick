@@ -153,5 +153,11 @@ struct WickApp: App {
                 .environment(agentRuntime)
                 .environment(indicatorConfig)
         }
+        // macOS Settings/Preferences windows are FIXED by default — without
+        // this the `.frame(maxWidth/Height: .infinity)` on the split-view
+        // root has no effect and the window won't resize. `.contentSize`
+        // lets the user drag it within the content's min…max (max .infinity),
+        // so it opens at the ideal size yet resizes freely.
+        .windowResizability(.contentSize)
     }
 }
