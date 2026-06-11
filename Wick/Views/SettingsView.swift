@@ -44,22 +44,26 @@ struct SettingsView: View {
                     .tag(category)
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 250)
+            // System Settings has NO collapse chevron and begins its rows
+            // flush under the traffic-light row — drop the toggle so the
+            // sidebar reads as a single calm inset panel.
+            .toolbar(removing: .sidebarToggle)
         } detail: {
-            // A large bold category header crowns each pane (the
-            // System Settings look), with the grouped `Form` below.
-            // The non-functional `‹ ›` chevrons are decorative chrome
-            // that mirrors the reference — disabled so they read as
-            // affordance-shaped ornament, not a live control.
+            // Use the NATIVE navigation title, not a custom header. macOS
+            // already reserves a title-bar strip atop the split-view detail
+            // pane (the sidebar side fills it with the collapse toggle); a
+            // custom `safeAreaInset` header sat BELOW that strip, leaving the
+            // native bar empty — the blank band at the top. `navigationTitle`
+            // drops the title INTO that bar, filling it, matching System
+            // Settings' big-title look with no empty space above it.
             detail(for: selection)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    SettingsDetailHeader(title: selection.title)
-                }
+                .navigationTitle(selection.title)
         }
         // Grouped forms are taller (cards + headers) and scroll, so a
         // comfortable min keeps the first card un-clipped while the
         // window still opens compact.
-        .frame(minWidth: 820, idealWidth: 860, minHeight: 580, idealHeight: 660)
+        .frame(minWidth: 820, idealWidth: 860, minHeight: 580, idealHeight: 680)
     }
 
     /// Hosts the existing per-tab view for `category` as detail content.
@@ -81,46 +85,23 @@ struct SettingsView: View {
 
 // MARK: - Shared chrome
 
-/// Large bold title strip that crowns every detail pane — the System
-/// Settings "big page title with ‹ › chevrons" header. The chevrons are
-/// decorative (disabled), present only to match the reference; the
-/// title text is the live, category-driven content. Sits in a top
-/// safe-area inset above the grouped `Form` so the form's scroll never
-/// rides over it.
-private struct SettingsDetailHeader: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 2) {
-                Image(systemName: "chevron.left")
-                Image(systemName: "chevron.right")
-            }
-            .font(.title3.weight(.medium))
-            .foregroundStyle(.tertiary)
-
-            Text(title)
-                .font(.largeTitle.bold())
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 10)
-        .background(.bar)
-    }
-}
-
 /// Sidebar `Label` style with a fixed-width symbol slot so every row's
 /// title starts at the same x regardless of glyph width — the calm,
-/// aligned look of the System Settings sidebar.
+/// aligned look of the System Settings sidebar. Adds vertical padding so
+/// rows breathe at ~30–32pt like the reference; the selection pill (a
+/// solid blue rounded bar, white icon + text) is rendered natively by
+/// `.listStyle(.sidebar)`. Unselected icons read `.secondary` so they
+/// recede next to the white-on-blue selected row.
 private struct SidebarLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             configuration.icon
-                .frame(width: 20, alignment: .center)
+                .font(.system(size: 15))
+                .frame(width: 22, alignment: .center)
             configuration.title
+                .font(.system(size: 13))
         }
+        .padding(.vertical, 3)
     }
 }
 
@@ -141,25 +122,34 @@ private struct SettingsRow<Control: View>: View {
         LabeledContent {
             control()
         } label: {
-            HStack(spacing: 11) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+            HStack(spacing: 12) {
+                // System Settings icon tile: ~29pt rounded-rect, tint
+                // gradient fill, optically-centred glyph. The continuous
+                // corner + the slightly-larger square reads as the
+                // reference's "app icon" leading tile rather than a chip.
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(tint.gradient)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 29, height: 29)
                     .overlay {
                         Image(systemName: systemImage)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
                     }
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(title)
+                        .font(.system(size: 13))
                     if let subtitle {
                         Text(.init(subtitle))
-                            .font(.caption)
+                            .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
+            // Two-line rows ride tall (~50pt) in System Settings; a little
+            // vertical padding gives that airy cell height without forcing
+            // a fixed frame that would clip dynamic-type.
+            .padding(.vertical, 3)
         }
     }
 }
@@ -267,7 +257,7 @@ private struct MCPTab: View {
 
             Section("Claude Code / Codex") {
                 Text("Add this to `~/.claude.json` (Claude Code) or your Codex `mcp.json` — then the agent can call `wick.snapshot`, `wick.candles`, `wick.holdings`, `wick.watchlist`, `wick.portfolio`.")
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
 
                 ScrollView {
@@ -275,11 +265,10 @@ private struct MCPTab: View {
                         .font(.system(.caption, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
-                        .padding(8)
+                        .padding(10)
                 }
                 .frame(maxHeight: 160)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 HStack {
                     Button {
@@ -297,16 +286,16 @@ private struct MCPTab: View {
             }
 
             Section("Notes") {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 9) {
                     Label("Wick doesn't need to be running. The helper spawns on demand.",
                           systemImage: "power.circle")
-                        .font(.caption)
+                        .font(.system(size: 11))
                     Label("Helper is sandboxed: outbound HTTP + App Group only. No file-system, no listening sockets.",
                           systemImage: "lock.shield")
-                        .font(.caption)
+                        .font(.system(size: 11))
                     Label("Each invocation is short-lived — your MCP client kills it when it disconnects.",
                           systemImage: "hourglass")
-                        .font(.caption)
+                        .font(.system(size: 11))
                 }
                 .foregroundStyle(.secondary)
             }
@@ -498,7 +487,7 @@ private struct DataSourcesTab: View {
                     }
                     SecureField("FMP API key:", text: $settings.fmpKey)
                     Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Section("News & sentiment (Finnhub)") {
                     SettingsRow(systemImage: "newspaper",
@@ -509,7 +498,7 @@ private struct DataSourcesTab: View {
                     }
                     SecureField("Finnhub API key:", text: $settings.finnhubKey)
                     Text("[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \"no data\".")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Section("Macro backdrop (FRED)") {
                     SettingsRow(systemImage: "building.columns",
@@ -520,7 +509,7 @@ private struct DataSourcesTab: View {
                     }
                     SecureField("FRED API key:", text: $settings.fredKey)
                     Text("[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · Fed funds, 10y, 10y-2y spread, unemployment, CPI YoY. Free; commercial-OK with attribution. Empty = no macro context in reports.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -550,14 +539,14 @@ private struct ProviderTab: View {
                 Text(settings.providerKind == .server
                      ? "All LLM traffic routes through Wick's hosted broker. No keys needed on this device — pricing handled via subscription. (Coming soon.)"
                      : "Wick talks directly to the provider with your own key. Nothing touches our servers.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
 
             if settings.providerKind == .server {
                 Section("Server") {
                     TextField("Server URL:", text: $settings.serverBaseURL)
                     Text("Defaults to our hosted instance once auth wiring lands. For now points at a local WickServer for development.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             } else {
                 Section("Provider") {
@@ -580,13 +569,13 @@ private struct ProviderTab: View {
                                   text: $settings.claudeCodeCLIPath,
                                   prompt: Text("Leave blank to resolve from $PATH"))
                         Text("Drives the Wicker workflow by shelling out to your locally-installed `claude` CLI. Uses whichever subscription `claude login` is signed into — no API key here. Each desk run is ~10-20 s slower than a direct API call and bills against your Pro/Max quota; not recommended for high-frequency use.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
                     } else {
                         TextField("Base URL:", text: $settings.byoBaseURL)
                         if settings.providerKind.requiresAPIKey {
                             SecureField("API key:", text: $settings.currentAPIKey)
                             Text("Stored in your macOS Keychain. Each provider's key gets its own entry — switching providers preserves the others.")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -814,7 +803,7 @@ private struct WorkflowTab: View {
                            isOn: bindingFor(kind))
                 }
                 Text("Disabled analysts are skipped — fewer LLM calls per report.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Chinese-market analysts") {
                 // policy / capital only run for A-share / HK tickers — the desk
@@ -825,7 +814,7 @@ private struct WorkflowTab: View {
                            isOn: bindingFor(kind))
                 }
                 Text("政策面 / 资金面 — only run for A-share (.SS/.SZ) and Hong Kong (.HK) tickers. 资金面 is A-share-only; HK has no main-force fund-flow data.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Debate") {
                 LabeledContent("Bull ↔ bear rounds:") {
@@ -836,7 +825,7 @@ private struct WorkflowTab: View {
                     }
                 }
                 Text("0 skips the debate entirely. Each round = 2 LLM calls.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Self-conditioning") {
                 LabeledContent("History depth:") {
@@ -847,7 +836,7 @@ private struct WorkflowTab: View {
                     }
                 }
                 Text("Past calls on the same ticker (rating + position) are inlined into the trader's prompt so it can change its mind on contradicting evidence. 0 disables.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Sampling") {
                 LabeledContent("Temperature:") {
@@ -924,11 +913,11 @@ private struct FreeAgentTab: View {
                     }
                 }
                 Text("Hard cap on how many tool round-trips the chat agent can take before it must answer. Belt-and-suspenders against runaway loops.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Model") {
                 Text("The free agent uses the **Deep model** set in Provider.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -959,27 +948,29 @@ private struct SkillsTab: View {
                     }
                 }
                 Text("Drop `.md` files with `name` and `description` frontmatter into this folder; same-name files override the bundled skill.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Loaded skills") {
                 if loadedSkills.isEmpty {
                     Text("(loading…)").font(.caption).foregroundStyle(.tertiary)
                 } else {
                     ForEach(loadedSkills) { skill in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 3) {
                             HStack {
                                 Text(skill.name)
-                                    .font(.system(.body, design: .monospaced))
+                                    .font(.system(size: 13, design: .monospaced))
                                 Spacer()
                                 Text(badge(for: skill.source))
                                     .font(.system(size: 10, weight: .semibold))
-                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 7).padding(.vertical, 2)
                                     .background(.quaternary, in: Capsule())
                             }
                             Text(skill.description)
-                                .font(.caption)
+                                .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -1037,7 +1028,7 @@ private struct AppearanceTab: View {
                 }
                 .pickerStyle(.segmented)
                 Text("Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
