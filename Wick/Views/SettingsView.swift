@@ -686,6 +686,14 @@ private struct WorkflowTab: View {
                     }
                 }
             }
+            Section("BYO 浏览器（实验）") {
+                Toggle("启用 Wicker 浏览器工具", isOn: $settings.enableWickerBrowser)
+                Text("让 Wicker 通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("雪球 BYO 讨论(情绪源)", isOn: $settings.enableXueqiuSentiment)
+                Text("把你登录的雪球个股讨论纳入情绪分析。默认关;需先在个股 Social tab 连接雪球登录。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.columns)
         .padding(20)
