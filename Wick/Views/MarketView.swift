@@ -34,6 +34,7 @@ struct MarketView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var assetClass: MarketAssetClass = .us
+    @State private var macroCategory: MacroCategory = .rates
     @State private var moverTab: MoverTab = .gainers
     /// Per-asset-class card selection so each tab remembers its own
     /// active card across tab switches.
@@ -107,7 +108,7 @@ struct MarketView: View {
             // levels/rates, bar for monthly/quarterly flows). Every other class
             // keeps the flick-able card rail + chart pane.
             if assetClass == .macro {
-                macroRowList(specs)
+                macroSection(specs)
             } else {
                 cardsGrid(specs)
                 if let active = activeSpec(in: specs) {
@@ -155,49 +156,33 @@ struct MarketView: View {
         .padding(.horizontal, -22)
     }
 
-    /// Macro dashboard: a vertical list, grouped by theme, one indicator per
-    /// row with its own inline chart. `barMacroSymbols` (Nonfarm Payrolls,
-    /// quarterly GDP) render as +/- bars off a zero baseline — they're discrete
-    /// period flows where the sign and per-period size are the story; the rest
-    /// are levels/rates and render as lines.
-    private func macroRowList(_ specs: [IndexSpec]) -> some View {
+    /// Macro dashboard: a category SUB-TAB (Rates / Inflation / Labor / Growth)
+    /// over a detailed per-indicator list. Picking a tab shows only that group's
+    /// indicators, each as one full-width row — name + latest value + change up
+    /// top, a larger chart below (line for levels/rates, +/- bars for the
+    /// discrete monthly/quarterly flows). With only a few items per tab there's
+    /// room for a real chart per indicator instead of a tiny sparkline.
+    private func macroSection(_ specs: [IndexSpec]) -> some View {
         let bySymbol = Dictionary(specs.map { ($0.symbol, $0) },
                                   uniquingKeysWith: { a, _ in a })
-        return VStack(alignment: .leading, spacing: 18) {
-            ForEach(Self.macroGroups, id: \.title) { group in
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(group.title.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 6)
-                    VStack(spacing: 0) {
-                        ForEach(group.symbols, id: \.self) { sym in
-                            if let spec = bySymbol[sym] {
-                                MacroRow(spec: spec,
-                                         series: seriesFor(spec),
-                                         isBar: Self.barMacroSymbols.contains(sym))
-                                if sym != group.symbols.last {
-                                    Divider().opacity(0.4)
-                                }
-                            }
-                        }
+        return VStack(alignment: .leading, spacing: 16) {
+            FlatPicker(items: MacroCategory.allCases,
+                       selection: $macroCategory,
+                       layout: .compact)
+            VStack(spacing: 0) {
+                let symbols = macroCategory.symbols
+                ForEach(symbols, id: \.self) { sym in
+                    if let spec = bySymbol[sym] {
+                        MacroDetailRow(spec: spec,
+                                       series: seriesFor(spec),
+                                       isBar: Self.barMacroSymbols.contains(sym))
+                        if sym != symbols.last { Divider().opacity(0.4) }
                     }
-                    .liquidGlass(cornerRadius: 12)
                 }
             }
+            .liquidGlass(cornerRadius: 14)
         }
     }
-
-    /// Macro indicators grouped by theme, in display order. Symbols resolve
-    /// against `macroIndicators`; a symbol missing from the spec list is simply
-    /// skipped.
-    static let macroGroups: [(title: String, symbols: [String])] = [
-        ("Rates & Curve",      ["DGS10", "DGS2", "FEDFUNDS", "T10Y2Y"]),
-        ("Inflation (YoY)",    ["CPIAUCSL", "CPILFESL", "PCEPILFE"]),
-        ("Labor",              ["UNRATE", "PAYEMS", "ICSA"]),
-        ("Growth & Activity",  ["A191RL1Q225SBEA", "RSAFS"]),
-    ]
 
     /// Macro series that render as bars (discrete period flows, sign matters):
     /// monthly Nonfarm-Payroll adds + quarterly Real-GDP growth.
@@ -483,7 +468,7 @@ struct MarketView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
-            Text("Macro values are synthetic previews. Live FRED wiring coming in next iteration — the agent already uses your FRED key for analysis.")
+            Text("Live FRED data when a key is set in Settings (synthetic preview otherwise). Tap a chart's Overlay to compare against another series or the US market.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -516,6 +501,27 @@ struct MarketView: View {
 /// the picker. US sits first because Wick's reference design language
 /// is Apple Stocks / NYSE-first; macro is last because it's currently
 /// previewing synthetic numbers (live FRED wiring TBD).
+/// Sub-tab categories inside the Macro asset class. `rawValue` is the tab
+/// label (FlatPicker renders it); `symbols` is the FRED-id set shown when that
+/// category is selected, in display order.
+enum MacroCategory: String, CaseIterable, Identifiable, Hashable {
+    case rates     = "Rates"
+    case inflation = "Inflation"
+    case labor     = "Labor"
+    case growth    = "Growth"
+
+    var id: String { rawValue }
+
+    var symbols: [String] {
+        switch self {
+        case .rates:     return ["DGS10", "DGS2", "FEDFUNDS", "T10Y2Y"]
+        case .inflation: return ["CPIAUCSL", "CPILFESL", "PCEPILFE"]
+        case .labor:     return ["UNRATE", "PAYEMS", "ICSA"]
+        case .growth:    return ["A191RL1Q225SBEA", "RSAFS"]
+        }
+    }
+}
+
 enum MarketAssetClass: String, CaseIterable, Identifiable, Hashable {
     case us           = "US"
     case asiaPacific  = "Asia Pacific"
@@ -640,46 +646,88 @@ fileprivate struct IndexCardView: View {
 
 // MARK: - Macro dashboard row
 
-/// One macro indicator as a list row: name + FRED id + latest value + change on
-/// the left, an inline chart on the right (line for levels/rates, +/- bars for
-/// flows). No drilldown — the row IS the data.
-fileprivate struct MacroRow: View {
+/// One macro indicator as a DETAIL row: a header (name + FRED id + latest value
+/// + change) over a full-width chart (line for levels/rates, +/- bars for
+/// flows). With only a few indicators per category sub-tab there's room for a
+/// proper chart per indicator, one to a row.
+fileprivate struct MacroDetailRow: View {
     let spec: IndexSpec
     let series: CandleSeries
     let isBar: Bool
 
+    @Environment(FredDataStore.self) private var fredStore
+    @State private var overlay: MacroOverlay = .none
+
     var body: some View {
         let snap = IndexSnapshot(series: series)
         let tint: Color = snap.isUp ? .green : .red
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(spec.shortName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Text(Self.format(snap.last))
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                    Text(snap.changeString)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(tint)
-                }
-            }
-            Spacer(minLength: 10)
-            Group {
-                if isBar {
-                    MacroBarSparkline(values: snap.closes)
-                } else {
-                    SparklineView(closes: snap.closes,
-                                  baseline: snap.closes.first ?? snap.last,
-                                  style: .line,
-                                  tint: tint,
-                                  lineWidth: 1.5)
-                }
-            }
-            .frame(width: 132, height: 38)
+        // Resolve the overlay series through the same FRED cache as the primary.
+        let overlaySeries: CandleSeries? = overlay.fred.map { f in
+            fredStore.series(for: f.id, units: f.units,
+                             fallback: Fixtures.gbm(n: 120, seed: 99,
+                                                    mu: 0, sigma: 0.01,
+                                                    startPrice: overlay.fallbackLevel,
+                                                    symbol: f.id, interval: .d1))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(spec.shortName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                    Text(spec.symbol)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Self.format(snap.last))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                    HStack(spacing: 6) {
+                        Text(snap.changeString)
+                        Text(snap.changePctString).opacity(0.85)
+                    }
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(tint)
+                }
+            }
+            MacroOverlayChart(primary: series,
+                              primaryIsBar: isBar,
+                              primaryTint: tint,
+                              overlay: overlaySeries,
+                              overlayColor: overlay.color)
+                .frame(maxWidth: .infinity)
+                .frame(height: 88)
+            // Overlay picker + legend.
+            HStack(spacing: 8) {
+                if overlay != .none {
+                    Circle().fill(overlay.color).frame(width: 7, height: 7)
+                    Text(overlay.rawValue)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Menu {
+                    Picker("Overlay", selection: $overlay) {
+                        ForEach(MacroOverlay.allCases) { o in
+                            Text(o.rawValue).tag(o)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                        Text(overlay == .none ? "Overlay" : "Change")
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+        }
+        .padding(16)
         .contentShape(Rectangle())
     }
 
@@ -693,6 +741,168 @@ fileprivate struct MacroRow: View {
         }
         if abs(v) < 1 { return String(format: "%.2f", v) }
         return String(format: "%.1f", v)
+    }
+}
+
+/// What a macro chart can overlay for comparison: another macro series, or the
+/// broad US stock market. Each resolves to a FRED id + units (so it goes
+/// through the same `FredDataStore` path as the primary). "Total Market" is the
+/// Wilshire 5000 — the most comprehensive US equity index ("最全").
+fileprivate enum MacroOverlay: String, CaseIterable, Identifiable {
+    case none        = "None"
+    case sp500       = "S&P 500"
+    case nasdaq      = "Nasdaq Comp"
+    case dow         = "Dow"
+    case cpi         = "CPI YoY"
+    case corePCE     = "Core PCE"
+    case fedFunds    = "Fed Funds"
+    case tenYear     = "10Y Yield"
+    case unemployment = "Unemployment"
+
+    var id: String { rawValue }
+
+    /// FRED series id + units, or nil for `.none`.
+    var fred: (id: String, units: String)? {
+        switch self {
+        case .none:         return nil
+        case .sp500:        return ("SP500", "lin")
+        case .nasdaq:       return ("NASDAQCOM", "lin")
+        case .dow:          return ("DJIA", "lin")
+        case .cpi:          return ("CPIAUCSL", "pc1")
+        case .corePCE:      return ("PCEPILFE", "pc1")
+        case .fedFunds:     return ("FEDFUNDS", "lin")
+        case .tenYear:      return ("DGS10", "lin")
+        case .unemployment: return ("UNRATE", "lin")
+        }
+    }
+
+    /// Synthetic fallback level so the overlay isn't a flat 0 before FRED loads.
+    var fallbackLevel: Double {
+        switch self {
+        case .sp500: return 5200; case .nasdaq: return 18000; case .dow: return 42000
+        case .cpi: return 3.2; case .corePCE: return 2.8
+        case .fedFunds: return 5.25; case .tenYear: return 4.3
+        case .unemployment: return 4.0; case .none: return 0
+        }
+    }
+
+    /// Overlay line colour — a contrasting accent against the primary's tint.
+    var color: Color { .purple }
+}
+
+/// Chart that draws a macro PRIMARY series (line or +/- bars) and, optionally, a
+/// second OVERLAY series on its OWN independent vertical scale (the two have
+/// wildly different ranges — e.g. payroll adds vs the S&P level). The overlay is
+/// **date-aligned** to the primary's bar times (sampled at-or-before each date),
+/// so they line up in time even at different frequencies; where the overlay has
+/// no data for an early date it simply isn't drawn there.
+fileprivate struct MacroOverlayChart: View {
+    let primary: CandleSeries
+    let primaryIsBar: Bool
+    let primaryTint: Color
+    let overlay: CandleSeries?
+    let overlayColor: Color
+
+    var body: some View {
+        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+            let bars = Array(primary.candles.suffix(60))
+            guard !bars.isEmpty, size.width > 0, size.height > 0 else { return }
+            let times = bars.map(\.time)
+            let n = bars.count
+
+            // ── Primary ──
+            let pv = bars.map(\.close)
+            if primaryIsBar {
+                drawBars(pv, in: &ctx, size: size, color: primaryTint)
+            } else {
+                drawLine(pv.map { Optional($0) }, in: &ctx, size: size,
+                         color: primaryTint, width: 1.6, fill: true)
+            }
+
+            // ── Overlay (independent scale, date-aligned) ──
+            if let overlay {
+                let aligned = Self.align(Array(overlay.candles), to: times)
+                drawLine(aligned, in: &ctx, size: size,
+                         color: overlayColor, width: 1.4, fill: false)
+            }
+            _ = n
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// Sample `candles` at-or-before each target time (step-hold), giving one
+    /// value per target date (nil before the overlay's history starts).
+    static func align(_ candles: [Candle], to times: [Date]) -> [Double?] {
+        let ov = candles.sorted { $0.time < $1.time }
+        var out: [Double?] = []
+        var j = 0
+        var last: Double? = nil
+        for t in times {
+            while j < ov.count && ov[j].time <= t { last = ov[j].close; j += 1 }
+            out.append(last)
+        }
+        return out
+    }
+
+    private func drawLine(_ values: [Double?], in ctx: inout GraphicsContext,
+                          size: CGSize, color: Color, width: CGFloat, fill: Bool) {
+        let present = values.compactMap { $0 }
+        guard let lo = present.min(), let hi = present.max() else { return }
+        let range = max(hi - lo, 0.0001)
+        let n = values.count
+        func pt(_ i: Int, _ v: Double) -> CGPoint {
+            let x = n <= 1 ? size.width / 2 : size.width * CGFloat(i) / CGFloat(n - 1)
+            let y = size.height - CGFloat((v - lo) / range) * (size.height - 2) - 1
+            return CGPoint(x: x, y: y)
+        }
+        var path = Path()
+        var started = false
+        for (i, v) in values.enumerated() {
+            guard let v else { started = false; continue }
+            let p = pt(i, v)
+            if started { path.addLine(to: p) } else { path.move(to: p); started = true }
+        }
+        if fill {
+            var area = path
+            // close down to the baseline for a soft fill
+            if let lastIdx = values.lastIndex(where: { $0 != nil }),
+               let firstIdx = values.firstIndex(where: { $0 != nil }) {
+                area.addLine(to: CGPoint(x: pt(lastIdx, values[lastIdx]!).x, y: size.height))
+                area.addLine(to: CGPoint(x: pt(firstIdx, values[firstIdx]!).x, y: size.height))
+                area.closeSubpath()
+                ctx.fill(area, with: .linearGradient(
+                    Gradient(colors: [color.opacity(0.22), color.opacity(0.02)]),
+                    startPoint: CGPoint(x: 0, y: 0),
+                    endPoint: CGPoint(x: 0, y: size.height)))
+            }
+        }
+        ctx.stroke(path, with: .color(color),
+                   style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+    }
+
+    private func drawBars(_ values: [Double], in ctx: inout GraphicsContext,
+                          size: CGSize, color: Color) {
+        let lo = min(0, values.min() ?? 0)
+        let hi = max(0, values.max() ?? 0)
+        let range = max(hi - lo, 0.0001)
+        func y(_ v: Double) -> CGFloat { size.height - CGFloat((v - lo) / range) * size.height }
+        let zeroY = y(0)
+        let gap: CGFloat = 1.5
+        let n = values.count
+        let barW = max(1, (size.width - gap * CGFloat(n - 1)) / CGFloat(n))
+        for (i, v) in values.enumerated() {
+            let x = CGFloat(i) * (barW + gap)
+            let top = min(zeroY, y(v))
+            let h = max(0.5, abs(zeroY - y(v)))
+            ctx.fill(Path(roundedRect: CGRect(x: x, y: top, width: barW, height: h),
+                          cornerRadius: min(1.5, barW / 2)),
+                     with: .color(v >= 0 ? .green : .red))
+        }
+        var zero = Path()
+        zero.move(to: CGPoint(x: 0, y: zeroY))
+        zero.addLine(to: CGPoint(x: size.width, y: zeroY))
+        ctx.stroke(zero, with: .color(.secondary.opacity(0.35)), lineWidth: 0.5)
     }
 }
 
