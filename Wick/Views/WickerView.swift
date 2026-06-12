@@ -47,21 +47,21 @@ struct WickerView: View {
     /// per-view state the moment `isAgentBrowsing` flips false.
     @State private var browserPinnedOpen: Bool = false
 
-    /// User-draggable width of the right-side browser panel. Seeded at the
-    /// former fixed 560pt; the draggable divider between chat and browser
-    /// writes the live value here (clamped to `browserWidthRange`) and the
-    /// panel `.frame(width:)` reads it, so the split is resizable. Hoisted to
-    /// WickerView so it persists across the panel mounting / unmounting.
-    @State private var browserPanelWidth: CGFloat = 560
+    /// User-draggable width of the CHAT pane when the browser is open. The chat
+    /// is the FIXED-width side and the browser FILLS the remaining space — that
+    /// way the browser absorbs any extra width instead of the chat leaving a
+    /// dead gap between its (narrow) bubbles and the browser. The drag handle
+    /// writes this (clamped to `chatWidthRange`); hoisted so it survives the
+    /// panel mounting / unmounting.
+    @State private var chatPaneWidth: CGFloat = 520
     /// In-drag baseline so the gesture is relative to where the divider was
     /// when the drag began, not absolute pointer position (avoids a jump on
     /// grab). nil when no drag is in flight.
-    @State private var browserDragStartWidth: CGFloat?
+    @State private var chatDragStartWidth: CGFloat?
 
-    /// Clamp for the browser panel width. Lower bound keeps the live page
-    /// usable; upper bound guarantees the conversation keeps ≥520pt on the
-    /// 1180pt minimum window.
-    private let browserWidthRange: ClosedRange<CGFloat> = 360...820
+    /// Clamp for the chat pane width. Lower bound keeps the chat readable;
+    /// upper bound keeps ≥~360pt for the browser on the 1180pt minimum window.
+    private let chatWidthRange: ClosedRange<CGFloat> = 380...820
 
     /// True while a `web.*` tool is mid-flight (macOS 26 + flag on +
     /// a live `BrowserSessionManager`). Drives the right-region hand-off:
@@ -84,9 +84,20 @@ struct WickerView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        // Is the browser panel occupying the trailing region right now? When it
+        // is, the chat becomes a fixed (draggable) width and the browser fills
+        // the rest; when it isn't, the chat fills the whole pane.
+        let browserShown: Bool = {
+            if #available(macOS 26.0, *), settings.enableWickerBrowser,
+               let manager = runtime.browserSession as? BrowserSessionManager {
+                return browserPanelRevealed(manager)
+            }
+            return false
+        }()
+        return HStack(spacing: 0) {
             conversationPane
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: browserShown ? nil : .infinity, maxHeight: .infinity)
+                .frame(width: browserShown ? chatPaneWidth : nil)
                 .overlay(alignment: .topTrailing) {
                     // Liquid Glass capsule around the action cluster
                     // means message bubbles scrolling past it look
@@ -116,13 +127,12 @@ struct WickerView: View {
                 // `browserWidthRange` so neither pane collapses. Replaces the
                 // former fixed 560pt divider.
                 browserResizeHandle
-                // Browser gets the LARGER share of the workspace when open —
-                // the user is logging in / watching a real page, so the
-                // conversation narrows to give the live page room. Width is
-                // user-set via the handle (defaults 560pt); on the 1180pt
-                // minimum window even the 820pt max still leaves ≥360pt chat.
+                // Browser FILLS the remaining width (chat is the fixed,
+                // draggable side) so no dead gap appears between the chat
+                // bubbles and the page. `minWidth` keeps the page usable when
+                // the user drags the chat wide.
                 WickerBrowserPanel(manager: manager, pinnedOpen: $browserPinnedOpen)
-                    .frame(width: browserPanelWidth)
+                    .frame(minWidth: 360, maxWidth: .infinity)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if showHistoryDrawer {
                 Divider()
@@ -165,37 +175,38 @@ struct WickerView: View {
         }
     }
 
-    /// Draggable split handle between the conversation pane and the browser
-    /// panel. A 1pt visible divider sits inside a wider (8pt) transparent hit
-    /// area so it's easy to grab; the pointer turns into the
-    /// `resizeLeftRight` cursor on hover. Dragging writes `browserPanelWidth`
-    /// — the browser is on the trailing edge, so dragging LEFT (negative x)
-    /// widens it and dragging RIGHT narrows it.
+    /// Draggable split handle between the conversation pane and the browser.
+    /// A crisp 1pt vertical hairline sits centred in an 11pt transparent hit
+    /// strip (easy to grab); the pointer becomes the `resizeLeftRight` cursor on
+    /// hover. The CHAT is the fixed side, so dragging RIGHT widens the chat
+    /// (browser shrinks) and LEFT narrows it — `chatPaneWidth += translation.x`.
     @available(macOS 26.0, *)
     private var browserResizeHandle: some View {
-        ZStack {
-            Color.clear
-                .frame(width: 8)
-                .contentShape(Rectangle())
-            Divider()
-        }
-        .frame(maxHeight: .infinity)
-        .onHover { inside in
-            if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    let base = browserDragStartWidth ?? browserPanelWidth
-                    if browserDragStartWidth == nil { browserDragStartWidth = base }
-                    // Trailing panel: leftward drag (negative translation)
-                    // should ENLARGE it, so subtract the x translation.
-                    let proposed = base - value.translation.width
-                    browserPanelWidth = min(max(proposed, browserWidthRange.lowerBound),
-                                            browserWidthRange.upperBound)
-                }
-                .onEnded { _ in browserDragStartWidth = nil }
-        )
+        Rectangle()
+            .fill(.clear)
+            .frame(width: 11)
+            .frame(maxHeight: .infinity)
+            .overlay(
+                Rectangle()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(width: 1)
+            )
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let base = chatDragStartWidth ?? chatPaneWidth
+                        if chatDragStartWidth == nil { chatDragStartWidth = base }
+                        // Chat is the leading fixed side: drag right → wider chat.
+                        let proposed = base + value.translation.width
+                        chatPaneWidth = min(max(proposed, chatWidthRange.lowerBound),
+                                            chatWidthRange.upperBound)
+                    }
+                    .onEnded { _ in chatDragStartWidth = nil }
+            )
     }
 
     /// Two-icon control cluster in the top-right of the conversation
