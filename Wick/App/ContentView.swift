@@ -178,14 +178,13 @@ struct ContentView: View {
             // Wire Wicker's portfolio.* tools over this window's live
             // HoldingsStore so the agent can read/write 持仓 (idempotent).
             agentRuntime.attachPortfolio(holdings)
-            // Validate-on-failure: any held symbol whose fetch fails gets
-            // resolved against the real provider search + rewritten.
-            holdingResolver.reconcile(holdings: holdings, store: store)
-        }
-        .onChange(of: holdings.holdings) { _, _ in
-            // A newly-added holding (e.g. agent portfolio.add) gets the same
-            // resolve-on-failure treatment; already-attempted symbols are skipped.
-            holdingResolver.reconcile(holdings: holdings, store: store)
+            // NOTE: the validate-on-failure HoldingSymbolResolver is DISABLED.
+            // It rewrote a holding's symbol on ANY fetch failure (incl. a
+            // transient EastMoney throttle) using a loose Yahoo name search,
+            // which mis-matched a wrong ticker and CORRUPTED the holding
+            // (7666.HK / Metis → RO9.F). Mechanical canonicalisation + the
+            // EastMoney→Yahoo chart fallback cover the real cases safely; a
+            // best-effort fuzzy rename must never overwrite the user's symbol.
         }
     }
 

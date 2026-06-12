@@ -1,7 +1,15 @@
 import SwiftUI
+import AppKit
 
 @main
 struct WickApp: App {
+
+    /// Single-window app — turn OFF macOS automatic window tabbing so the
+    /// system tab bar (a "Wick / +" strip) never injects itself under the
+    /// toolbar and overlap the detail content. Set once at app construction.
+    init() {
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
 
     /// Process-wide live-data cache. Passed through the environment so
     /// every view can pull the freshest Yahoo series without prop drilling.

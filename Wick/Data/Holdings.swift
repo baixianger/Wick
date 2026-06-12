@@ -148,6 +148,32 @@ final class HoldingsStore {
         }
         migrateClearAutoSeededRowsIfNeeded()
         migrateCanonicalizeSymbolsIfNeeded()
+        migrateRestoreFromOriginalIfNeeded()
+    }
+
+    /// REPAIR: the (now-disabled) HoldingSymbolResolver could rewrite a holding's
+    /// `symbol` to a WRONG ticker via a loose name search when the real fetch
+    /// transiently failed (EastMoney throttle) — e.g. `7666.HK` (Metis) → `RO9.F`.
+    /// Every such rename preserved the pre-rename string in `originalSymbol`, so
+    /// we can undo the damage: for any holding whose `symbol` no longer equals
+    /// `canonicalSymbol(originalSymbol)`, restore it to that authoritative
+    /// canonical form. No-op for correctly-canonicalised rows. Idempotent.
+    private let restoreMigrationKey = "candlekit.holdings.migrate.v6-restore-original"
+    private func migrateRestoreFromOriginalIfNeeded() {
+        let defaults = SharedStore.defaults
+        guard !defaults.bool(forKey: restoreMigrationKey) else { return }
+        var changed = false
+        holdings = holdings.map { h in
+            guard let original = h.originalSymbol else { return h }
+            let canon = Self.canonicalSymbol(original)
+            guard canon != h.symbol else { return h }
+            changed = true
+            var c = h
+            c.symbol = canon
+            return c
+        }
+        defaults.set(true, forKey: restoreMigrationKey)
+        if changed { save() }
     }
 
     /// Canonical symbol for the app's data namespace: fold any broker `:MIC`
