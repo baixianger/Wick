@@ -4740,6 +4740,46 @@
           }
         }
       }
+    },
+    "东方财富 / EastMoney": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "东方财富 / EastMoney"
+          }
+        }
+      }
+    },
+    "Yahoo Finance": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yahoo Finance"
+          }
+        }
+      }
+    },
+    "See More Data from %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 %@ 查看更多数据"
+          }
+        }
+      }
+    },
+    "News from %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新闻来自 %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

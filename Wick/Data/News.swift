@@ -1,12 +1,16 @@
 import Foundation
 
-/// Synthetic news headline shown in the Overview / News tabs.
+/// One news headline shown in the Overview / News tabs. Originally a synthetic
+/// fixture shape; now also the render model for REAL fetched news (mapped from
+/// `TradingFloor.NewsArticle` by `NewsStore`). `url` is the optional tappable
+/// article link (fixtures leave it nil).
 struct NewsItem: Identifiable, Hashable {
     let id = UUID()
     let source: String
     let headline: String
     let summary: String
     let ageMinutes: Int
+    var url: URL? = nil
 
     var ageLabel: String {
         switch ageMinutes {

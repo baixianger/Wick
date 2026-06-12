@@ -14,6 +14,7 @@ struct OverviewTab: View {
     let holdings: HoldingsStore
 
     @Environment(LiveDataStore.self) private var store
+    @Environment(NewsStore.self) private var news
     @Environment(\.colorScheme) private var colorScheme
     /// Per-tab coordinator. Configured up-front with a single main pane
     /// (no volume — Overview renders its own decorative volume strip
@@ -290,7 +291,10 @@ struct OverviewTab: View {
     private var seeMoreLink: some View {
         Button(action: {}) {
             HStack(spacing: 3) {
-                Text("See More Data from Yahoo Finance")
+                // Attribution reflects the ACTUAL source: EastMoney for CN/HK
+                // tickers, Yahoo Finance for US / international — matching the
+                // routing in `LiveDataStore` / `NewsStore`.
+                Text(NewsSource.seeMoreLabel(for: ticker.symbol))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
             }
@@ -305,7 +309,9 @@ struct OverviewTab: View {
                             GridItem(.flexible(), alignment: .topLeading)],
                   alignment: .leading,
                   spacing: 20) {
-            ForEach(NewsFixtures.items(for: ticker.symbol)) { item in
+            // Real fetched news when available, else the fixture fallback so
+            // the grid is never blank while the background fetch is in flight.
+            ForEach(news.display(for: ticker.symbol)) { item in
                 NewsRow(item: item, expanded: true)
             }
         }
@@ -421,15 +427,56 @@ struct ChartTab: View {
 struct NewsTab: View {
     let ticker: Ticker
 
+    @Environment(NewsStore.self) private var news
+
     var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading),
-                            GridItem(.flexible(), alignment: .topLeading)],
-                  alignment: .leading,
-                  spacing: 20) {
-            ForEach(NewsFixtures.items(for: ticker.symbol)) { item in
-                NewsRow(item: item, expanded: true)
+        VStack(alignment: .leading, spacing: 16) {
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading),
+                                GridItem(.flexible(), alignment: .topLeading)],
+                      alignment: .leading,
+                      spacing: 20) {
+                // Real fetched news when available, else the fixture fallback so
+                // the tab is never blank while the background fetch is in flight.
+                ForEach(news.display(for: ticker.symbol)) { item in
+                    NewsRow(item: item, expanded: true)
+                }
             }
+            // Footer attribution reflects the ACTUAL source (EastMoney for
+            // CN/HK, Yahoo Finance for US / international).
+            Text(NewsSource.footerLabel(for: ticker.symbol))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// Source attribution helper for the News / Overview tabs. Mirrors the
+/// `LiveDataStore` / `NewsStore` routing — CN A-share / HK tickers come from
+/// 东方财富 (EastMoney), everything else from Yahoo Finance — so the on-screen
+/// "data from …" labels are honest about where the news actually came from.
+/// Uses the imperative-localization path (`String(localized:locale:)` +
+/// `LocaleHolder.current`) already used elsewhere in this file.
+enum NewsSource {
+
+    /// Localized provider name for `symbol`.
+    static func name(for symbol: String) -> String {
+        if CNSymbol.parse(symbol) != nil {
+            return String(localized: "东方财富 / EastMoney", locale: LocaleHolder.current)
+        }
+        return String(localized: "Yahoo Finance", locale: LocaleHolder.current)
+    }
+
+    /// "See More Data from <source>" link label (Overview attribution).
+    static func seeMoreLabel(for symbol: String) -> String {
+        String(localized: "See More Data from \(name(for: symbol))",
+               locale: LocaleHolder.current)
+    }
+
+    /// "News from <source>" footer label (News tab).
+    static func footerLabel(for symbol: String) -> String {
+        String(localized: "News from \(name(for: symbol))",
+               locale: LocaleHolder.current)
     }
 }
 

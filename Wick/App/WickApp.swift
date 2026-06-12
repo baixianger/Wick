@@ -20,6 +20,11 @@ struct WickApp: App {
     /// instead of the broker / English name. Shared via the environment like
     /// the other data stores. See `CNNameStore`.
     @State private var cnNames = CNNameStore()
+    /// Real per-ticker news cache for the Overview / News tabs — the live
+    /// replacement for `NewsFixtures`. Routes CN/HK tickers to EastMoney 资讯
+    /// and US / international to Yahoo Finance, caching per symbol. Shared via
+    /// the environment like the other data stores. See `NewsStore`.
+    @State private var newsStore = NewsStore()
     /// BYO agent settings (LLM key in Keychain, model choices, agent knobs,
     /// appearance, chart layout — see AgentSettings). Shared via the
     /// environment so any view can read or bind.
@@ -58,6 +63,7 @@ struct WickApp: App {
                 .environment(dataStore)
                 .environment(fredStore)
                 .environment(cnNames)
+                .environment(newsStore)
                 .environment(agentSettings)
                 .environment(reportHistory)
                 .environment(agentRuntime)
