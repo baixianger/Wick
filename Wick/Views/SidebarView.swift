@@ -235,17 +235,27 @@ struct SidebarView: View {
 
     private var groupMenu: some View {
         Menu {
+            // `.inline` renders the options FLAT inside this menu (with a
+            // checkmark on the active one) instead of the default `.menu` style,
+            // which nests them in a submenu — that submenu was the second expand
+            // the user had to do just to switch lists. Now: open the ⋯ menu →
+            // pick a group directly, one expand.
             Picker("Group", selection: $watchlist.selection) {
-                Label("All", systemImage: "tray.full")
-                    .tag(WatchlistGroupSelection.all)
+                // Holdings pinned to the TOP — it's the user's own positions, the
+                // most-returned-to list, so it leads regardless of how many user
+                // groups exist. Then "All" (every tracked stock across all groups
+                // in one list), then the user's groups.
                 Label("Holdings (\(holdingsCount))", systemImage: "rectangle.3.group")
                     .tag(WatchlistGroupSelection.holdings)
+                Label("All", systemImage: "tray.full")
+                    .tag(WatchlistGroupSelection.all)
                 ForEach(watchlist.groups) { group in
                     Label("\(group.name) (\(group.symbols.count))",
                           systemImage: "folder")
                         .tag(WatchlistGroupSelection.user(group.id))
                 }
             }
+            .pickerStyle(.inline)
             Divider()
             Button {
                 newGroupName = ""
