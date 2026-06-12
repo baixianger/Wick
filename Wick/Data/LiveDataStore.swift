@@ -111,7 +111,22 @@ final class LiveDataStore {
                                                            interval: key.interval)
                     self.handleFetchSuccess(key: key, series: series)
                 } catch {
-                    self.handleFetchFailure(key: key, error: error, fallback: fallback)
+                    // EastMoney (push2his) failed — empty / IP-throttled / a
+                    // brand-new listing it hasn't indexed yet. Fall back to
+                    // Yahoo, which carries delayed data for `.HK` / `.SS` / `.SZ`
+                    // and isn't subject to the push2his throttle, so CN/HK charts
+                    // still render (e.g. 0100.HK / MiniMax). Only on a Yahoo miss
+                    // do we hand off to the backoff-retry path.
+                    if let yInterval = self.mapInterval(key.interval),
+                       let ySeries = try? await self.adapter.fetch(
+                           symbol: self.ySymbol(key.symbol),
+                           interval: yInterval,
+                           range: self.mapRange(key.interval)),
+                       !ySeries.candles.isEmpty {
+                        self.handleFetchSuccess(key: key, series: ySeries)
+                    } else {
+                        self.handleFetchFailure(key: key, error: error, fallback: fallback)
+                    }
                 }
             }
             return
