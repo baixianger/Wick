@@ -28,6 +28,12 @@ struct PortfolioToolDriver: Sendable {
     var add: @Sendable (_ tx: PortfolioAddRequest) async -> String
     /// Current netted positions, formatted for the model to read back.
     var list: @Sendable () async -> String
+    /// Raw transaction ledger (optionally filtered by symbol), each row
+    /// carrying its `id` so the model can reference a specific lot to remove.
+    var transactions: @Sendable (_ symbol: String?) async -> String
+    /// Delete one transaction by its `id` (a UUID string from `transactions`);
+    /// returns what was removed, or a not-found note.
+    var remove: @Sendable (_ id: String) async -> String
 }
 
 /// Decoded arguments for `portfolio.add`, normalised into store types by the
@@ -140,6 +146,69 @@ struct PortfolioListTool: AgentTool {
     }
 }
 
+// MARK: - portfolio.transactions
+
+/// List the raw transaction ledger (each lot WITH its `id`) so the model can
+/// reference a specific row to remove. `portfolio.list` nets by symbol and
+/// hides ids; this is the addressable view.
+struct PortfolioTransactionsTool: AgentTool {
+    let driver: PortfolioToolDriver
+    var spec: ToolSpec {
+        ToolSpec(
+            name: "portfolio.transactions",
+            description: "List individual portfolio (持仓) transactions WITH their ids — optionally "
+                + "filtered to one symbol. Each row shows id, symbol, side, quantity, price, currency, "
+                + "and date. Call this to find the id of a lot before removing or correcting it.",
+            parametersJSONSchema: """
+            {
+              "type": "object",
+              "properties": {
+                "symbol": { "type": "string", "description": "Optional ticker to filter to, e.g. AAPL; omit for all." }
+              }
+            }
+            """)
+    }
+    private struct Args: Decodable { let symbol: String? }
+    func call(arguments: Data) async throws -> String {
+        let symbol = (try? JSONDecoder().decode(Args.self, from: arguments))?.symbol
+        let normalized = symbol?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ToolResultBounding.bound(
+            await driver.transactions(normalized?.isEmpty == false ? normalized : nil))
+    }
+}
+
+// MARK: - portfolio.remove
+
+/// Delete one transaction by its `id`. Destructive — the tool description tells
+/// the model to confirm with the user first; the result echoes what was removed
+/// so it lands visibly in the conversation.
+struct PortfolioRemoveTool: AgentTool {
+    let driver: PortfolioToolDriver
+    var spec: ToolSpec {
+        ToolSpec(
+            name: "portfolio.remove",
+            description: "Delete ONE transaction from the user's portfolio (持仓) by its id (get ids from "
+                + "portfolio.transactions). This is destructive and cannot be undone — confirm the exact "
+                + "lot with the user before calling. Returns what was removed, or a not-found note.",
+            parametersJSONSchema: """
+            {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "description": "The transaction id (UUID) from portfolio.transactions." }
+              },
+              "required": ["id"]
+            }
+            """)
+    }
+    private struct Args: Decodable { let id: String }
+    func call(arguments: Data) async throws -> String {
+        let id = try JSONDecoder().decode(Args.self, from: arguments).id
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty else { return "Error: id is required (get it from portfolio.transactions)." }
+        return ToolResultBounding.bound(await driver.remove(id))
+    }
+}
+
 // MARK: - Bundle
 
 enum PortfolioTools {
@@ -150,9 +219,12 @@ enum PortfolioTools {
         [
             PortfolioAddTool(driver: driver),
             PortfolioListTool(driver: driver),
+            PortfolioTransactionsTool(driver: driver),
+            PortfolioRemoveTool(driver: driver),
         ]
     }
 
     /// Names — used to UNregister when retracting (registry keyed by `spec.name`).
-    static let names = ["portfolio.add", "portfolio.list"]
+    static let names = ["portfolio.add", "portfolio.list",
+                        "portfolio.transactions", "portfolio.remove"]
 }

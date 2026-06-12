@@ -194,6 +194,38 @@ final class AgentRuntime {
                     }
                     return "Current positions (\(positions.count)):\n" + lines.joined(separator: "\n")
                 }
+            },
+            transactions: { @Sendable symbol in
+                await MainActor.run {
+                    let rows = symbol.map { store.transactions(for: $0) }
+                        ?? store.holdings.sorted { $0.date < $1.date }
+                    guard !rows.isEmpty else {
+                        return symbol.map { "No transactions for \($0)." }
+                            ?? "Portfolio is empty — no transactions yet."
+                    }
+                    let lines = rows.map { h in
+                        "- id=\(h.id.uuidString) | \(h.symbol) \(h.side.rawValue) "
+                            + "\(Self.trimNumber(h.quantity)) @ \(Self.trimNumber(h.price)) "
+                            + "\(h.currency) (\(Self.dayString(h.date)))"
+                    }
+                    let scope = symbol.map { " for \($0)" } ?? ""
+                    return "Transactions\(scope) (\(rows.count)):\n" + lines.joined(separator: "\n")
+                }
+            },
+            remove: { @Sendable idString in
+                await MainActor.run {
+                    guard let uuid = UUID(uuidString: idString) else {
+                        return "Error: \"\(idString)\" is not a valid transaction id. "
+                            + "Call portfolio.transactions to get ids."
+                    }
+                    guard let h = store.holdings.first(where: { $0.id == uuid }) else {
+                        return "No transaction with id \(idString) — it may already be gone. "
+                            + "Call portfolio.transactions for the current ledger."
+                    }
+                    store.remove(id: uuid)
+                    return "🗑️ Removed: \(h.symbol) \(h.side.rawValue) \(Self.trimNumber(h.quantity)) @ "
+                        + "\(Self.trimNumber(h.price)) \(h.currency) (\(Self.dayString(h.date)))."
+                }
             })
         Task { [tools] in await tools.registerAll(PortfolioTools.all(driver: driver)) }
     }
