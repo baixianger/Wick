@@ -475,8 +475,134 @@ private enum MCPTestStatus: Equatable {
 private struct DataSourcesTab: View {
     @Bindable var settings: AgentSettings
 
+    /// Read-only catalog model — pure reference UI, nothing persisted.
+    private struct DataSourceEntry: Identifiable {
+        let id = UUID()
+        let symbol: String
+        let name: String        // e.g. "EastMoney 行情 & K线"
+        let provides: String    // subtitle, e.g. "实时报价 · 日/周/月/分钟 K线"
+        let access: DSAccess
+        let status: DSStatus
+    }
+
+    private enum DSAccess {
+        case free, freeKey, byo
+        var label: String {
+            switch self {
+            case .free:    "免费"
+            case .freeKey: "免费·需Key"
+            case .byo:     "自带账号"
+            }
+        }
+        var tint: Color {
+            switch self {
+            case .free:    .green
+            case .freeKey: .orange
+            case .byo:     .blue
+            }
+        }
+    }
+
+    private enum DSStatus {
+        case active, planned
+        var label: String { self == .active ? "已接入" : "计划中" }
+        var tint: Color { self == .active ? .green : .secondary }
+    }
+
+    private enum DSMarket: String, CaseIterable, Identifiable {
+        case cn = "A股 / 港股", us = "美股"
+        var id: String { rawValue }
+    }
+
+    /// Which market's source list the segmented picker shows.
+    @State private var market: DSMarket = .cn
+
+    private static let cnSources: [DataSourceEntry] = [
+        .init(symbol: "chart.xyaxis.line",                name: "EastMoney 行情 & K线", provides: "实时报价 · 日/周/月/分钟 K线",        access: .free, status: .active),
+        .init(symbol: "dollarsign.circle",                name: "EastMoney 资金流",     provides: "主力/超大/大/中/小单净流入",       access: .free, status: .active),
+        .init(symbol: "doc.text",                         name: "EastMoney F10 财务",   provides: "营收/净利/EPS/ROE/毛利率 等",      access: .free, status: .active),
+        .init(symbol: "flame",                            name: "EastMoney 龙虎榜",     provides: "上榜原因 · 净买入 · 席位解读",     access: .free, status: .active),
+        .init(symbol: "flame",                            name: "EastMoney 涨停板",     provides: "涨停池 · 连板 · 封单额",          access: .free, status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "雪球 讨论/情绪",       provides: "个股讨论 · 散户情绪",             access: .byo,  status: .active),
+        .init(symbol: "dollarsign.circle",                name: "EastMoney 北向资金",   provides: "沪深港通 · 外资流向",             access: .free, status: .planned),
+        .init(symbol: "building.columns",                 name: "HKEX 沽空",            provides: "港股卖空数据",                   access: .free, status: .planned),
+        .init(symbol: "building.columns",                 name: "港交所 CCASS",         provides: "中央结算持股分布",               access: .free, status: .planned),
+        .init(symbol: "chart.xyaxis.line",                name: "新浪 / 腾讯 报价",     provides: "A股实时报价(备份源)",            access: .free, status: .planned),
+    ]
+
+    private static let usSources: [DataSourceEntry] = [
+        .init(symbol: "chart.xyaxis.line",                name: "Yahoo Finance",        provides: "行情 · K线 · 搜索",              access: .free,    status: .active),
+        .init(symbol: "doc.text",                         name: "FMP",                  provides: "基本面 · 估值",                  access: .freeKey, status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "Finnhub",              provides: "新闻 · 情绪",                    access: .freeKey, status: .active),
+        .init(symbol: "building.columns",                 name: "FRED",                 provides: "宏观:利率/CPI/非农/GDP",          access: .freeKey, status: .active),
+        .init(symbol: "building.columns",                 name: "FINRA",                provides: "空头 / Short Interest",          access: .free,    status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "X (Twitter)",          provides: "讨论 · 情绪",                    access: .byo,     status: .active),
+        .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: "内部人交易(Form 4) · XBRL 财务 · filings", access: .free, status: .planned),
+        .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: "分析师评级 · 财报日 · 机构持股",   access: .free,    status: .planned),
+    ]
+
+    private var sources: [DataSourceEntry] {
+        market == .cn ? Self.cnSources : Self.usSources
+    }
+
+    private func badge(_ text: String, _ tint: Color) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(tint.opacity(0.15)))
+            .foregroundStyle(tint)
+    }
+
+    @ViewBuilder
+    private func catalogRow(_ entry: DataSourceEntry) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.secondary.gradient)
+                .frame(width: 29, height: 29)
+                .overlay {
+                    Image(systemName: entry.symbol)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.name)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(entry.provides)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            badge(entry.access.label, entry.access.tint)
+            badge(entry.status.label, entry.status.tint)
+                .opacity(entry.status == .planned ? 0.6 : 1)
+        }
+        .padding(.vertical, 3)
+    }
+
     var body: some View {
         Form {
+            Section {
+                Picker("市场", selection: $market) {
+                    ForEach(DSMarket.allCases) { m in
+                        Text(m.rawValue).tag(m)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                ForEach(sources) { entry in
+                    catalogRow(entry)
+                }
+            } header: {
+                Text("数据源总览")
+            } footer: {
+                Text("免费 = 无需 Key;免费·需Key = 在下方填写;自带账号 = 在工作流里登录。计划中 = 即将接入。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
             if settings.providerKind == .server {
                 Section {
                     Text("In Wick Server mode, FMP / Finnhub / FRED are provided by our backend — you don't need to supply data keys. Switch to a BYO provider on the Provider tab to manage your own data sources.")
