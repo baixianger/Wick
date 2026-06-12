@@ -87,7 +87,7 @@ struct SidebarView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField(L("Search stocks", "搜索股票"), text: $searchQuery)
+            TextField("Search stocks", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
             if !searchQuery.isEmpty {
@@ -135,9 +135,9 @@ struct SidebarView: View {
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("Portfolio", "组合"))
+                Text("Portfolio")
                     .font(.system(size: 14, weight: .semibold))
-                Text(L("Holdings · P&L heatmap", "持仓 · 盈亏热图"))
+                Text("Holdings · P&L heatmap")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -167,10 +167,10 @@ struct SidebarView: View {
             Spacer()
             groupMenu
         }
-        .alert(L("New group", "新建分组"), isPresented: $newGroupPromptShown) {
-            TextField(L("Name", "名称"), text: $newGroupName)
-            Button(L("Cancel", "取消"), role: .cancel) { }
-            Button(L("Create", "创建")) {
+        .alert("New group", isPresented: $newGroupPromptShown) {
+            TextField("Name", text: $newGroupName)
+            Button("Cancel", role: .cancel) { }
+            Button("Create") {
                 let n = newGroupName.trimmingCharacters(in: .whitespaces)
                 guard !n.isEmpty else { return }
                 let g = watchlist.addGroup(name: n)
@@ -202,7 +202,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Wicker")
                     .font(.system(size: 14, weight: .semibold))
-                Text(L("Chat · screening · macro", "对话 · 选股 · 宏观"))
+                Text("Chat · screening · macro")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -228,9 +228,9 @@ struct SidebarView: View {
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(L("Market", "市场"))
+                Text("Market")
                     .font(.system(size: 14, weight: .semibold))
-                Text(L("Sectors · indices · macro", "板块 · 指数 · 宏观"))
+                Text("Sectors · indices · macro")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -251,9 +251,9 @@ struct SidebarView: View {
                 // most-returned-to list, so it leads regardless of how many user
                 // groups exist. Then "All" (every tracked stock across all groups
                 // in one list), then the user's groups.
-                Label(L("Holdings (\(holdingsCount))", "持仓 (\(holdingsCount))"), systemImage: "rectangle.3.group")
+                Label("Holdings (\(holdingsCount))", systemImage: "rectangle.3.group")
                     .tag(WatchlistGroupSelection.holdings)
-                Label(L("All", "全部"), systemImage: "tray.full")
+                Label("All", systemImage: "tray.full")
                     .tag(WatchlistGroupSelection.all)
                 ForEach(watchlist.groups) { group in
                     Label("\(group.name) (\(group.symbols.count))",
@@ -267,13 +267,13 @@ struct SidebarView: View {
                 newGroupName = ""
                 newGroupPromptShown = true
             } label: {
-                Label(L("New group…", "新建分组…"), systemImage: "plus")
+                Label("New group…", systemImage: "plus")
             }
             if case .user(let id) = watchlist.selection {
                 Button(role: .destructive) {
                     watchlist.remove(id: id)
                 } label: {
-                    Label(L("Delete current group", "删除当前分组"), systemImage: "trash")
+                    Label("Delete current group", systemImage: "trash")
                 }
             }
         } label: {
@@ -299,25 +299,25 @@ struct SidebarView: View {
 
     private var currentGroupTitle: String {
         switch watchlist.selection {
-        case .all:      return L("All", "全部")
-        case .holdings: return L("Holdings", "持仓")
+        case .all:      return String(localized: "All", locale: LocaleHolder.current)
+        case .holdings: return String(localized: "Holdings", locale: LocaleHolder.current)
         case .user(let id):
-            return watchlist.groups.first(where: { $0.id == id })?.name ?? L("Group", "分组")
+            return watchlist.groups.first(where: { $0.id == id })?.name ?? String(localized: "Group", locale: LocaleHolder.current)
         }
     }
 
     @ViewBuilder
     private func tickerContextMenu(for ticker: Ticker) -> some View {
         if watchlist.groups.isEmpty {
-            Text(L("No user groups yet", "暂无自定义分组"))
+            Text("No user groups yet")
         } else {
             ForEach(watchlist.groups) { group in
                 let isMember = group.symbols.contains(ticker.symbol)
                 Button {
                     watchlist.toggle(symbol: ticker.symbol, in: group.id)
                 } label: {
-                    Label(isMember ? L("Remove from \(group.name)", "从 \(group.name) 移除")
-                                   : L("Add to \(group.name)", "加入 \(group.name)"),
+                    Label(isMember ? String(localized: "Remove from \(group.name)", locale: LocaleHolder.current)
+                                   : String(localized: "Add to \(group.name)", locale: LocaleHolder.current),
                           systemImage: isMember ? "minus.circle" : "plus.circle")
                 }
             }
@@ -390,7 +390,7 @@ private struct TickerRow: View {
                 if isClosed {
                     // Dimmed "已平仓" chip so a fully-closed (net-0) holding reads
                     // as history at a glance while still living in the list.
-                    Text(L("Closed", "已平仓"))
+                    Text("Closed")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 5)

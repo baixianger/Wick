@@ -91,7 +91,7 @@ struct MarketView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(L("Market", "市场"))
+            Text("Market")
                 .font(.system(size: 32, weight: .bold))
             Text(headerSubtitle)
                 .font(.system(size: 13))
@@ -262,11 +262,10 @@ struct MarketView: View {
     private var sectorSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(L("Sectors", "板块"))
+                Text("Sectors")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text(L("SPDR sector ETFs · color ∝ today's change",
-                       "SPDR 行业 ETF · 颜色 ∝ 当日涨跌"))
+                Text("SPDR sector ETFs · color ∝ today's change")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -298,9 +297,9 @@ struct MarketView: View {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .gainers:    return L("Gainers", "领涨")
-            case .losers:     return L("Losers", "领跌")
-            case .mostActive: return L("Most Active", "最活跃")
+            case .gainers:    return String(localized: "Gainers", locale: LocaleHolder.current)
+            case .losers:     return String(localized: "Losers", locale: LocaleHolder.current)
+            case .mostActive: return String(localized: "Most Active", locale: LocaleHolder.current)
             }
         }
     }
@@ -308,10 +307,10 @@ struct MarketView: View {
     private var moversSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L("Movers", "异动"))
+                Text("Movers")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text(L("\(universe.count) tickers in watchlist", "自选列表 \(universe.count) 只"))
+                Text("\(universe.count) tickers in watchlist")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -322,8 +321,7 @@ struct MarketView: View {
             VStack(spacing: 0) {
                 let rows = moverRows()
                 if rows.isEmpty {
-                    Text(L("Add tickers to the watchlist to populate movers.",
-                           "向自选列表添加标的即可显示异动。"))
+                    Text("Add tickers to the watchlist to populate movers.")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -416,10 +414,10 @@ struct MarketView: View {
     private var earningsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(L("Upcoming Earnings", "即将公布财报"))
+                Text("Upcoming Earnings")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text(L("Next 10 days · preview", "未来 10 天 · 预览"))
+                Text("Next 10 days · preview")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -434,8 +432,7 @@ struct MarketView: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
-                Text(L("Preview data. Live earnings calendar needs a Finnhub key in Settings → Agents.",
-                       "预览数据。实时财报日历需在「设置 → 智能体」中配置 Finnhub 密钥。"))
+                Text("Preview data. Live earnings calendar needs a Finnhub key in Settings → Agents.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
@@ -466,7 +463,7 @@ struct MarketView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(L("EPS est.", "预期EPS"))
+                Text("EPS est.")
                     .font(.system(size: 9))
                     .foregroundStyle(.tertiary)
                 Text("$\(String(format: "%.2f", r.epsEstimate))")
@@ -488,10 +485,10 @@ struct MarketView: View {
     private var newsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(L("Headlines", "头条"))
+                Text("Headlines")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text(L("Across asset classes", "跨资产类别"))
+                Text("Across asset classes")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -518,8 +515,7 @@ struct MarketView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
-            Text(L("Live FRED data when a key is set in Settings (synthetic preview otherwise). Tap a chart's Overlay to compare against another series or the US market.",
-                   "在「设置」中配置密钥后显示实时 FRED 数据（否则为模拟预览）。点击图表的「叠加」可与另一序列或美股市场对比。"))
+            Text("Live FRED data when a key is set in Settings (synthetic preview otherwise). Tap a chart's Overlay to compare against another series or the US market.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -566,10 +562,10 @@ enum MacroCategory: String, CaseIterable, Identifiable, Hashable {
     /// Localized display label — `rawValue` stays English for persistence.
     var label: String {
         switch self {
-        case .rates:     return L("Rates", "利率")
-        case .inflation: return L("Inflation", "通胀")
-        case .labor:     return L("Labor", "就业")
-        case .growth:    return L("Growth", "增长")
+        case .rates:     return String(localized: "Rates", locale: LocaleHolder.current)
+        case .inflation: return String(localized: "Inflation", locale: LocaleHolder.current)
+        case .labor:     return String(localized: "Labor", locale: LocaleHolder.current)
+        case .growth:    return String(localized: "Growth", locale: LocaleHolder.current)
         }
     }
 
@@ -596,13 +592,13 @@ enum MarketAssetClass: String, CaseIterable, Identifiable, Hashable {
     /// Localized tab label — `rawValue` stays English for persistence / ids.
     var label: String {
         switch self {
-        case .us:          return L("US", "美股")
-        case .asiaPacific: return L("Asia Pacific", "亚太")
-        case .europe:      return L("Europe", "欧洲")
-        case .crypto:      return L("Crypto", "加密货币")
-        case .commodities: return L("Commodities", "大宗商品")
-        case .forex:       return L("Forex", "外汇")
-        case .macro:       return L("Macro", "宏观")
+        case .us:          return String(localized: "US", locale: LocaleHolder.current)
+        case .asiaPacific: return String(localized: "Asia Pacific", locale: LocaleHolder.current)
+        case .europe:      return String(localized: "Europe", locale: LocaleHolder.current)
+        case .crypto:      return String(localized: "Crypto", locale: LocaleHolder.current)
+        case .commodities: return String(localized: "Commodities", locale: LocaleHolder.current)
+        case .forex:       return String(localized: "Forex", locale: LocaleHolder.current)
+        case .macro:       return String(localized: "Macro", locale: LocaleHolder.current)
         }
     }
 
@@ -611,13 +607,13 @@ enum MarketAssetClass: String, CaseIterable, Identifiable, Hashable {
     /// market-tab page title.
     var subtitle: String {
         switch self {
-        case .us:          return L("NYSE · NASDAQ", "纽交所 · 纳斯达克")
-        case .asiaPacific: return L("Tokyo · Hong Kong · Shanghai · Seoul", "东京 · 香港 · 上海 · 首尔")
-        case .europe:      return L("London · Frankfurt · Paris", "伦敦 · 法兰克福 · 巴黎")
-        case .crypto:      return L("Spot · USD pairs", "现货 · 美元交易对")
-        case .commodities: return L("Front-month futures · Metals · Energy", "近月期货 · 金属 · 能源")
-        case .forex:       return L("Major pairs · Spot", "主要货币对 · 现货")
-        case .macro:       return L("Rates · Inflation · Labor", "利率 · 通胀 · 就业")
+        case .us:          return String(localized: "NYSE · NASDAQ", locale: LocaleHolder.current)
+        case .asiaPacific: return String(localized: "Tokyo · Hong Kong · Shanghai · Seoul", locale: LocaleHolder.current)
+        case .europe:      return String(localized: "London · Frankfurt · Paris", locale: LocaleHolder.current)
+        case .crypto:      return String(localized: "Spot · USD pairs", locale: LocaleHolder.current)
+        case .commodities: return String(localized: "Front-month futures · Metals · Energy", locale: LocaleHolder.current)
+        case .forex:       return String(localized: "Major pairs · Spot", locale: LocaleHolder.current)
+        case .macro:       return String(localized: "Rates · Inflation · Labor", locale: LocaleHolder.current)
         }
     }
 
@@ -788,7 +784,7 @@ fileprivate struct MacroDetailRow: View {
                 }
                 Spacer()
                 Menu {
-                    Picker(L("Overlay", "叠加"), selection: $overlay) {
+                    Picker("Overlay", selection: $overlay) {
                         ForEach(MacroOverlay.allCases) { o in
                             Text(o.label).tag(o)
                         }
@@ -797,7 +793,7 @@ fileprivate struct MacroDetailRow: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
-                        Text(overlay == .none ? L("Overlay", "叠加") : L("Change", "更改"))
+                        Text(overlay == .none ? String(localized: "Overlay", locale: LocaleHolder.current) : String(localized: "Change", locale: LocaleHolder.current))
                     }
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -845,15 +841,15 @@ fileprivate enum MacroOverlay: String, CaseIterable, Identifiable {
     /// nouns (S&P 500, Nasdaq, Dow, CPI, PCE) stay as-is.
     var label: String {
         switch self {
-        case .none:         return L("None", "无")
+        case .none:         return String(localized: "None", locale: LocaleHolder.current)
         case .sp500:        return "S&P 500"
         case .nasdaq:       return "Nasdaq Comp"
         case .dow:          return "Dow"
-        case .cpi:          return L("CPI YoY", "CPI同比")
-        case .corePCE:      return L("Core PCE", "核心PCE")
-        case .fedFunds:     return L("Fed Funds", "联邦基金利率")
-        case .tenYear:      return L("10Y Yield", "10年期收益率")
-        case .unemployment: return L("Unemployment", "失业率")
+        case .cpi:          return String(localized: "CPI YoY", locale: LocaleHolder.current)
+        case .corePCE:      return String(localized: "Core PCE", locale: LocaleHolder.current)
+        case .fedFunds:     return String(localized: "Fed Funds", locale: LocaleHolder.current)
+        case .tenYear:      return String(localized: "10Y Yield", locale: LocaleHolder.current)
+        case .unemployment: return String(localized: "Unemployment", locale: LocaleHolder.current)
         }
     }
 
@@ -1418,30 +1414,30 @@ extension IndexSpec {
     /// tickers fall through unchanged.
     var localizedShortName: String {
         switch symbol {
-        case "DGS10":            return L("10Y Yield (%)", "10年期收益率(%)")
-        case "DGS2":             return L("2Y Yield (%)", "2年期收益率(%)")
-        case "FEDFUNDS":         return L("Fed Funds (%)", "联邦基金利率(%)")
-        case "T10Y2Y":           return L("10Y-2Y Spread (%)", "10年-2年利差(%)")
-        case "CPIAUCSL":         return L("CPI YoY (%)", "CPI同比(%)")
-        case "CPILFESL":         return L("Core CPI YoY (%)", "核心CPI同比(%)")
-        case "PCEPILFE":         return L("Core PCE YoY (%)", "核心PCE同比(%)")
-        case "UNRATE":           return L("Unemployment (%)", "失业率(%)")
-        case "PAYEMS":           return L("Nonfarm Payrolls (Δk)", "非农就业(千人变动)")
-        case "ICSA":             return L("Initial Claims", "初请失业金人数")
-        case "A191RL1Q225SBEA":  return L("Real GDP (QoQ ann. %)", "实际GDP(环比年化%)")
-        case "RSAFS":            return L("Retail Sales YoY (%)", "零售销售同比(%)")
+        case "DGS10":            return String(localized: "10Y Yield (%)", locale: LocaleHolder.current)
+        case "DGS2":             return String(localized: "2Y Yield (%)", locale: LocaleHolder.current)
+        case "FEDFUNDS":         return String(localized: "Fed Funds (%)", locale: LocaleHolder.current)
+        case "T10Y2Y":           return String(localized: "10Y-2Y Spread (%)", locale: LocaleHolder.current)
+        case "CPIAUCSL":         return String(localized: "CPI YoY (%)", locale: LocaleHolder.current)
+        case "CPILFESL":         return String(localized: "Core CPI YoY (%)", locale: LocaleHolder.current)
+        case "PCEPILFE":         return String(localized: "Core PCE YoY (%)", locale: LocaleHolder.current)
+        case "UNRATE":           return String(localized: "Unemployment (%)", locale: LocaleHolder.current)
+        case "PAYEMS":           return String(localized: "Nonfarm Payrolls (Δk)", locale: LocaleHolder.current)
+        case "ICSA":             return String(localized: "Initial Claims", locale: LocaleHolder.current)
+        case "A191RL1Q225SBEA":  return String(localized: "Real GDP (QoQ ann. %)", locale: LocaleHolder.current)
+        case "RSAFS":            return String(localized: "Retail Sales YoY (%)", locale: LocaleHolder.current)
         // SPDR sector ETF labels (US-tab sector heatmap).
-        case "XLK":              return L("Tech", "科技")
-        case "XLF":              return L("Financials", "金融")
-        case "XLV":              return L("Health Care", "医疗保健")
-        case "XLY":              return L("Discretionary", "可选消费")
-        case "XLC":              return L("Comm Svcs", "通信服务")
-        case "XLI":              return L("Industrials", "工业")
-        case "XLP":              return L("Staples", "必需消费")
-        case "XLE":              return L("Energy", "能源")
-        case "XLU":              return L("Utilities", "公用事业")
-        case "XLB":              return L("Materials", "材料")
-        case "XLRE":             return L("Real Estate", "房地产")
+        case "XLK":              return String(localized: "Tech", locale: LocaleHolder.current)
+        case "XLF":              return String(localized: "Financials", locale: LocaleHolder.current)
+        case "XLV":              return String(localized: "Health Care", locale: LocaleHolder.current)
+        case "XLY":              return String(localized: "Discretionary", locale: LocaleHolder.current)
+        case "XLC":              return String(localized: "Comm Svcs", locale: LocaleHolder.current)
+        case "XLI":              return String(localized: "Industrials", locale: LocaleHolder.current)
+        case "XLP":              return String(localized: "Staples", locale: LocaleHolder.current)
+        case "XLE":              return String(localized: "Energy", locale: LocaleHolder.current)
+        case "XLU":              return String(localized: "Utilities", locale: LocaleHolder.current)
+        case "XLB":              return String(localized: "Materials", locale: LocaleHolder.current)
+        case "XLRE":             return String(localized: "Real Estate", locale: LocaleHolder.current)
         default:                 return shortName
         }
     }

@@ -36,7 +36,7 @@ struct TransactionImportSheet: View {
     private var toolbar: some ToolbarContent {
         if phase == .preview {
             ToolbarItem(placement: .cancellationAction) {
-                Button(L("Cancel", "取消")) { dismiss() }
+                Button("Cancel") { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button(importButtonTitle) { runImport() }
@@ -45,7 +45,7 @@ struct TransactionImportSheet: View {
             }
         } else if phase == .done {
             ToolbarItem(placement: .confirmationAction) {
-                Button(L("Done", "完成")) { dismiss() }
+                Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -90,9 +90,9 @@ struct TransactionImportSheet: View {
                     .truncationMode(.middle)
             }
             HStack(spacing: 12) {
-                Label(L("\(newCount) new", "\(newCount) 条新增"), systemImage: "plus.circle.fill")
+                Label("\(newCount) new", systemImage: "plus.circle.fill")
                     .foregroundStyle(.green)
-                Label(L("\(duplicateCount) duplicate", "\(duplicateCount) 条重复"), systemImage: "equal.circle.fill")
+                Label("\(duplicateCount) duplicate", systemImage: "equal.circle.fill")
                     .foregroundStyle(.secondary)
             }
             .font(.system(size: 12))
@@ -124,19 +124,14 @@ struct TransactionImportSheet: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                     if let eid = row.wrappedValue.preview.transaction.externalId {
-                        Text(L("ID \(eid)", "编号 \(eid)"))
+                        Text("ID \(eid)")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
                 }
                 if let existing = row.wrappedValue.preview.existing {
-                    Text(L("matches existing \(existing.symbol) " +
-                         "\(formatQuantity(existing.quantity)) @ \(formatPrice(existing.price)) " +
-                         "(\(dateLine(existing.date)))",
-                         "匹配已有 \(existing.symbol) " +
-                         "\(formatQuantity(existing.quantity)) @ \(formatPrice(existing.price)) " +
-                         "(\(dateLine(existing.date)))"))
+                    Text(String(localized: "matches existing \(existing.symbol) \(formatQuantity(existing.quantity)) @ \(formatPrice(existing.price)) (\(dateLine(existing.date)))", locale: LocaleHolder.current))
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
@@ -158,10 +153,10 @@ struct TransactionImportSheet: View {
 
     private func statusBadge(_ preview: DedupPreview) -> some View {
         let (label, color): (String, Color) = {
-            guard let reason = preview.reason else { return (L("NEW", "新增"), .green) }
+            guard let reason = preview.reason else { return (String(localized: "NEW", locale: LocaleHolder.current), .green) }
             switch reason {
-            case .externalIdMatch: return (L("EXACT DUP", "完全重复"), .orange)
-            case .fuzzyMatch:      return (L("LIKELY DUP", "疑似重复"), .yellow)
+            case .externalIdMatch: return (String(localized: "EXACT DUP", locale: LocaleHolder.current), .orange)
+            case .fuzzyMatch:      return (String(localized: "LIKELY DUP", locale: LocaleHolder.current), .yellow)
             }
         }()
         return Text(label)
@@ -177,7 +172,7 @@ struct TransactionImportSheet: View {
     private var importingView: some View {
         VStack(spacing: 12) {
             ProgressView()
-            Text(L("Importing \(selectedRows.count) transactions…", "正在导入 \(selectedRows.count) 笔交易…"))
+            Text("Importing \(selectedRows.count) transactions…")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -187,12 +182,10 @@ struct TransactionImportSheet: View {
     private var resultView: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let r = result {
-                Text(L("Imported \(r.newCount) transaction\(r.newCount == 1 ? "" : "s") from \(r.broker).",
-                       "已从 \(r.broker) 导入 \(r.newCount) 笔交易。"))
+                Text(String(localized: "Imported \(r.newCount) transaction\(r.newCount == 1 ? "" : "s") from \(r.broker).", locale: LocaleHolder.current))
                     .font(.headline)
                 if r.skippedCount > 0 {
-                    Text(L("Skipped \(r.skippedCount) duplicate\(r.skippedCount == 1 ? "" : "s").",
-                           "已跳过 \(r.skippedCount) 笔重复交易。"))
+                    Text(String(localized: "Skipped \(r.skippedCount) duplicate\(r.skippedCount == 1 ? "" : "s").", locale: LocaleHolder.current))
                         .foregroundStyle(.secondary)
                 }
                 if !r.added.isEmpty {
@@ -248,12 +241,12 @@ struct TransactionImportSheet: View {
     private var selectedRows: [Row] { rows.filter(\.included) }
     private var importButtonTitle: String {
         let n = selectedRows.count
-        return L("Import \(n) transaction\(n == 1 ? "" : "s")", "导入 \(n) 笔交易")
+        return String(localized: "Import \(n) transaction\(n == 1 ? "" : "s")", locale: LocaleHolder.current)
     }
     private var title: String {
         switch phase {
-        case .preview, .importing: return L("Review transactions", "核对交易")
-        case .done:                return L("Import complete", "导入完成")
+        case .preview, .importing: return String(localized: "Review transactions", locale: LocaleHolder.current)
+        case .done:                return String(localized: "Import complete", locale: LocaleHolder.current)
         }
     }
 

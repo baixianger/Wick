@@ -115,11 +115,10 @@ struct SocialView: View {
     private var sectionHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             sourceBadge(text: "雪球", tint: blueTint)
-            Text(L("Discussion", "讨论"))
+            Text("Discussion")
                 .font(.system(size: 18, weight: .semibold))
             if let asOf = model.asOf {
-                Text(L("· as of \(asOf.formatted(date: .omitted, time: .shortened))",
-                       "· 截至 \(asOf.formatted(date: .omitted, time: .shortened))"))
+                Text("· as of \(asOf.formatted(date: .omitted, time: .shortened))")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -156,14 +155,13 @@ struct SocialView: View {
     @available(macOS 26.0, *)
     private func notConnectedState(session: BrowserSessionManager) -> some View {
         emptyCard(icon: "person.crop.circle.badge.questionmark",
-                  title: L("Not connected to 雪球", "未连接雪球"),
-                  message: L("Sign in to 雪球 to view discussion for this ticker. Your session stays on this device, is triggered on demand, and is never scraped automatically.",
-                             "登录雪球后即可查看该标的的讨论。登录态仅保存在本机，按需触发，不会自动抓取。")) {
+                  title: "Not connected to 雪球",
+                  message: String(localized: "Sign in to 雪球 to view discussion for this ticker. Your session stays on this device, is triggered on demand, and is never scraped automatically.", locale: LocaleHolder.current)) {
             Button {
                 session.login()
                 loginSheetShown = true
             } label: {
-                Label(L("Connect 雪球", "连接雪球"), systemImage: "link")
+                Label("Connect 雪球", systemImage: "link")
                     .font(.system(size: 13, weight: .semibold))
             }
             .buttonStyle(LiquidGlassButtonStyle(prominent: true))
@@ -177,16 +175,14 @@ struct SocialView: View {
     @available(macOS 26.0, *)
     private func emptyState(session: BrowserSessionManager) -> some View {
         emptyCard(icon: "bubble.left.and.bubble.right",
-                  title: L("No discussion", "暂无讨论"),
+                  title: "No discussion",
                   message: model.didLoadOnce
-                      ? L("雪球 returned no recent discussion for this ticker. Try refreshing later.",
-                          "雪球未返回该标的的最新讨论。可稍后再刷新。")
-                      : L("Tap refresh to load 雪球 discussion for this ticker.",
-                          "点击刷新以加载该标的的雪球讨论。")) {
+                      ? String(localized: "雪球 returned no recent discussion for this ticker. Try refreshing later.", locale: LocaleHolder.current)
+                      : String(localized: "Tap refresh to load 雪球 discussion for this ticker.", locale: LocaleHolder.current)) {
             Button {
                 Task { await model.refresh(symbol: ticker.symbol, session: session) }
             } label: {
-                Label(L("Refresh", "刷新"), systemImage: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
                     .font(.system(size: 13, weight: .semibold))
             }
             .buttonStyle(LiquidGlassButtonStyle(prominent: true))
@@ -207,7 +203,7 @@ struct SocialView: View {
     private var loadingState: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text(L("Loading 雪球 discussion…", "正在加载雪球讨论…"))
+            Text("Loading 雪球 discussion…")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -219,9 +215,8 @@ struct SocialView: View {
     /// expose a dead control.
     private var unsupportedState: some View {
         emptyCard(icon: "exclamationmark.triangle",
-                  title: L("Requires macOS 26", "需要 macOS 26"),
-                  message: L("雪球 discussion relies on the embedded WebKit (WebPage) capability, which needs macOS 26 or later.",
-                             "雪球讨论依赖内嵌 WebKit（WebPage）能力，需 macOS 26 及以上。")) { EmptyView() }
+                  title: "Requires macOS 26",
+                  message: String(localized: "雪球 discussion relies on the embedded WebKit (WebPage) capability, which needs macOS 26 or later.", locale: LocaleHolder.current)) { EmptyView() }
     }
 
     // MARK: Card
@@ -238,7 +233,7 @@ struct SocialView: View {
                 Image(systemName: "person.circle.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
-                Text(post.author.isEmpty ? L("雪球 user", "雪球用户") : post.author)
+                Text(post.author.isEmpty ? String(localized: "雪球 user", locale: LocaleHolder.current) : post.author)
                     .font(.system(size: 13, weight: .semibold))
                 sourceBadge(text: "雪球", tint: blueTint)
                 Spacer(minLength: 0)
@@ -272,7 +267,7 @@ struct SocialView: View {
         .onTapGesture {
             if let url = post.url { openURL(url) }
         }
-        .help(tappable ? L("Open in browser", "在浏览器中打开") : "")
+        .help(tappable ? String(localized: "Open in browser", locale: LocaleHolder.current) : "")
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(post.author.isEmpty ? "雪球用户" : post.author): \(post.text). 赞 \(post.likeCount), 评 \(post.replyCount)")
         .accessibilityAddTraits(tappable ? .isLink : [])
@@ -288,10 +283,10 @@ struct SocialView: View {
     private func loginSheet(session: BrowserSessionManager) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Text(L("Sign in to 雪球", "登录雪球"))
+                Text("Sign in to 雪球")
                     .font(.headline)
                 Spacer()
-                Button(L("Done", "完成")) {
+                Button("Done") {
                     loginSheetShown = false
                     Task {
                         await session.refreshStatus()
@@ -353,8 +348,7 @@ struct SocialView: View {
             Text("X (Twitter)")
                 .font(.system(size: 18, weight: .semibold))
             if let asOf = xModel.asOf {
-                Text(L("· as of \(asOf.formatted(date: .omitted, time: .shortened))",
-                       "· 截至 \(asOf.formatted(date: .omitted, time: .shortened))"))
+                Text("· as of \(asOf.formatted(date: .omitted, time: .shortened))")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -386,9 +380,8 @@ struct SocialView: View {
     /// rather than expose a dead control. Points at Settings → Workflow.
     private var xDisabledState: some View {
         emptyCard(icon: "globe.badge.chevron.backward",
-                  title: L("BYO browser required", "需要开启 BYO 浏览器"),
-                  message: L("X (Twitter) discussion uses the same BYO (bring-your-own account) approach. Enable the embedded browser under Settings → Workflow, then sign in to X to view discussion for this ticker.",
-                             "X (Twitter) 讨论沿用同样的 BYO（自带账号）方式。请在「设置 → 工作流」中开启内嵌浏览器后，登录 X 即可查看该标的讨论。")) { EmptyView() }
+                  title: "BYO browser required",
+                  message: String(localized: "X (Twitter) discussion uses the same BYO (bring-your-own account) approach. Enable the embedded browser under Settings → Workflow, then sign in to X to view discussion for this ticker.", locale: LocaleHolder.current)) { EmptyView() }
     }
 
     /// (a) X session invalid / never connected → "登录 X" empty state. Logging in
@@ -397,14 +390,13 @@ struct SocialView: View {
     @available(macOS 26.0, *)
     private func xNotConnectedState(session: BrowserSessionManager) -> some View {
         emptyCard(icon: "person.crop.circle.badge.questionmark",
-                  title: L("Not signed in to X", "未登录 X"),
-                  message: L("Sign in to X (Twitter) to view discussion for this ticker. Your session stays on this device, is triggered on demand, and is never scraped automatically.",
-                             "登录 X (Twitter) 后即可查看该标的的讨论。登录态仅保存在本机，按需触发，不会自动抓取。")) {
+                  title: "Not signed in to X",
+                  message: String(localized: "Sign in to X (Twitter) to view discussion for this ticker. Your session stays on this device, is triggered on demand, and is never scraped automatically.", locale: LocaleHolder.current)) {
             Button {
                 session.xLogin()
                 xLoginSheetShown = true
             } label: {
-                Label(L("Sign in to X", "登录 X"), systemImage: "link")
+                Label("Sign in to X", systemImage: "link")
                     .font(.system(size: 13, weight: .semibold))
             }
             .buttonStyle(LiquidGlassButtonStyle(prominent: true))
@@ -418,16 +410,14 @@ struct SocialView: View {
     @available(macOS 26.0, *)
     private func xEmptyState(session: BrowserSessionManager) -> some View {
         emptyCard(icon: "bubble.left.and.bubble.right",
-                  title: L("No discussion", "暂无讨论"),
+                  title: "No discussion",
                   message: xModel.didLoadOnce
-                      ? L("X returned no recent discussion for this ticker. Try refreshing later.",
-                          "X 未返回该标的的最新讨论。可稍后再刷新。")
-                      : L("Tap refresh to load X discussion for this ticker.",
-                          "点击刷新以加载该标的的 X 讨论。")) {
+                      ? String(localized: "X returned no recent discussion for this ticker. Try refreshing later.", locale: LocaleHolder.current)
+                      : String(localized: "Tap refresh to load X discussion for this ticker.", locale: LocaleHolder.current)) {
             Button {
                 Task { await xModel.refresh(symbol: ticker.symbol, session: session) }
             } label: {
-                Label(L("Refresh", "刷新"), systemImage: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
                     .font(.system(size: 13, weight: .semibold))
             }
             .buttonStyle(LiquidGlassButtonStyle(prominent: true))
@@ -448,7 +438,7 @@ struct SocialView: View {
     private var xLoadingState: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text(L("Loading X discussion…", "正在加载 X 讨论…"))
+            Text("Loading X discussion…")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -469,7 +459,7 @@ struct SocialView: View {
                 Image(systemName: "person.circle.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
-                Text(post.handle.isEmpty ? L("X user", "X 用户") : post.handle)
+                Text(post.handle.isEmpty ? String(localized: "X user", locale: LocaleHolder.current) : post.handle)
                     .font(.system(size: 13, weight: .semibold))
                 sourceBadge(text: "X", tint: .secondary)
                 Spacer(minLength: 0)
@@ -492,7 +482,7 @@ struct SocialView: View {
         .onTapGesture {
             if let url = profileURL { openURL(url) }
         }
-        .help(tappable ? L("Open author profile in browser", "在浏览器中打开作者主页") : "")
+        .help(tappable ? String(localized: "Open author profile in browser", locale: LocaleHolder.current) : "")
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(post.handle.isEmpty ? "X 用户" : post.handle): \(post.text)")
         .accessibilityAddTraits(tappable ? .isLink : [])
@@ -510,8 +500,8 @@ struct SocialView: View {
         }
         .buttonStyle(.plain)
         .disabled(xModel.isLoading || sessionManager?.xStatus.canScrape != true)
-        .help(L("Refresh X discussion", "刷新 X 讨论"))
-        .accessibilityLabel(L("Refresh", "刷新"))
+        .help("Refresh X discussion")
+        .accessibilityLabel("Refresh")
     }
 
     /// Presents the manager's visible X login `WebPage` so the user can sign in
@@ -523,10 +513,10 @@ struct SocialView: View {
     private func xLoginSheet(session: BrowserSessionManager) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Text(L("Sign in to X (Twitter)", "登录 X (Twitter)"))
+                Text("Sign in to X (Twitter)")
                     .font(.headline)
                 Spacer()
-                Button(L("Done", "完成")) {
+                Button("Done") {
                     xLoginSheetShown = false
                     Task {
                         await session.xRefreshStatus()
@@ -568,7 +558,7 @@ struct SocialView: View {
     @ViewBuilder
     private func emptyCard<Action: View>(
         icon: String,
-        title: String,
+        title: LocalizedStringKey,
         message: String,
         @ViewBuilder action: () -> Action
     ) -> some View {
@@ -616,8 +606,8 @@ struct SocialView: View {
         }
         .buttonStyle(.plain)
         .disabled(model.isLoading || sessionManager?.status.canScrape != true)
-        .help(L("Refresh 雪球 discussion", "刷新雪球讨论"))
-        .accessibilityLabel(L("Refresh", "刷新"))
+        .help("Refresh 雪球 discussion")
+        .accessibilityLabel("Refresh")
     }
 
     // MARK: - Wiring

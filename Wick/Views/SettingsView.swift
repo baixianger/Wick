@@ -125,7 +125,7 @@ private struct SidebarLabelStyle: LabelStyle {
 private struct SettingsRow<Control: View>: View {
     let systemImage: String
     let tint: Color
-    let title: String
+    let title: LocalizedStringKey
     var subtitle: String? = nil
     @ViewBuilder var control: () -> Control
 
@@ -178,13 +178,13 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .provider:  return L("Provider", "模型服务")
-        case .data:      return L("Data", "数据")
-        case .workflow:  return L("Workflow", "工作流")
-        case .freeAgent: return L("Free Agent", "自由智能体")
-        case .skills:    return L("Skills", "技能")
-        case .display:   return L("Display", "显示")
-        case .mcp:       return L("MCP", "MCP")
+        case .provider:  return String(localized: "Provider", locale: LocaleHolder.current)
+        case .data:      return String(localized: "Data", locale: LocaleHolder.current)
+        case .workflow:  return String(localized: "Workflow", locale: LocaleHolder.current)
+        case .freeAgent: return String(localized: "Free Agent", locale: LocaleHolder.current)
+        case .skills:    return String(localized: "Skills", locale: LocaleHolder.current)
+        case .display:   return String(localized: "Display", locale: LocaleHolder.current)
+        case .mcp:       return String(localized: "MCP", locale: LocaleHolder.current)
         }
     }
 
@@ -234,7 +234,7 @@ private struct MCPTab: View {
 
     var body: some View {
         Form {
-            Section(L("Helper", "辅助进程")) {
+            Section("Helper") {
                 // Rich status row: a green/orange icon-tile signals
                 // whether the App Group bridge is live, with the
                 // bundle/provisioning detail as the subtitle.
@@ -242,12 +242,10 @@ private struct MCPTab: View {
                     systemImage: SharedStore.isAppGroupAvailable
                         ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
                     tint: SharedStore.isAppGroupAvailable ? .green : .orange,
-                    title: L("`wick-mcp` ships inside Wick.app", "`wick-mcp` 已内置于 Wick.app"),
+                    title: "`wick-mcp` ships inside Wick.app",
                     subtitle: SharedStore.isAppGroupAvailable
-                        ? L("Sharing holdings + watchlist with helper (App Group active)",
-                            "正在与辅助进程共享持仓 + 自选（App Group 已启用）")
-                        : L("App Group not provisioned — helper will see empty holdings",
-                            "未配置 App Group——辅助进程将看到空持仓")
+                        ? String(localized: "Sharing holdings + watchlist with helper (App Group active)", locale: LocaleHolder.current)
+                        : String(localized: "App Group not provisioned — helper will see empty holdings", locale: LocaleHolder.current)
                 ) {
                     EmptyView()
                 }
@@ -259,7 +257,7 @@ private struct MCPTab: View {
                     Button {
                         Task { await runTest() }
                     } label: {
-                        Label(isTesting ? L("Testing…", "测试中…") : L("Test connection", "测试连接"),
+                        Label(isTesting ? String(localized: "Testing…", locale: LocaleHolder.current) : String(localized: "Test connection", locale: LocaleHolder.current),
                               systemImage: "bolt.horizontal.circle")
                     }
                     .disabled(isTesting)
@@ -269,8 +267,7 @@ private struct MCPTab: View {
             }
 
             Section("Claude Code / Codex") {
-                Text(L("Add this to `~/.claude.json` (Claude Code) or your Codex `mcp.json` — then the agent can call `wick.snapshot`, `wick.candles`, `wick.holdings`, `wick.watchlist`, `wick.portfolio`.",
-                       "将以下内容添加到 `~/.claude.json`（Claude Code）或你的 Codex `mcp.json`——之后智能体即可调用 `wick.snapshot`、`wick.candles`、`wick.holdings`、`wick.watchlist`、`wick.portfolio`。"))
+                Text("Add this to `~/.claude.json` (Claude Code) or your Codex `mcp.json` — then the agent can call `wick.snapshot`, `wick.candles`, `wick.holdings`, `wick.watchlist`, `wick.portfolio`.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
 
@@ -288,29 +285,26 @@ private struct MCPTab: View {
                     Button {
                         copyToPasteboard(claudeCodeConfig)
                     } label: {
-                        Label(L("Copy JSON snippet", "复制 JSON 片段"), systemImage: "doc.on.doc")
+                        Label("Copy JSON snippet", systemImage: "doc.on.doc")
                     }
                     Button {
                         copyToPasteboard(helperPath)
                     } label: {
-                        Label(L("Copy helper path", "复制辅助进程路径"), systemImage: "terminal")
+                        Label("Copy helper path", systemImage: "terminal")
                     }
                     Spacer()
                 }
             }
 
-            Section(L("Notes", "说明")) {
+            Section("Notes") {
                 VStack(alignment: .leading, spacing: 9) {
-                    Label(L("Wick doesn't need to be running. The helper spawns on demand.",
-                            "Wick 无需保持运行。辅助进程会按需启动。"),
+                    Label("Wick doesn't need to be running. The helper spawns on demand.",
                           systemImage: "power.circle")
                         .font(.system(size: 11))
-                    Label(L("Helper is sandboxed: outbound HTTP + App Group only. No file-system, no listening sockets.",
-                            "辅助进程运行在沙盒中：仅允许出站 HTTP + App Group。无文件系统访问，无监听端口。"),
+                    Label("Helper is sandboxed: outbound HTTP + App Group only. No file-system, no listening sockets.",
                           systemImage: "lock.shield")
                         .font(.system(size: 11))
-                    Label(L("Each invocation is short-lived — your MCP client kills it when it disconnects.",
-                            "每次调用都是短生命周期——MCP 客户端断开时会终止它。"),
+                    Label("Each invocation is short-lived — your MCP client kills it when it disconnects.",
                           systemImage: "hourglass")
                         .font(.system(size: 11))
                 }
@@ -348,7 +342,7 @@ private struct MCPTab: View {
         case .ok(let rttMillis, let toolCount):
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text(L("OK · \(toolCount) tools · \(rttMillis) ms", "正常 · \(toolCount) 个工具 · \(rttMillis) ms"))
+                Text("OK · \(toolCount) tools · \(rttMillis) ms")
                     .font(.caption.monospacedDigit())
             }
         case .failed(let message):
@@ -495,9 +489,9 @@ private struct DataSourcesTab: View {
         case free, freeKey, byo
         var label: String {
             switch self {
-            case .free:    L("Free", "免费")
-            case .freeKey: L("Free · Key", "免费·需Key")
-            case .byo:     L("BYO account", "自带账号")
+            case .free:    String(localized: "Free", locale: LocaleHolder.current)
+            case .freeKey: String(localized: "Free · Key", locale: LocaleHolder.current)
+            case .byo:     String(localized: "BYO account", locale: LocaleHolder.current)
             }
         }
         var tint: Color {
@@ -511,7 +505,7 @@ private struct DataSourcesTab: View {
 
     private enum DSStatus {
         case active, planned
-        var label: String { self == .active ? L("Active", "已接入") : L("Planned", "计划中") }
+        var label: String { self == .active ? String(localized: "Active", locale: LocaleHolder.current) : String(localized: "Planned", locale: LocaleHolder.current) }
         var tint: Color { self == .active ? .green : .secondary }
     }
 
@@ -521,8 +515,8 @@ private struct DataSourcesTab: View {
         /// Localized segment label — `rawValue` kept for `id`.
         var label: String {
             switch self {
-            case .cn: return L("CN / HK", "A股 / 港股")
-            case .us: return L("US", "美股")
+            case .cn: return String(localized: "CN / HK", locale: LocaleHolder.current)
+            case .us: return String(localized: "US", locale: LocaleHolder.current)
             }
         }
     }
@@ -530,34 +524,34 @@ private struct DataSourcesTab: View {
     /// Which market's source list the segmented picker shows.
     @State private var market: DSMarket = .cn
 
-    // Computed (not `static let`) so the bilingual `L(...)` re-evaluates when the
+    // Computed (not `static let`) so the localized strings re-evaluate when the
     // user flips language — proper nouns stay fixed, only the descriptive halves
     // translate.
     private var cnSources: [DataSourceEntry] {
         [
-        .init(symbol: "chart.xyaxis.line",                name: L("EastMoney quotes & K-line", "EastMoney 行情 & K线"), provides: L("real-time quotes · daily/weekly/monthly/minute K-line", "实时报价 · 日/周/月/分钟 K线"),        access: .free, status: .active),
-        .init(symbol: "dollarsign.circle",                name: L("EastMoney fund flow", "EastMoney 资金流"),     provides: L("net inflow by main/super-large/large/medium/small orders", "主力/超大/大/中/小单净流入"),       access: .free, status: .active),
-        .init(symbol: "doc.text",                         name: L("EastMoney F10 financials", "EastMoney F10 财务"),   provides: L("revenue/net profit/EPS/ROE/gross margin, etc.", "营收/净利/EPS/ROE/毛利率 等"),      access: .free, status: .active),
-        .init(symbol: "flame",                            name: L("EastMoney top-list (龙虎榜)", "EastMoney 龙虎榜"),     provides: L("listing reasons · net buy · seat analysis", "上榜原因 · 净买入 · 席位解读"),     access: .free, status: .active),
-        .init(symbol: "flame",                            name: L("EastMoney limit-up board", "EastMoney 涨停板"),     provides: L("limit-up pool · consecutive boards · sealing orders", "涨停池 · 连板 · 封单额"),          access: .free, status: .active),
-        .init(symbol: "bubble.left.and.bubble.right",     name: L("雪球 discussion/sentiment", "雪球 讨论/情绪"),       provides: L("per-stock discussion · retail sentiment", "个股讨论 · 散户情绪"),             access: .byo,  status: .active),
-        .init(symbol: "dollarsign.circle",                name: L("EastMoney northbound flow", "EastMoney 北向资金"),   provides: L("Stock Connect · foreign capital flow", "沪深港通 · 外资流向"),             access: .free, status: .planned),
-        .init(symbol: "building.columns",                 name: L("HKEX short selling", "HKEX 沽空"),            provides: L("Hong Kong short-sell data", "港股卖空数据"),                   access: .free, status: .planned),
-        .init(symbol: "building.columns",                 name: L("HKEX CCASS", "港交所 CCASS"),         provides: L("central clearing shareholding distribution", "中央结算持股分布"),               access: .free, status: .planned),
-        .init(symbol: "chart.xyaxis.line",                name: L("Sina / Tencent quotes", "新浪 / 腾讯 报价"),     provides: L("A-share real-time quotes (backup source)", "A股实时报价(备份源)"),            access: .free, status: .planned),
+        .init(symbol: "chart.xyaxis.line",                name: String(localized: "EastMoney quotes & K-line", locale: LocaleHolder.current), provides: String(localized: "real-time quotes · daily/weekly/monthly/minute K-line", locale: LocaleHolder.current),        access: .free, status: .active),
+        .init(symbol: "dollarsign.circle",                name: String(localized: "EastMoney fund flow", locale: LocaleHolder.current),     provides: String(localized: "net inflow by main/super-large/large/medium/small orders", locale: LocaleHolder.current),       access: .free, status: .active),
+        .init(symbol: "doc.text",                         name: String(localized: "EastMoney F10 financials", locale: LocaleHolder.current),   provides: String(localized: "revenue/net profit/EPS/ROE/gross margin, etc.", locale: LocaleHolder.current),      access: .free, status: .active),
+        .init(symbol: "flame",                            name: String(localized: "EastMoney top-list (龙虎榜)", locale: LocaleHolder.current),     provides: String(localized: "listing reasons · net buy · seat analysis", locale: LocaleHolder.current),     access: .free, status: .active),
+        .init(symbol: "flame",                            name: String(localized: "EastMoney limit-up board", locale: LocaleHolder.current),     provides: String(localized: "limit-up pool · consecutive boards · sealing orders", locale: LocaleHolder.current),          access: .free, status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: String(localized: "雪球 discussion/sentiment", locale: LocaleHolder.current),       provides: String(localized: "per-stock discussion · retail sentiment", locale: LocaleHolder.current),             access: .byo,  status: .active),
+        .init(symbol: "dollarsign.circle",                name: String(localized: "EastMoney northbound flow", locale: LocaleHolder.current),   provides: String(localized: "Stock Connect · foreign capital flow", locale: LocaleHolder.current),             access: .free, status: .planned),
+        .init(symbol: "building.columns",                 name: String(localized: "HKEX short selling", locale: LocaleHolder.current),            provides: String(localized: "Hong Kong short-sell data", locale: LocaleHolder.current),                   access: .free, status: .planned),
+        .init(symbol: "building.columns",                 name: String(localized: "HKEX CCASS", locale: LocaleHolder.current),         provides: String(localized: "central clearing shareholding distribution", locale: LocaleHolder.current),               access: .free, status: .planned),
+        .init(symbol: "chart.xyaxis.line",                name: String(localized: "Sina / Tencent quotes", locale: LocaleHolder.current),     provides: String(localized: "A-share real-time quotes (backup source)", locale: LocaleHolder.current),            access: .free, status: .planned),
         ]
     }
 
     private var usSources: [DataSourceEntry] {
         [
-        .init(symbol: "chart.xyaxis.line",                name: "Yahoo Finance",        provides: L("quotes · K-line · search", "行情 · K线 · 搜索"),              access: .free,    status: .active),
-        .init(symbol: "doc.text",                         name: "FMP",                  provides: L("fundamentals · valuation", "基本面 · 估值"),                  access: .freeKey, status: .active),
-        .init(symbol: "bubble.left.and.bubble.right",     name: "Finnhub",              provides: L("news · sentiment", "新闻 · 情绪"),                    access: .freeKey, status: .active),
-        .init(symbol: "building.columns",                 name: "FRED",                 provides: L("macro: rates/CPI/payrolls/GDP", "宏观:利率/CPI/非农/GDP"),          access: .freeKey, status: .active),
-        .init(symbol: "building.columns",                 name: "FINRA",                provides: L("Short Interest", "空头 / Short Interest"),          access: .free,    status: .active),
-        .init(symbol: "bubble.left.and.bubble.right",     name: "X (Twitter)",          provides: L("discussion · sentiment", "讨论 · 情绪"),                    access: .byo,     status: .active),
-        .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: L("insider trades (Form 4) · XBRL financials · filings", "内部人交易(Form 4) · XBRL 财务 · filings"), access: .free, status: .active),
-        .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: L("analyst ratings · earnings dates · institutional holdings", "分析师评级 · 财报日 · 机构持股"),   access: .free,    status: .active),
+        .init(symbol: "chart.xyaxis.line",                name: "Yahoo Finance",        provides: String(localized: "quotes · K-line · search", locale: LocaleHolder.current),              access: .free,    status: .active),
+        .init(symbol: "doc.text",                         name: "FMP",                  provides: String(localized: "fundamentals · valuation", locale: LocaleHolder.current),                  access: .freeKey, status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "Finnhub",              provides: String(localized: "news · sentiment", locale: LocaleHolder.current),                    access: .freeKey, status: .active),
+        .init(symbol: "building.columns",                 name: "FRED",                 provides: String(localized: "macro: rates/CPI/payrolls/GDP", locale: LocaleHolder.current),          access: .freeKey, status: .active),
+        .init(symbol: "building.columns",                 name: "FINRA",                provides: String(localized: "Short Interest", locale: LocaleHolder.current),          access: .free,    status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "X (Twitter)",          provides: String(localized: "discussion · sentiment", locale: LocaleHolder.current),                    access: .byo,     status: .active),
+        .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: String(localized: "insider trades (Form 4) · XBRL financials · filings", locale: LocaleHolder.current), access: .free, status: .active),
+        .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: String(localized: "analyst ratings · earnings dates · institutional holdings", locale: LocaleHolder.current),   access: .free,    status: .active),
         ]
     }
 
@@ -604,7 +598,7 @@ private struct DataSourcesTab: View {
     var body: some View {
         Form {
             Section {
-                Picker(L("Market", "市场"), selection: $market) {
+                Picker("Market", selection: $market) {
                     ForEach(DSMarket.allCases) { m in
                         Text(m.label).tag(m)
                     }
@@ -616,18 +610,16 @@ private struct DataSourcesTab: View {
                     catalogRow(entry)
                 }
             } header: {
-                Text(L("Data Sources", "数据源总览"))
+                Text("Data Sources")
             } footer: {
-                Text(L("Free = no key needed; Free · Key = fill in below; BYO account = sign in within the workflow. Planned = coming soon.",
-                       "免费 = 无需 Key;免费·需Key = 在下方填写;自带账号 = 在工作流里登录。计划中 = 即将接入。"))
+                Text("Free = no key needed; Free · Key = fill in below; BYO account = sign in within the workflow. Planned = coming soon.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
 
             if settings.providerKind == .server {
                 Section {
-                    Text(L("In Wick Server mode, FMP / Finnhub / FRED are provided by our backend — you don't need to supply data keys. Switch to a BYO provider on the Provider tab to manage your own data sources.",
-                           "在 Wick Server 模式下，FMP / Finnhub / FRED 由我们的后端提供——无需自行填写数据 Key。如需管理自己的数据源，请在「服务商」标签页切换到 BYO 服务商。"))
+                    Text("In Wick Server mode, FMP / Finnhub / FRED are provided by our backend — you don't need to supply data keys. Switch to a BYO provider on the Provider tab to manage your own data sources.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -637,40 +629,37 @@ private struct DataSourcesTab: View {
                 // and the provider/fallback note as caption. The tile
                 // colour codes the source so the three cards scan apart
                 // at a glance.
-                Section(L("Fundamentals & price (FMP)", "基本面 & 价格（FMP）")) {
+                Section("Fundamentals & price (FMP)") {
                     SettingsRow(systemImage: "chart.bar.doc.horizontal",
                                 tint: .blue,
                                 title: "Financial Modeling Prep",
-                                subtitle: L("price history, fundamentals, profile", "历史价格、基本面、公司概况")) {
+                                subtitle: "price history, fundamentals, profile") {
                         EmptyView()
                     }
-                    SecureField(L("FMP API key:", "FMP API 密钥："), text: $settings.fmpKey)
-                    Text(L("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.",
-                           "[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · 历史价格、基本面、公司概况。留空 = Wick 回退到 Yahoo，仅提供 K 线数据。"))
+                    SecureField("FMP API key:", text: $settings.fmpKey)
+                    Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Section(L("News & sentiment (Finnhub)", "新闻 & 情绪（Finnhub）")) {
+                Section("News & sentiment (Finnhub)") {
                     SettingsRow(systemImage: "newspaper",
                                 tint: .indigo,
                                 title: "Finnhub",
-                                subtitle: L("company headlines, sentiment", "公司头条、情绪")) {
+                                subtitle: "company headlines, sentiment") {
                         EmptyView()
                     }
-                    SecureField(L("Finnhub API key:", "Finnhub API 密钥："), text: $settings.finnhubKey)
-                    Text(L("[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \"no data\".",
-                           "[finnhub.io](https://finnhub.io/dashboard) · 公司头条、情绪。留空 = 新闻/情绪分析师将报告「无数据」。"))
+                    SecureField("Finnhub API key:", text: $settings.finnhubKey)
+                    Text("[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \"no data\".")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Section(L("Macro backdrop (FRED)", "宏观背景（FRED）")) {
+                Section("Macro backdrop (FRED)") {
                     SettingsRow(systemImage: "building.columns",
                                 tint: .teal,
                                 title: "FRED · St. Louis Fed",
-                                subtitle: L("rates, spreads, unemployment, CPI", "利率、利差、失业率、CPI")) {
+                                subtitle: "rates, spreads, unemployment, CPI") {
                         EmptyView()
                     }
-                    SecureField(L("FRED API key:", "FRED API 密钥："), text: $settings.fredKey)
-                    Text(L("[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · Fed funds, 10y, 10y-2y spread, unemployment, CPI YoY. Free; commercial-OK with attribution. Empty = no macro context in reports.",
-                           "[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · 联邦基金利率、10年期、10年-2年利差、失业率、CPI 同比。免费；署名后可商用。留空 = 报告中无宏观背景。"))
+                    SecureField("FRED API key:", text: $settings.fredKey)
+                    Text("[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · Fed funds, 10y, 10y-2y spread, unemployment, CPI YoY. Free; commercial-OK with attribution. Empty = no macro context in reports.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
@@ -696,31 +685,28 @@ private struct ProviderTab: View {
 
     var body: some View {
         Form {
-            Section(L("Mode", "模式")) {
+            Section("Mode") {
                 modePicker
                 Text(settings.providerKind == .server
-                     ? L("All LLM traffic routes through Wick's hosted broker. No keys needed on this device — pricing handled via subscription. (Coming soon.)",
-                         "所有 LLM 流量都经由 Wick 托管的中转。本机无需任何 Key——计费通过订阅处理。（即将推出。）")
-                     : L("Wick talks directly to the provider with your own key. Nothing touches our servers.",
-                         "Wick 使用你自己的 Key 直接与服务商通信。不经过我们的服务器。"))
+                     ? String(localized: "All LLM traffic routes through Wick's hosted broker. No keys needed on this device — pricing handled via subscription. (Coming soon.)", locale: LocaleHolder.current)
+                     : String(localized: "Wick talks directly to the provider with your own key. Nothing touches our servers.", locale: LocaleHolder.current))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
 
             if settings.providerKind == .server {
-                Section(L("Server", "服务器")) {
-                    TextField(L("Server URL:", "服务器地址："), text: $settings.serverBaseURL)
-                    Text(L("Defaults to our hosted instance once auth wiring lands. For now points at a local WickServer for development.",
-                           "认证接入后将默认指向我们的托管实例。目前指向本地 WickServer 用于开发。"))
+                Section("Server") {
+                    TextField("Server URL:", text: $settings.serverBaseURL)
+                    Text("Defaults to our hosted instance once auth wiring lands. For now points at a local WickServer for development.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             } else {
-                Section(L("Provider", "服务商")) {
+                Section("Provider") {
                     // Rich provider row: a keyed icon-tile + the live
                     // provider name as subtitle, with the dropdown on
                     // the trailing edge.
                     SettingsRow(systemImage: "cpu",
                                 tint: .purple,
-                                title: L("LLM provider", "LLM 服务商"),
+                                title: "LLM provider",
                                 subtitle: settings.providerKind.displayName) {
                         providerPicker
                             .labelsHidden()
@@ -730,30 +716,28 @@ private struct ProviderTab: View {
                         // No URL / key — Claude Code uses local OAuth.
                         // Just let the user override the binary path if
                         // it's not in $PATH.
-                        TextField(L("`claude` path (optional):", "`claude` 路径（可选）："),
+                        TextField("`claude` path (optional):",
                                   text: $settings.claudeCodeCLIPath,
-                                  prompt: Text(L("Leave blank to resolve from $PATH", "留空则从 $PATH 解析")))
-                        Text(L("Drives the Wicker workflow by shelling out to your locally-installed `claude` CLI. Uses whichever subscription `claude login` is signed into — no API key here. Each desk run is ~10-20 s slower than a direct API call and bills against your Pro/Max quota; not recommended for high-frequency use.",
-                               "通过调用本机安装的 `claude` CLI 驱动 Wicker 工作流。使用 `claude login` 登录的订阅——此处无需 API Key。每次跑桌面分析比直接 API 调用慢约 10-20 秒，并计入你的 Pro/Max 额度；不建议高频使用。"))
+                                  prompt: Text("Leave blank to resolve from $PATH"))
+                        Text("Drives the Wicker workflow by shelling out to your locally-installed `claude` CLI. Uses whichever subscription `claude login` is signed into — no API key here. Each desk run is ~10-20 s slower than a direct API call and bills against your Pro/Max quota; not recommended for high-frequency use.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     } else {
-                        TextField(L("Base URL:", "基础地址："), text: $settings.byoBaseURL)
+                        TextField("Base URL:", text: $settings.byoBaseURL)
                         if settings.providerKind.requiresAPIKey {
-                            SecureField(L("API key:", "API 密钥："), text: $settings.currentAPIKey)
-                            Text(L("Stored in your macOS Keychain. Each provider's key gets its own entry — switching providers preserves the others.",
-                                   "保存在你的 macOS 钥匙串中。每个服务商的 Key 独立存储——切换服务商不会丢失其他 Key。"))
+                            SecureField("API key:", text: $settings.currentAPIKey)
+                            Text("Stored in your macOS Keychain. Each provider's key gets its own entry — switching providers preserves the others.")
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                     }
                 }
-                Section(L("Models", "模型")) {
+                Section("Models") {
                     quickModelField
                     deepModelField
                     HStack {
                         Button {
                             Task { await refreshModels() }
                         } label: {
-                            Label(discovering ? L("Refreshing…", "刷新中…") : L("Refresh models", "刷新模型列表"),
+                            Label(discovering ? String(localized: "Refreshing…", locale: LocaleHolder.current) : String(localized: "Refresh models", locale: LocaleHolder.current),
                                   systemImage: "arrow.clockwise")
                         }
                         .disabled(discovering
@@ -761,7 +745,7 @@ private struct ProviderTab: View {
                                       && settings.currentAPIKey.isEmpty))
                         Spacer()
                         if !settings.availableModels.isEmpty {
-                            Text(L("\(settings.availableModels.count) models loaded", "已加载 \(settings.availableModels.count) 个模型"))
+                            Text("\(settings.availableModels.count) models loaded")
                                 .font(.caption).foregroundStyle(.tertiary)
                         }
                     }
@@ -813,9 +797,9 @@ private struct ProviderTab: View {
     // MARK: - Sub-views
 
     private var modePicker: some View {
-        Picker(L("Mode:", "模式："), selection: serverModeBinding) {
-            Text(L("Wick Server (managed)", "Wick Server（托管）")).tag(true)
-            Text(L("Bring Your Own", "自带账号")).tag(false)
+        Picker("Mode:", selection: serverModeBinding) {
+            Text("Wick Server (managed)").tag(true)
+            Text("Bring Your Own").tag(false)
         }
         .pickerStyle(.segmented)
     }
@@ -840,7 +824,7 @@ private struct ProviderTab: View {
     }
 
     private var providerPicker: some View {
-        Picker(L("Provider:", "服务商："), selection: byoKindBinding) {
+        Picker("Provider:", selection: byoKindBinding) {
             ForEach(ProviderKind.pickerSections, id: \.title) { section in
                 if section.title == "Managed" {
                     EmptyView()  // hide the server case in BYO mode
@@ -873,7 +857,7 @@ private struct ProviderTab: View {
     }
 
     private var quickModelField: some View {
-        Picker(L("Quick model:", "快速模型："), selection: $settings.quickModel) {
+        Picker("Quick model:", selection: $settings.quickModel) {
             ForEach(modelOptions(currentValue: settings.quickModel)) { m in
                 Text(modelLabel(m)).tag(m.id)
             }
@@ -881,7 +865,7 @@ private struct ProviderTab: View {
     }
 
     private var deepModelField: some View {
-        Picker(L("Deep model:", "深度模型："), selection: $settings.deepModel) {
+        Picker("Deep model:", selection: $settings.deepModel) {
             ForEach(modelOptions(currentValue: settings.deepModel)) { m in
                 Text(modelLabel(m)).tag(m.id)
             }
@@ -937,7 +921,7 @@ private struct ProviderTab: View {
         discoveryError = nil
         defer { discovering = false }
         guard let url = URL(string: settings.byoBaseURL) else {
-            discoveryError = L("Invalid base URL.", "基础地址无效。")
+            discoveryError = String(localized: "Invalid base URL.", locale: LocaleHolder.current)
             return
         }
         let key: String? = settings.providerKind.requiresAPIKey
@@ -963,17 +947,16 @@ private struct WorkflowTab: View {
 
     var body: some View {
         Form {
-            Section(L("Analysts", "分析师")) {
+            Section("Analysts") {
                 // The four shared analysts run on every ticker (US, intl, CN).
                 ForEach(Self.sharedAnalysts, id: \.self) { kind in
                     Toggle(Self.sharedAnalystLabel(kind),
                            isOn: bindingFor(kind))
                 }
-                Text(L("Disabled analysts are skipped — fewer LLM calls per report.",
-                       "被禁用的分析师会被跳过——每份报告更少的 LLM 调用。"))
+                Text("Disabled analysts are skipped — fewer LLM calls per report.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Chinese-market analysts", "A股/港股分析师")) {
+            Section("Chinese-market analysts") {
                 // policy / capital only run for A-share / HK tickers — the desk
                 // routes them in per-symbol, so these toggles are no-ops for US
                 // / intl names. Surfaced separately so the distinction is clear.
@@ -981,36 +964,33 @@ private struct WorkflowTab: View {
                     Toggle(Self.chineseAnalystLabel(kind),
                            isOn: bindingFor(kind))
                 }
-                Text(L("政策面 / 资金面 — only run for A-share (.SS/.SZ) and Hong Kong (.HK) tickers. 资金面 is A-share-only; HK has no main-force fund-flow data.",
-                       "政策面 / 资金面——仅对 A 股（.SS/.SZ）和港股（.HK）标的运行。资金面仅限 A 股；港股没有主力资金流向数据。"))
+                Text("政策面 / 资金面 — only run for A-share (.SS/.SZ) and Hong Kong (.HK) tickers. 资金面 is A-share-only; HK has no main-force fund-flow data.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Debate", "辩论")) {
-                LabeledContent(L("Bull ↔ bear rounds:", "多空辩论轮数：")) {
+            Section("Debate") {
+                LabeledContent("Bull ↔ bear rounds:") {
                     HStack(spacing: 6) {
                         Stepper("", value: $settings.maxDebateRounds, in: 0...4)
                             .labelsHidden()
                         Text("\(settings.maxDebateRounds)").monospacedDigit()
                     }
                 }
-                Text(L("0 skips the debate entirely. Each round = 2 LLM calls.",
-                       "设为 0 则完全跳过辩论。每轮 = 2 次 LLM 调用。"))
+                Text("0 skips the debate entirely. Each round = 2 LLM calls.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Self-conditioning", "自我校准")) {
-                LabeledContent(L("History depth:", "历史深度：")) {
+            Section("Self-conditioning") {
+                LabeledContent("History depth:") {
                     HStack(spacing: 6) {
                         Stepper("", value: $settings.historyDepth, in: 0...20)
                             .labelsHidden()
-                        Text(L("\(settings.historyDepth) reports", "\(settings.historyDepth) 份报告")).monospacedDigit()
+                        Text("\(settings.historyDepth) reports").monospacedDigit()
                     }
                 }
-                Text(L("Past calls on the same ticker (rating + position) are inlined into the trader's prompt so it can change its mind on contradicting evidence. 0 disables.",
-                       "同一标的的历史结论（评级 + 仓位）会内联到交易员的提示中，以便在出现相反证据时改变判断。设为 0 则禁用。"))
+                Text("Past calls on the same ticker (rating + position) are inlined into the trader's prompt so it can change its mind on contradicting evidence. 0 disables.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Sampling", "采样")) {
-                LabeledContent(L("Temperature:", "温度：")) {
+            Section("Sampling") {
+                LabeledContent("Temperature:") {
                     HStack(spacing: 8) {
                         Slider(value: $settings.temperature, in: 0...1.5, step: 0.05)
                             .frame(maxWidth: 180)
@@ -1020,15 +1000,14 @@ private struct WorkflowTab: View {
                     }
                 }
             }
-            Section(L("BYO browser (experimental)", "BYO 浏览器（实验）")) {
+            Section("BYO browser (experimental)") {
                 // Rich toggle rows: icon-tile + the existing long
                 // descriptions promoted to subtitle, control on the
                 // trailing edge.
                 SettingsRow(systemImage: "globe",
                             tint: .blue,
-                            title: L("Enable Wicker browser tools", "启用 Wicker 浏览器工具"),
-                            subtitle: L("Let Wicker navigate / read / operate web pages via embedded WebKit (navigate·read·snapshot·click·type·eval·fetchJSON). Once on, asking it to browse in chat slides out a live browser panel you can sign into / take over. Off by default, macOS 26+.",
-                                        "让 Wicker 通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。")) {
+                            title: "Enable Wicker browser tools",
+                            subtitle: "Let Wicker navigate / read / operate web pages via embedded WebKit (navigate·read·snapshot·click·type·eval·fetchJSON). Once on, asking it to browse in chat slides out a live browser panel you can sign into / take over. Off by default, macOS 26+.") {
                     Toggle("", isOn: $settings.enableWickerBrowser)
                         .labelsHidden()
                 }
@@ -1039,18 +1018,16 @@ private struct WorkflowTab: View {
                 SettingsRow(systemImage: settings.allowWickerBrowserWrites
                                 ? "hand.tap" : "hand.raised",
                             tint: settings.allowWickerBrowserWrites ? .orange : .secondary,
-                            title: L("Allow browser write actions (click / type / run scripts)", "允许浏览器写操作(点击 / 输入 / 执行脚本)"),
-                            subtitle: L("Guardrail switch. Off = Wicker goes read-only: it can still navigate / read / snapshot pages, but won't click, type, or run scripts (it prompts you to enable instead). On by default. Only effective when the Wicker browser is enabled.",
-                                        "护栏开关。关闭后 Wicker 进入只读模式:仍可导航 / 读取 / 快照页面,但不会点击、输入或执行脚本(改用提示让你去开启)。默认开。仅在已启用 Wicker 浏览器时生效。")) {
+                            title: "Allow browser write actions (click / type / run scripts)",
+                            subtitle: "Guardrail switch. Off = Wicker goes read-only: it can still navigate / read / snapshot pages, but won't click, type, or run scripts (it prompts you to enable instead). On by default. Only effective when the Wicker browser is enabled.") {
                     Toggle("", isOn: $settings.allowWickerBrowserWrites)
                         .labelsHidden()
                         .disabled(!settings.enableWickerBrowser)
                 }
                 SettingsRow(systemImage: "bubble.left.and.text.bubble.right",
                             tint: .green,
-                            title: L("雪球 BYO discussion (sentiment source)", "雪球 BYO 讨论(情绪源)"),
-                            subtitle: L("Fold your logged-in 雪球 per-stock discussion into sentiment analysis. Off by default; first connect a 雪球 login from a stock's Social tab.",
-                                        "把你登录的雪球个股讨论纳入情绪分析。默认关;需先在个股 Social tab 连接雪球登录。")) {
+                            title: "雪球 BYO discussion (sentiment source)",
+                            subtitle: "Fold your logged-in 雪球 per-stock discussion into sentiment analysis. Off by default; first connect a 雪球 login from a stock's Social tab.") {
                     Toggle("", isOn: $settings.enableXueqiuSentiment)
                         .labelsHidden()
                 }
@@ -1060,9 +1037,8 @@ private struct WorkflowTab: View {
                 // server. Sensitive — default OFF, gated by the browser switch.
                 SettingsRow(systemImage: "antenna.radiowaves.left.and.right",
                             tint: .red,
-                            title: L("Expose Wicker browser / social via MCP (read-only)", "通过 MCP 暴露 Wicker 浏览器/社交(只读)"),
-                            subtitle: L("Lets third-party MCP clients (Claude Code / Codex, etc.) drive your logged-in browser and 雪球/X sessions via the bundled wick-mcp — read-only: navigate / read / snapshot / 雪球·X discussion (no click / type / run scripts). ⚠️ This lets external agents operate your logged-in sessions. Off by default; first enable the Wicker browser above, macOS 26+.",
-                                        "允许第三方 MCP 客户端(Claude Code / Codex 等)通过内置 wick-mcp 驱动你已登录的浏览器与雪球/X 会话——仅只读:导航 / 读取 / 快照 / 雪球·X 讨论(不含点击 / 输入 / 执行脚本)。⚠️ 这会让外部 agent 操作你的登录会话。默认关;需先启用上方「Wicker 浏览器」,macOS 26+。")) {
+                            title: "Expose Wicker browser / social via MCP (read-only)",
+                            subtitle: "Lets third-party MCP clients (Claude Code / Codex, etc.) drive your logged-in browser and 雪球/X sessions via the bundled wick-mcp — read-only: navigate / read / snapshot / 雪球·X discussion (no click / type / run scripts). ⚠️ This lets external agents operate your logged-in sessions. Off by default; first enable the Wicker browser above, macOS 26+.") {
                     Toggle("", isOn: $settings.exposeWickerViaMCP)
                         .labelsHidden()
                         .disabled(!settings.enableWickerBrowser)
@@ -1075,9 +1051,8 @@ private struct WorkflowTab: View {
                 // chat away.
                 SettingsRow(systemImage: "rectangle.split.2x1",
                             tint: .blue,
-                            title: L("Browser width", "浏览器宽度"),
-                            subtitle: L("Fixed width of the Wicker browser panel (height fills the window). It auto-shrinks on a narrow window so chat stays usable.",
-                                        "Wicker 浏览器面板的固定宽度(高度填满窗口)。窗口窄时会自动缩,保证聊天可用。")) {
+                            title: "Browser width",
+                            subtitle: "Fixed width of the Wicker browser panel (height fills the window). It auto-shrinks on a narrow window so chat stays usable.") {
                     HStack(spacing: 10) {
                         Slider(
                             value: Binding(
@@ -1109,18 +1084,18 @@ private struct WorkflowTab: View {
     /// the persisted id; this is purely display.
     private static func sharedAnalystLabel(_ kind: AnalystKind) -> String {
         switch kind {
-        case .fundamental: return L("Fundamental", "基本面")
-        case .technical:   return L("Technical", "技术面")
-        case .sentiment:   return L("Sentiment", "情绪面")
-        case .news:        return L("News", "新闻面")
+        case .fundamental: return String(localized: "Fundamental", locale: LocaleHolder.current)
+        case .technical:   return String(localized: "Technical", locale: LocaleHolder.current)
+        case .sentiment:   return String(localized: "Sentiment", locale: LocaleHolder.current)
+        case .news:        return String(localized: "News", locale: LocaleHolder.current)
         default:           return kind.rawValue.capitalized
         }
     }
 
     private static func chineseAnalystLabel(_ kind: AnalystKind) -> String {
         switch kind {
-        case .policy:  return L("Policy · 政策面", "政策面")
-        case .capital: return L("Capital · 资金面", "资金面")
+        case .policy:  return String(localized: "Policy · 政策面", locale: LocaleHolder.current)
+        case .capital: return String(localized: "Capital · 资金面", locale: LocaleHolder.current)
         default:       return kind.rawValue.capitalized
         }
     }
@@ -1143,21 +1118,19 @@ private struct FreeAgentTab: View {
 
     var body: some View {
         Form {
-            Section(L("Tool loop", "工具循环")) {
-                LabeledContent(L("Max tool turns:", "最大工具轮次：")) {
+            Section("Tool loop") {
+                LabeledContent("Max tool turns:") {
                     HStack(spacing: 6) {
                         Stepper("", value: $settings.freeAgentMaxToolTurns, in: 1...20)
                             .labelsHidden()
                         Text("\(settings.freeAgentMaxToolTurns)").monospacedDigit()
                     }
                 }
-                Text(L("Hard cap on how many tool round-trips the chat agent can take before it must answer. Belt-and-suspenders against runaway loops.",
-                       "聊天智能体在必须作答前可执行的工具往返次数上限。用于防止循环失控的双重保险。"))
+                Text("Hard cap on how many tool round-trips the chat agent can take before it must answer. Belt-and-suspenders against runaway loops.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Model", "模型")) {
-                Text(L("The free agent uses the **Deep model** set in Provider.",
-                       "自由智能体使用「服务商」中设置的**深度模型**。"))
+            Section("Model") {
+                Text("The free agent uses the **Deep model** set in Provider.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
@@ -1174,27 +1147,26 @@ private struct SkillsTab: View {
 
     var body: some View {
         Form {
-            Section(L("Your skill folder", "你的技能目录")) {
-                LabeledContent(L("Folder:", "目录：")) {
+            Section("Your skill folder") {
+                LabeledContent("Folder:") {
                     HStack {
-                        Text(settings.userSkillsDirectoryPath ?? L("Not set — bundled only", "未设置——仅使用内置技能"))
+                        Text(settings.userSkillsDirectoryPath ?? String(localized: "Not set — bundled only", locale: LocaleHolder.current))
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                             .lineLimit(1).truncationMode(.middle)
                         Spacer()
-                        Button(L("Choose…", "选择…")) { picking = true }
+                        Button("Choose…") { picking = true }
                         if settings.userSkillsDirectoryPath != nil {
-                            Button(L("Clear", "清除")) { settings.userSkillsDirectoryPath = nil }
+                            Button("Clear") { settings.userSkillsDirectoryPath = nil }
                         }
                     }
                 }
-                Text(L("Drop `.md` files with `name` and `description` frontmatter into this folder; same-name files override the bundled skill.",
-                       "将带有 `name` 和 `description` frontmatter 的 `.md` 文件放入此目录；同名文件会覆盖内置技能。"))
+                Text("Drop `.md` files with `name` and `description` frontmatter into this folder; same-name files override the bundled skill.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Loaded skills", "已加载技能")) {
+            Section("Loaded skills") {
                 if loadedSkills.isEmpty {
-                    Text(L("(loading…)", "(加载中…)")).font(.caption).foregroundStyle(.tertiary)
+                    Text("(loading…)").font(.caption).foregroundStyle(.tertiary)
                 } else {
                     ForEach(loadedSkills) { skill in
                         VStack(alignment: .leading, spacing: 3) {
@@ -1237,8 +1209,8 @@ private struct SkillsTab: View {
 
     private func badge(for source: Skill.Source) -> String {
         switch source {
-        case .bundled: return L("BUNDLED", "内置")
-        case .user:    return L("USER", "用户")
+        case .bundled: return String(localized: "BUNDLED", locale: LocaleHolder.current)
+        case .user:    return String(localized: "USER", locale: LocaleHolder.current)
         }
     }
 }
@@ -1250,37 +1222,36 @@ private struct AppearanceTab: View {
 
     var body: some View {
         Form {
-            Section(L("Language", "语言")) {
-                Picker(L("App language:", "应用语言："), selection: $settings.appLanguage) {
-                    Text(L("System", "跟随系统")).tag(AppLanguage.system)
+            Section("Language") {
+                Picker("App language:", selection: $settings.appLanguage) {
+                    Text("System").tag(AppLanguage.system)
                     Text("中文").tag(AppLanguage.zh)
                     Text("English").tag(AppLanguage.en)
                 }
                 .pickerStyle(.segmented)
-                Text(L("Switches the interface language immediately. Some less-visited screens are still being translated.",
-                       "立即切换界面语言。部分次要页面仍在翻译中。"))
+                Text("Switches the interface language immediately. Some less-visited screens are still being translated.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Theme", "主题")) {
-                Picker(L("Appearance:", "外观："), selection: $settings.appearanceOverride) {
-                    Text(L("System", "跟随系统")).tag(ColorScheme?.none)
-                    Text(L("Light", "浅色")).tag(ColorScheme?.some(.light))
-                    Text(L("Dark", "深色")).tag(ColorScheme?.some(.dark))
+            Section("Theme") {
+                Picker("Appearance:", selection: $settings.appearanceOverride) {
+                    Text("System").tag(ColorScheme?.none)
+                    Text("Light").tag(ColorScheme?.some(.light))
+                    Text("Dark").tag(ColorScheme?.some(.dark))
                 }
                 .pickerStyle(.segmented)
             }
-            Section(L("Chart", "图表")) {
-                Toggle(L("Side-by-side pane in Chart tab", "图表页并排显示面板"),
+            Section("Chart") {
+                Toggle("Side-by-side pane in Chart tab",
                        isOn: $settings.chartSplitView)
             }
-            Section(L("Macro", "宏观")) {
-                Picker(L("Layout:", "布局："), selection: $settings.macroTwoColumn) {
-                    Text(L("Single", "一览")).tag(false)
-                    Text(L("Two-column", "两栏")).tag(true)
+            Section("Macro") {
+                Picker("Layout:", selection: $settings.macroTwoColumn) {
+                    Text("Single").tag(false)
+                    Text("Two-column").tag(true)
                 }
                 .pickerStyle(.segmented)
 
-                Picker(L("Time interval:", "时间区间："), selection: $settings.macroWindowMonths) {
+                Picker("Time interval:", selection: $settings.macroWindowMonths) {
                     Text("3M").tag(3)
                     Text("6M").tag(6)
                     Text("1Y").tag(12)
@@ -1289,32 +1260,30 @@ private struct AppearanceTab: View {
                 }
                 .pickerStyle(.segmented)
 
-                Picker(L("Column 1 default:", "第一栏默认："), selection: $settings.macroColumn1) {
+                Picker("Column 1 default:", selection: $settings.macroColumn1) {
                     ForEach(MacroCategory.allCases) { cat in
                         Text(cat.label).tag(cat.rawValue)
                     }
                 }
 
-                Picker(L("Column 2 default:", "第二栏默认："), selection: $settings.macroColumn2) {
+                Picker("Column 2 default:", selection: $settings.macroColumn2) {
                     ForEach(MacroCategory.allCases) { cat in
                         Text(cat.label).tag(cat.rawValue)
                     }
                 }
                 .disabled(!settings.macroTwoColumn)
 
-                Text(L("Two-column layout shows two category panels side by side, each switchable independently. The time interval controls each chart's visible window.",
-                       "两栏布局并排显示两个分类面板，各自独立切换。时间区间控制每个图表的可视窗口长度。"))
+                Text("Two-column layout shows two category panels side by side, each switchable independently. The time interval controls each chart's visible window.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section(L("Watchlist", "自选")) {
-                Picker(L("Change display:", "涨跌显示："), selection: $settings.watchlistChangeStyle) {
+            Section("Watchlist") {
+                Picker("Change display:", selection: $settings.watchlistChangeStyle) {
                     ForEach(WatchlistChangeStyle.allCases, id: \.self) { style in
                         Text(style.displayName).tag(style)
                     }
                 }
                 .pickerStyle(.segmented)
-                Text(L("Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.",
-                       "以绝对价差或百分比显示当日涨跌。仅影响侧边栏行。"))
+                Text("Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }

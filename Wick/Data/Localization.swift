@@ -1,26 +1,37 @@
 import Foundation
 
-/// Phase-1 internationalization — a deliberately tiny, pure-code localization
-/// layer. No String Catalog, no `.lproj`, no pbxproj resource wiring: the two
-/// language strings live AT THE CALL SITE via `L("English", "中文")`, and a
-/// single global flag decides which one is returned.
+/// App UI language. Backs the Settings → Display → Language picker and drives
+/// native String Catalog localization (`Localizable.xcstrings`).
 ///
-/// Runtime switching is achieved by the host (`WickApp`) setting
-/// `appUILanguageIsChinese` when the user picks a language AND forcing a full
-/// view-tree rebuild via `.id(language)`, so every `L(...)` re-evaluates.
+/// Runtime switching is achieved by the host (`WickApp`) overriding the SwiftUI
+/// environment locale on the roots (`.environment(\.locale, …)`) AND forcing a
+/// clean view-tree rebuild via `.id(language)`, so every auto-localized `Text`,
+/// `LocalizedStringKey` label and `String(localized:)` helper re-resolves.
 enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     case system, zh, en
     var id: String { rawValue }
+
+    /// The locale to apply to the SwiftUI environment for this choice.
+    /// `.system` returns `autoupdatingCurrent` (don't override the user's OS
+    /// preference); the explicit cases pin a concrete locale.
+    var locale: Locale {
+        switch self {
+        case .system: return .autoupdatingCurrent
+        case .zh:     return Locale(identifier: "zh-Hans")
+        case .en:     return Locale(identifier: "en")
+        }
+    }
 }
 
-/// Resolved UI language (never `.system`) — read by the `L()` helper. Set by the
-/// host when the setting changes; global so the free `L(_:_:)` function can read
-/// it without threading a binding through every view.
-nonisolated(unsafe) var appUILanguageIsChinese: Bool = {
-    // Initial resolve from the system's preferred language.
-    (Locale.preferredLanguages.first ?? "en").hasPrefix("zh")
-}()
-
-/// Inline bilingual literal — returns the active language's string. Translations
-/// live AT THE CALL SITE (no key scheme, no catalog): `Text(L("Overview", "概览"))`.
-func L(_ en: String, _ zh: String) -> String { appUILanguageIsChinese ? zh : en }
+/// Globally-readable resolved UI locale for the handful of non-SwiftUI call
+/// sites that localize imperatively via `String(localized:locale:)` (e.g.
+/// guardrail / spoken-status / composed strings outside a `Text`). The host
+/// updates this whenever the language setting changes, and the `.id(language)`
+/// view rebuild forces dependent views to re-evaluate.
+enum LocaleHolder {
+    nonisolated(unsafe) static var current: Locale = {
+        (Locale.preferredLanguages.first ?? "en").hasPrefix("zh")
+            ? Locale(identifier: "zh-Hans")
+            : .autoupdatingCurrent
+    }()
+}

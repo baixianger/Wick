@@ -290,7 +290,7 @@ struct OverviewTab: View {
     private var seeMoreLink: some View {
         Button(action: {}) {
             HStack(spacing: 3) {
-                Text(L("See More Data from Yahoo Finance", "在 Yahoo Finance 查看更多数据"))
+                Text("See More Data from Yahoo Finance")
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
             }
@@ -484,10 +484,10 @@ enum AgentPhase: String, CaseIterable, Identifiable, Hashable {
     /// Localized display title — `rawValue` stays English for ids/mapping.
     var title: String {
         switch self {
-        case .analysts: return L("Analysts", "分析师")
-        case .research: return L("Research", "研究")
-        case .decision: return L("Decision", "决策")
-        case .gatekeep: return L("Risk", "风控")
+        case .analysts: return String(localized: "Analysts", locale: LocaleHolder.current)
+        case .research: return String(localized: "Research", locale: LocaleHolder.current)
+        case .decision: return String(localized: "Decision", locale: LocaleHolder.current)
+        case .gatekeep: return String(localized: "Risk", locale: LocaleHolder.current)
         }
     }
 
@@ -495,10 +495,10 @@ enum AgentPhase: String, CaseIterable, Identifiable, Hashable {
     /// happens at this stage. Same vocabulary the engine uses.
     var subtitle: String {
         switch self {
-        case .analysts: return L("Information gathering", "信息收集")
-        case .research: return L("Bull vs Bear debate", "多空辩论")
-        case .decision: return L("Trade synthesis", "交易综合")
-        case .gatekeep: return L("Risk gate", "风险把关")
+        case .analysts: return String(localized: "Information gathering", locale: LocaleHolder.current)
+        case .research: return String(localized: "Bull vs Bear debate", locale: LocaleHolder.current)
+        case .decision: return String(localized: "Trade synthesis", locale: LocaleHolder.current)
+        case .gatekeep: return String(localized: "Risk gate", locale: LocaleHolder.current)
         }
     }
 
@@ -758,7 +758,7 @@ struct AITab: View {
                 .intelligenceGlow(active: true,
                                   cornerRadius: 14,
                                   intensity: running ? 1.0 : 0.55)
-            Text(L("AI Analysis", "AI 分析"))
+            Text("AI Analysis")
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
             // Inline compact workflow stepper — sits between the
@@ -822,7 +822,7 @@ struct AITab: View {
             )
         }
         .buttonStyle(.plain)
-        .help(historyOpen ? L("Hide history", "隐藏历史") : L("Show analysis history", "显示分析历史"))
+        .help(historyOpen ? String(localized: "Hide history", locale: LocaleHolder.current) : String(localized: "Show analysis history", locale: LocaleHolder.current))
     }
 
     // MARK: - History column (right side of the two-column layout)
@@ -838,7 +838,7 @@ struct AITab: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
-                Text(L("History", "历史"))
+                Text("History")
                     .font(.system(.subheadline, weight: .semibold))
                 Spacer(minLength: 0)
                 Text("\(items.count)")
@@ -931,7 +931,7 @@ struct AITab: View {
                     Image(systemName: "play.fill")
                         .font(.system(size: 10, weight: .semibold))
                 }
-                Text(running ? L("Running…", "运行中…") : L("Run Analysis", "运行分析"))
+                Text(running ? String(localized: "Running…", locale: LocaleHolder.current) : String(localized: "Run Analysis", locale: LocaleHolder.current))
                     .font(.system(size: 12, weight: .semibold))
             }
         }
@@ -1031,7 +1031,7 @@ struct AITab: View {
                 .foregroundStyle(.primary)
                 .lineLimit(2)
             Spacer()
-            Button(L("Retry", "重试")) {
+            Button("Retry") {
                 runner.run(ticker: ticker.symbol, settings: settings)
             }
             .buttonStyle(.link)
@@ -1053,15 +1053,9 @@ struct AITab: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(L("No analyses yet for \(ticker.symbol).", "\(ticker.symbol) 暂无分析。"))
+            Text("No analyses yet for \(ticker.symbol).")
                 .font(.system(size: 13, weight: .medium))
-            Text(L("Ask Wicker — \"run a full analysis on \(ticker.symbol)\" — "
-                 + "and the multi-agent desk (fundamental / technical / "
-                 + "sentiment / news → bull-bear debate → trade → risk) will "
-                 + "kick off. Completed reports get archived here for "
-                 + "side-by-side comparison.",
-                 "让 Wicker 「对 \(ticker.symbol) 做一次完整分析」——多智能体团队（基本面 / 技术面 / "
-                 + "情绪面 / 新闻面 → 多空辩论 → 交易 → 风控）就会启动。完成的报告会归档在此，便于对比。"))
+            Text(String(localized: "Ask Wicker — \"run a full analysis on \(ticker.symbol)\" — and the multi-agent desk (fundamental / technical / sentiment / news → bull-bear debate → trade → risk) will kick off. Completed reports get archived here for side-by-side comparison.", locale: LocaleHolder.current))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1100,7 +1094,7 @@ struct AITab: View {
             verdictBand(report, trader: trader, risk: risk)
                 .id(scrollAnchor(for: .decision))
             if !researchers.isEmpty {
-                section(L("Debate", "辩论"), subtitle: L("Bull vs Bear, argued in rounds", "多空逐轮论辩")) {
+                section("Debate", subtitle: String(localized: "Bull vs Bear, argued in rounds", locale: LocaleHolder.current)) {
                     debateThread(researchers)
                 }
                 .id(scrollAnchor(for: .research))
@@ -1112,7 +1106,7 @@ struct AITab: View {
                 // strip used to surface). Each card header still
                 // shows its lean chip, so the 4-cell consensus
                 // strip would have been redundant.
-                section(L("Evidence", "依据"),
+                section("Evidence",
                          subtitle: analystConsensusSubtitle(analysts: analysts)) {
                     analystEvidence(analysts)
                 }
@@ -1279,7 +1273,7 @@ struct AITab: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
-            Text(L("Risk override", "风控否决"))
+            Text("Risk override")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.orange)
             if let why = override.riskHeadline, !why.isEmpty {
@@ -1335,14 +1329,14 @@ struct AITab: View {
         let cashPct = max(0, 100 - pct)
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
-                Text(L("Position", "仓位"))
+                Text("Position")
                     .font(.caption2.weight(.semibold))
                     .tracking(0.4)
                     .foregroundStyle(.secondary)
                 Text("\(pct)%")
                     .font(.callout.weight(.semibold))
                     .monospacedDigit()
-                Text(L("· \(cashPct)% cash", "· \(cashPct)% 现金"))
+                Text("· \(cashPct)% cash")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -1406,7 +1400,7 @@ struct AITab: View {
                            height: active ? 9 : 6)
             }
         }
-        .help(L("Strong Sell  ←  →  Strong Buy", "强烈卖出  ←  →  强烈买入"))
+        .help("Strong Sell  ←  →  Strong Buy")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "Rating gauge: \(rating.label) on a five-step scale from Strong Sell to Strong Buy.")
@@ -1436,11 +1430,11 @@ struct AITab: View {
         let neut = counts[.neutral] ?? 0
         let known = bull + bear + neut
         let total = analysts.count
-        guard known > 0 else { return L("What each analyst found", "各分析师的结论") }
+        guard known > 0 else { return String(localized: "What each analyst found", locale: LocaleHolder.current) }
 
-        let bullPart = L("\(bull) bullish", "\(bull) 看多")
-        let bearPart = L("\(bear) bearish", "\(bear) 看空")
-        let neutPart = L("\(neut) neutral", "\(neut) 中性")
+        let bullPart = String(localized: "\(bull) bullish", locale: LocaleHolder.current)
+        let bearPart = String(localized: "\(bear) bearish", locale: LocaleHolder.current)
+        let neutPart = String(localized: "\(neut) neutral", locale: LocaleHolder.current)
         var parts: [String] = []
         if bull > 0 { parts.append(bullPart) }
         if bear > 0 { parts.append(bearPart) }
@@ -1448,16 +1442,16 @@ struct AITab: View {
         // Lead with the dominant stance when there's a clear edge.
         if bull > bear, bull > neut {
             let rest = parts.filter { $0 != bullPart }.joined(separator: " · ")
-            let head = L("\(bull) of \(total) bullish", "\(total) 位中 \(bull) 位看多")
+            let head = String(localized: "\(bull) of \(total) bullish", locale: LocaleHolder.current)
             return rest.isEmpty ? head : "\(head) · \(rest)"
         }
         if bear > bull, bear > neut {
             let rest = parts.filter { $0 != bearPart }.joined(separator: " · ")
-            let head = L("\(bear) of \(total) bearish", "\(total) 位中 \(bear) 位看空")
+            let head = String(localized: "\(bear) of \(total) bearish", locale: LocaleHolder.current)
             return rest.isEmpty ? head : "\(head) · \(rest)"
         }
         // Split — no dominant side. Lead with "Split".
-        return L("Split: ", "分歧：") + parts.joined(separator: " · ")
+        return String(localized: "Split: ", locale: LocaleHolder.current) + parts.joined(separator: " · ")
     }
 
     // MARK: Layer 3 — Debate thread
@@ -1509,7 +1503,7 @@ struct AITab: View {
     }
 
     private enum DebateSide { case bull, bear
-        var label: String { self == .bull ? L("Bull", "看多") : L("Bear", "看空") }
+        var label: String { self == .bull ? String(localized: "Bull", locale: LocaleHolder.current) : String(localized: "Bear", locale: LocaleHolder.current) }
         var tint: Color { self == .bull ? .green : .red }
         var symbol: String {
             self == .bull ? "arrow.up.forward.circle.fill"
@@ -1519,7 +1513,7 @@ struct AITab: View {
 
     private func roundHeader(_ n: Int, of total: Int) -> some View {
         HStack(spacing: 8) {
-            Text(L("Round \(n)", "第 \(n) 轮"))
+            Text("Round \(n)")
                 .font(.caption.weight(.heavy))
                 .tracking(0.6)
                 .foregroundStyle(.secondary)
@@ -1704,7 +1698,7 @@ struct AITab: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            Text(L("Risk gate passed", "通过风控审核"))
+            Text("Risk gate passed")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
             if let h = risk.headline, !h.isEmpty {
@@ -1731,7 +1725,7 @@ struct AITab: View {
     /// settings carry through. Title-style capitalization per macOS 26
     /// section header convention.
     @ViewBuilder
-    private func section<Content: View>(_ title: String,
+    private func section<Content: View>(_ title: LocalizedStringKey,
                                          subtitle: String? = nil,
                                          @ViewBuilder content: () -> Content)
         -> some View
@@ -1950,7 +1944,7 @@ struct AnalysisHistoryInspector: View {
         .listStyle(.inset)
         .overlay {
             if items.isEmpty {
-                Text(L("No analyses yet", "暂无分析"))
+                Text("No analyses yet")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -1960,9 +1954,9 @@ struct AnalysisHistoryInspector: View {
                 Button {
                     historyOpen = false
                 } label: {
-                    Label(L("Close history", "关闭历史"), systemImage: "sidebar.right")
+                    Label("Close history", systemImage: "sidebar.right")
                 }
-                .help(L("Hide history", "隐藏历史"))
+                .help("Hide history")
             }
         }
     }

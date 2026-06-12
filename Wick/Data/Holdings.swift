@@ -6,7 +6,7 @@ enum HoldingSide: String, Codable, Hashable {
     case buy
     case sell
 
-    var label: String { self == .buy ? L("Buy", "买入") : L("Sell", "卖出") }
+    var label: String { self == .buy ? String(localized: "Buy", locale: LocaleHolder.current) : String(localized: "Sell", locale: LocaleHolder.current) }
     var sign: Double  { self == .buy ?  1 : -1 }
 }
 

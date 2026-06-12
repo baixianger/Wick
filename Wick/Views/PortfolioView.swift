@@ -8,9 +8,9 @@ enum PortfolioTab: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .heatmap:      return L("Heatmap", "热力图")
-        case .positions:    return L("Positions", "持仓")
-        case .transactions: return L("Transactions", "交易")
+        case .heatmap:      return String(localized: "Heatmap", locale: LocaleHolder.current)
+        case .positions:    return String(localized: "Positions", locale: LocaleHolder.current)
+        case .transactions: return String(localized: "Transactions", locale: LocaleHolder.current)
         }
     }
 }
@@ -87,7 +87,7 @@ struct PortfolioView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(L("Portfolio", "投资组合"))
+                Text("Portfolio")
                     .font(.system(size: 32, weight: .bold))
                 Text(subtitle)
                     .font(.system(size: 13))
@@ -98,11 +98,11 @@ struct PortfolioView: View {
                 editorMode = .add
                 sheetShown = true
             } label: {
-                Label(L("Transaction", "交易"), systemImage: "plus")
+                Label("Transaction", systemImage: "plus")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(LiquidGlassButtonStyle(prominent: true))
-            .help(L("New transaction", "新增交易"))
+            .help("New transaction")
         }
     }
 
@@ -111,11 +111,9 @@ struct PortfolioView: View {
         let openCount = positions.filter { $0.netQuantity != 0 }.count
         let txCount = store.holdings.count
         if txCount == 0 {
-            return L("Track buys and sells manually · live prices via Yahoo",
-                     "手动记录买卖 · 实时价格来自 Yahoo")
+            return String(localized: "Track buys and sells manually · live prices via Yahoo", locale: LocaleHolder.current)
         }
-        return L("\(openCount) open · \(txCount) transaction\(txCount == 1 ? "" : "s") · live via Yahoo",
-                 "\(openCount) 个持仓 · \(txCount) 笔交易 · 实时来自 Yahoo")
+        return String(localized: "\(openCount) open · \(txCount) transaction\(txCount == 1 ? "" : "s") · live via Yahoo", locale: LocaleHolder.current)
     }
 
     // MARK: - Summary
@@ -127,18 +125,18 @@ struct PortfolioView: View {
                                             GridItem(.flexible(), alignment: .leading), count: 4),
                          alignment: .leading,
                          spacing: 16) {
-            kv(L("Market value", "市值"), money(totals.marketValue, ccy))
-            kv(L("Cost basis", "成本"),   money(totals.costBasis, ccy))
-            kv(L("Unrealized P&L", "浮动盈亏"),
+            kv("Market value", money(totals.marketValue, ccy))
+            kv("Cost basis",   money(totals.costBasis, ccy))
+            kv("Unrealized P&L",
                (totals.unrealizedPnL >= 0 ? "+" : "") + money(totals.unrealizedPnL, ccy),
                tint: pnlTint(totals.unrealizedPnL))
-            kv(L("Realized P&L", "已实现盈亏"),
+            kv("Realized P&L",
                (totals.realizedPnL >= 0 ? "+" : "") + money(totals.realizedPnL, ccy),
                tint: pnlTint(totals.realizedPnL))
         }
     }
 
-    private func kv(_ k: String, _ v: String, tint: Color? = nil) -> some View {
+    private func kv(_ k: LocalizedStringKey, _ v: String, tint: Color? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(k)
                 .font(.system(size: 11))
@@ -154,11 +152,10 @@ struct PortfolioView: View {
     private var heatmapSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(L("P&L heatmap", "盈亏热力图"))
+                Text("P&L heatmap")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text(L("Cell area ∝ market value · color ∝ unrealized P&L %",
-                       "格子面积 ∝ 市值 · 颜色 ∝ 浮动盈亏%"))
+                Text("Cell area ∝ market value · color ∝ unrealized P&L %")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -166,9 +163,8 @@ struct PortfolioView: View {
             if positions.isEmpty {
                 emptyState(
                     icon: "rectangle.3.group",
-                    title: L("No open positions", "暂无持仓"),
-                    body: L("Add a Buy transaction to see it on the heatmap, or load a sample portfolio to explore the page.",
-                            "添加一笔买入交易即可在热力图中查看，或加载示例组合来体验本页。"),
+                    title: "No open positions",
+                    body: String(localized: "Add a Buy transaction to see it on the heatmap, or load a sample portfolio to explore the page.", locale: LocaleHolder.current),
                     primaryAction: sampleAction
                 )
             } else {
@@ -199,10 +195,10 @@ struct PortfolioView: View {
     private var positionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(L("Positions", "持仓"))
+                Text("Positions")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text(L("\(openPositions().count) open", "\(openPositions().count) 个持仓"))
+                Text("\(openPositions().count) open")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -212,9 +208,8 @@ struct PortfolioView: View {
             if positions.isEmpty {
                 emptyState(
                     icon: "tray",
-                    title: L("No open positions", "暂无持仓"),
-                    body: L("Add a transaction with the button above, or load a sample portfolio.",
-                            "点击上方按钮添加交易，或加载示例组合。"),
+                    title: "No open positions",
+                    body: String(localized: "Add a transaction with the button above, or load a sample portfolio.", locale: LocaleHolder.current),
                     primaryAction: sampleAction
                 )
             } else {
@@ -238,7 +233,7 @@ struct PortfolioView: View {
                     Text(p.symbol)
                         .font(.system(size: 14, weight: .semibold))
                     if p.isShort {
-                        sideBadge(L("SHORT", "做空"), .red)
+                        sideBadge(String(localized: "SHORT", locale: LocaleHolder.current), .red)
                     }
                 }
                 Text(p.name)
@@ -248,10 +243,10 @@ struct PortfolioView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(L("Qty ", "数量 ") + qty(p.netQuantity))
+                Text(String(localized: "Qty ", locale: LocaleHolder.current) + qty(p.netQuantity))
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
-                Text(L("Avg buy ", "均价 ") + format2(p.averageBuyPrice))
+                Text(String(localized: "Avg buy ", locale: LocaleHolder.current) + format2(p.averageBuyPrice))
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
@@ -276,7 +271,7 @@ struct PortfolioView: View {
     private var transactionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(L("Transactions", "交易"))
+                Text("Transactions")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
                 Text("\(store.holdings.count)")
@@ -352,19 +347,19 @@ struct PortfolioView: View {
     /// Optional CTA payload for `emptyState`. When present the empty state
     /// renders a primary button under the body copy.
     private struct EmptyAction {
-        let title: String
+        let title: LocalizedStringKey
         let icon: String
         let handler: () -> Void
     }
 
     private var sampleAction: EmptyAction {
-        EmptyAction(title: L("Load sample portfolio", "加载示例组合"),
+        EmptyAction(title: "Load sample portfolio",
                     icon: "sparkles") { store.loadSampleTransactions() }
     }
 
     @ViewBuilder
     private func emptyState(icon: String,
-                            title: String,
+                            title: LocalizedStringKey,
                             body: String,
                             primaryAction: EmptyAction? = nil) -> some View
     {

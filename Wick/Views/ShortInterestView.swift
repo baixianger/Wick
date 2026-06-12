@@ -49,7 +49,7 @@ struct ShortInterestView: View {
     private var loadingState: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text(L("Loading FINRA short-interest data…", "正在加载 FINRA 空头数据…"))
+            Text("Loading FINRA short-interest data…")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -62,7 +62,7 @@ struct ShortInterestView: View {
             Image(systemName: "arrow.down.right.circle")
                 .font(.system(size: 28))
                 .foregroundStyle(.secondary)
-            Text(L("No FINRA short-interest data (US only, bi-monthly)", "无 FINRA 空头数据（仅美股，双月更新）"))
+            Text("No FINRA short-interest data (US only, bi-monthly)")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -74,7 +74,7 @@ struct ShortInterestView: View {
 
     @ViewBuilder
     private var shortInterestCard: some View {
-        card(header: L("Short Interest", "空头持仓 · Short Interest"), icon: "arrow.down.right") {
+        card(header: "Short Interest", icon: "arrow.down.right") {
             // Newest-first from the provider; the latest print drives headline.
             let points = model.points
             if let latest = points.first {
@@ -83,7 +83,7 @@ struct ShortInterestView: View {
                 let chgTint: Color = (chg ?? 0) >= 0 ? .red : .green
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L("Shares short", "做空股数"))
+                        Text("Shares short")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                         Text(Self.humanShares(latest.shortShares))
@@ -92,7 +92,7 @@ struct ShortInterestView: View {
                     Spacer(minLength: 0)
                     if let chg {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(L("vs prior", "较上期"))
+                            Text("vs prior")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                             Text(String(format: "%+.2f%%", chg))
@@ -101,7 +101,7 @@ struct ShortInterestView: View {
                         }
                     }
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(L("Settlement", "结算日")).font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("Settlement").font(.system(size: 11)).foregroundStyle(.secondary)
                         Text(latest.settlementDate)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
@@ -113,7 +113,7 @@ struct ShortInterestView: View {
                 let ordered = points.reversed().map { $0 }
                 Divider().opacity(0.4).padding(.vertical, 2)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L("Shares-short history (\(ordered.count) periods, bi-monthly)", "做空股数历史（\(ordered.count) 期，双月更新）"))
+                    Text("Shares-short history (\(ordered.count) periods, bi-monthly)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     ShortInterestBarChart(values: ordered.map { $0.shortShares })
@@ -125,11 +125,11 @@ struct ShortInterestView: View {
                 // Metrics row — ADV, venue.
                 Divider().opacity(0.4).padding(.vertical, 2)
                 HStack(spacing: 18) {
-                    metric(L("Avg daily volume", "日均成交量"), latest.adv.map { Self.humanShares($0) } ?? "—")
+                    metric("Avg daily volume", latest.adv.map { Self.humanShares($0) } ?? "—")
                     if let venue = latest.venue, !venue.isEmpty {
-                        metric(L("Venue", "上报场所"), venue)
+                        metric("Venue", venue)
                     }
-                    metric(L("Coverage range", "覆盖区间"),
+                    metric("Coverage range",
                            "\(ordered.first?.settlementDate ?? "—") → \(latest.settlementDate)")
                 }
             }
@@ -140,7 +140,7 @@ struct ShortInterestView: View {
 
     @ViewBuilder
     private var daysToCoverCard: some View {
-        card(header: L("Days-to-Cover", "天数覆盖 · Days-to-Cover"), icon: "clock.arrow.circlepath") {
+        card(header: "Days-to-Cover", icon: "clock.arrow.circlepath") {
             // Drop sentinel-stripped nils; keep paired dates for the line.
             let pairs = model.points.reversed().compactMap { p -> (String, Double)? in
                 p.daysToCover.map { (p.settlementDate, $0) }
@@ -149,14 +149,14 @@ struct ShortInterestView: View {
                let dtc = latest.daysToCover {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L("Days to cover", "回补天数"))
+                        Text("Days to cover")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
-                        Text(String(format: L("%.2f d", "%.2f 天"), dtc))
+                        Text(String(format: String(localized: "%.2f d", locale: LocaleHolder.current), dtc))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                     }
                     Spacer(minLength: 0)
-                    Text(L("Higher days-to-cover = harder to unwind shorts (greater squeeze risk)", "回补天数越高 = 平掉空头越难（挤空风险越高）"))
+                    Text("Higher days-to-cover = harder to unwind shorts (greater squeeze risk)")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
@@ -167,7 +167,7 @@ struct ShortInterestView: View {
                 if pairs.count > 1 {
                     Divider().opacity(0.4).padding(.vertical, 2)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L("Days-to-cover history", "回补天数历史"))
+                        Text("Days-to-cover history")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                         ShortInterestLineChart(values: pairs.map { $0.1 })
@@ -176,7 +176,7 @@ struct ShortInterestView: View {
                     }
                 }
             } else {
-                Text(L("No computable days-to-cover", "暂无可计算的回补天数"))
+                Text("No computable days-to-cover")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -187,7 +187,7 @@ struct ShortInterestView: View {
 
     // MARK: - Small parts
 
-    private func metric(_ label: String, _ value: String) -> some View {
+    private func metric(_ label: LocalizedStringKey, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.system(size: 11))
@@ -211,7 +211,7 @@ struct ShortInterestView: View {
 
     @ViewBuilder
     private func card<Content: View>(
-        header: String,
+        header: LocalizedStringKey,
         icon: String,
         @ViewBuilder content: () -> Content
     ) -> some View {

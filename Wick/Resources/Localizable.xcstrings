@@ -1,186 +1,4716 @@
 {
-  "sourceLanguage" : "en",
-  "version" : "1.0",
-  "strings" : {
-    "Provider" : {
-      "comment" : "Settings tab — LLM provider selection",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "模型" } }
+  "sourceLanguage": "en",
+  "strings": {
+    " CNY": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元"
+          }
+        }
       }
     },
-    "Data" : {
-      "comment" : "Settings tab — BYO data-source keys",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "数据" } }
+    "%.2f d": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%.2f 天"
+          }
+        }
       }
     },
-    "Workflow" : {
-      "comment" : "Settings tab — Wicker workflow knobs",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "工作流" } }
+    "%lld bearish": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 看空"
+          }
+        }
       }
     },
-    "Free Agent" : {
-      "comment" : "Settings tab — Wicker chat agent",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自由对话" } }
+    "%lld bullish": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 看多"
+          }
+        }
       }
     },
-    "Skills" : {
-      "comment" : "Settings tab — markdown skill files",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "技能" } }
+    "%lld duplicate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 条重复"
+          }
+        }
       }
     },
-    "Display" : {
-      "comment" : "Settings tab — appearance + chart prefs",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "界面" } }
+    "%lld models loaded": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加载 %lld 个模型"
+          }
+        }
       }
     },
-    "MCP" : {
-      "comment" : "Settings tab — MCP integration",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "MCP" } }
+    "%lld neutral": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 中性"
+          }
+        }
       }
     },
-    "Helper" : {
-      "comment" : "Settings → MCP → section header",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "助手程序" } }
+    "%lld new": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 条新增"
+          }
+        }
       }
     },
-    "Notes" : {
-      "comment" : "Settings → MCP → notes section",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "说明" } }
+    "%lld of %lld bearish": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld 位中 %1$lld 位看空"
+          }
+        }
       }
     },
-    "Test connection" : {
-      "comment" : "Button — spawn helper + probe",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "测试连接" } }
+    "%lld of %lld bullish": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld 位中 %1$lld 位看多"
+          }
+        }
       }
     },
-    "Testing…" : {
-      "comment" : "Test connection button — running state",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在测试…" } }
+    "%lld open": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个持仓"
+          }
+        }
       }
     },
-    "Copy JSON snippet" : {
-      "comment" : "MCP tab — copies the mcpServers config",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制 JSON 配置" } }
+    "%lld open · %lld transaction%@ · live via Yahoo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个持仓 · %2$lld 笔交易 · 实时来自 Yahoo"
+          }
+        }
       }
     },
-    "Copy helper path" : {
-      "comment" : "MCP tab — copies the bundled binary path",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制路径" } }
+    "%lld reports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 份报告"
+          }
+        }
       }
     },
-    "Theme" : {
-      "comment" : "Settings → Display → theme picker section",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "主题" } }
+    "%lld tickers in watchlist": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自选列表 %lld 只"
+          }
+        }
       }
     },
-    "Chart" : {
-      "comment" : "Settings → Display → chart section",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "图表" } }
+    "(loading…)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(加载中…)"
+          }
+        }
       }
     },
-    "Watchlist" : {
-      "comment" : "Settings → Display → watchlist section",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自选列表" } }
+    "0 skips the debate entirely. Each round = 2 LLM calls.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设为 0 则完全跳过辩论。每轮 = 2 次 LLM 调用。"
+          }
+        }
       }
     },
-    "Appearance:" : {
-      "comment" : "Settings → Display → theme picker label",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "外观:" } }
+    "10Y Yield": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10年期收益率"
+          }
+        }
       }
     },
-    "System" : {
-      "comment" : "Theme picker — follow system",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "跟随系统" } }
+    "10Y Yield (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10年期收益率(%)"
+          }
+        }
       }
     },
-    "Light" : {
-      "comment" : "Theme picker — light mode",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "浅色" } }
+    "10Y-2Y Spread (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10年-2年利差(%)"
+          }
+        }
       }
     },
-    "Dark" : {
-      "comment" : "Theme picker — dark mode",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "深色" } }
+    "2Y Yield (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2年期收益率(%)"
+          }
+        }
       }
     },
-    "Change display:" : {
-      "comment" : "Settings → Display → Watchlist → picker label",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "涨跌显示:" } }
+    "A-share real-time quotes (backup source)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A股实时报价(备份源)"
+          }
+        }
       }
     },
-    "Price" : {
-      "comment" : "Watchlist change-style — absolute delta",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "价格" } }
+    "AI": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI"
+          }
+        }
       }
     },
-    "Percent" : {
-      "comment" : "Watchlist change-style — percent change",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "百分比" } }
+    "AI Analysis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 分析"
+          }
+        }
       }
     },
-    "Add" : {
-      "comment" : "Generic — add row",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加" } }
+    "API key:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥："
+          }
+        }
       }
     },
-    "Delete" : {
-      "comment" : "Generic — delete row",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "删除" } }
+    "Across asset classes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跨资产类别"
+          }
+        }
       }
     },
-    "Cancel" : {
-      "comment" : "Generic — dismiss sheet",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消" } }
+    "Active": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已接入"
+          }
+        }
       }
     },
-    "Save" : {
-      "comment" : "Generic — commit form",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
+    "Add": {
+      "comment": "Generic — add row",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加"
+          }
+        }
       }
     },
-    "Portfolio" : {
-      "comment" : "Main tab — portfolio overview",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "持仓" } }
+    "Add a Buy transaction to see it on the heatmap, or load a sample portfolio to explore the page.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加一笔买入交易即可在热力图中查看，或加载示例组合来体验本页。"
+          }
+        }
       }
     },
-    "Holdings" : {
-      "comment" : "Sub-page — transaction list",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "交易" } }
+    "Add a transaction with the button above, or load a sample portfolio.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击上方按钮添加交易，或加载示例组合。"
+          }
+        }
       }
     },
-    "Reports" : {
-      "comment" : "Main tab — Wicker reports history",
-      "localizations" : {
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "报告" } }
+    "Add an Anthropic key or point at a local model in any ticker's AI tab to enable replies.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在任意标的的 AI 标签页中添加 Anthropic 密钥或指向本地模型即可启用回复。"
+          }
+        }
+      }
+    },
+    "Add holding": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加持仓"
+          }
+        }
+      }
+    },
+    "Add this to `~/.claude.json` (Claude Code) or your Codex `mcp.json` — then the agent can call `wick.snapshot`, `wick.candles`, `wick.holdings`, `wick.watchlist`, `wick.portfolio`.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将以下内容添加到 `~/.claude.json`（Claude Code）或你的 Codex `mcp.json`——之后智能体即可调用 `wick.snapshot`、`wick.candles`、`wick.holdings`、`wick.watchlist`、`wick.portfolio`。"
+          }
+        }
+      }
+    },
+    "Add tickers to the watchlist to populate movers.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向自选列表添加标的即可显示异动。"
+          }
+        }
+      }
+    },
+    "Add to %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入 %@"
+          }
+        }
+      }
+    },
+    "Address": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址"
+          }
+        }
+      }
+    },
+    "Agent browser": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "智能体浏览器"
+          }
+        }
+      }
+    },
+    "All": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部"
+          }
+        }
+      }
+    },
+    "All LLM traffic routes through Wick's hosted broker. No keys needed on this device — pricing handled via subscription. (Coming soon.)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有 LLM 流量都经由 Wick 托管的中转。本机无需任何 Key——计费通过订阅处理。（即将推出。）"
+          }
+        }
+      }
+    },
+    "Allow browser write actions (click / type / run scripts)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许浏览器写操作(点击 / 输入 / 执行脚本)"
+          }
+        }
+      }
+    },
+    "Analysts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析师"
+          }
+        }
+      }
+    },
+    "App Group not provisioned — helper will see empty holdings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未配置 App Group——辅助进程将看到空持仓"
+          }
+        }
+      }
+    },
+    "App language:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用语言："
+          }
+        }
+      }
+    },
+    "Appearance:": {
+      "comment": "Settings → Display → theme picker label",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外观："
+          }
+        }
+      }
+    },
+    "As of": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截至"
+          }
+        }
+      }
+    },
+    "Asia Pacific": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亚太"
+          }
+        }
+      }
+    },
+    "Ask Wicker about %@…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向 Wicker 询问 %@…"
+          }
+        }
+      }
+    },
+    "Ask Wicker — \"run a full analysis on %@\" — and the multi-agent desk (fundamental / technical / sentiment / news → bull-bear debate → trade → risk) will kick off. Completed reports get archived here for side-by-side comparison.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让 Wicker 「对 %@ 做一次完整分析」——多智能体团队（基本面 / 技术面 / 情绪面 / 新闻面 → 多空辩论 → 交易 → 风控）就会启动。完成的报告会归档在此，便于对比。"
+          }
+        }
+      }
+    },
+    "Ask Wicker…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向 Wicker 提问…"
+          }
+        }
+      }
+    },
+    "Ask anything…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随便问点什么…"
+          }
+        }
+      }
+    },
+    "Attach images or documents (PDF / CSV / Excel / text)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加图片或文档（PDF / CSV / Excel / 文本）"
+          }
+        }
+      }
+    },
+    "Auto from price": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按价格自动"
+          }
+        }
+      }
+    },
+    "Avg buy ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "均价 "
+          }
+        }
+      }
+    },
+    "Avg daily volume": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日均成交量"
+          }
+        }
+      }
+    },
+    "BPS": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每股净资产"
+          }
+        }
+      }
+    },
+    "BUNDLED": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置"
+          }
+        }
+      }
+    },
+    "BYO account": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自带账号"
+          }
+        }
+      }
+    },
+    "BYO browser (experimental)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BYO 浏览器（实验）"
+          }
+        }
+      }
+    },
+    "BYO browser required": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要开启 BYO 浏览器"
+          }
+        }
+      }
+    },
+    "Back": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后退"
+          }
+        }
+      }
+    },
+    "Base URL:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基础地址："
+          }
+        }
+      }
+    },
+    "Bear": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看空"
+          }
+        }
+      }
+    },
+    "Bring Your Own": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自带账号"
+          }
+        }
+      }
+    },
+    "Browser width": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览器宽度"
+          }
+        }
+      }
+    },
+    "Bull": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看多"
+          }
+        }
+      }
+    },
+    "Bull vs Bear debate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多空辩论"
+          }
+        }
+      }
+    },
+    "Bull vs Bear, argued in rounds": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多空逐轮论辩"
+          }
+        }
+      }
+    },
+    "Bull ↔ bear rounds:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多空辩论轮数："
+          }
+        }
+      }
+    },
+    "Buy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "买入"
+          }
+        }
+      }
+    },
+    "Buy price": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "买入价"
+          }
+        }
+      }
+    },
+    "CN / HK": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A股 / 港股"
+          }
+        }
+      }
+    },
+    "CPI YoY": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPI同比"
+          }
+        }
+      }
+    },
+    "CPI YoY (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPI同比(%)"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "comment": "Generic — dismiss sheet",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "Capital": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资金"
+          }
+        }
+      }
+    },
+    "Capital · 资金面": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资金面"
+          }
+        }
+      }
+    },
+    "Cell area ∝ market value · color ∝ unrealized P&L %": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格子面积 ∝ 市值 · 颜色 ∝ 浮动盈亏%"
+          }
+        }
+      }
+    },
+    "Change": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改"
+          }
+        }
+      }
+    },
+    "Change display:": {
+      "comment": "Settings → Display → Watchlist → picker label",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "涨跌显示："
+          }
+        }
+      }
+    },
+    "Chart": {
+      "comment": "Settings → Display → chart section",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图表"
+          }
+        }
+      }
+    },
+    "Chat · screening · macro": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对话 · 选股 · 宏观"
+          }
+        }
+      }
+    },
+    "Chinese-market analysts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A股/港股分析师"
+          }
+        }
+      }
+    },
+    "Choose…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择…"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        }
+      }
+    },
+    "Close history": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭历史"
+          }
+        }
+      }
+    },
+    "Close tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭标签页"
+          }
+        }
+      }
+    },
+    "Closed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已平仓"
+          }
+        }
+      }
+    },
+    "Column 1 default:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一栏默认："
+          }
+        }
+      }
+    },
+    "Column 2 default:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第二栏默认："
+          }
+        }
+      }
+    },
+    "Comm Svcs": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通信服务"
+          }
+        }
+      }
+    },
+    "Commodities": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大宗商品"
+          }
+        }
+      }
+    },
+    "Compare AAPL and MSFT margins": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比 AAPL 与 MSFT 的利润率"
+          }
+        }
+      }
+    },
+    "Connect 雪球": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接雪球"
+          }
+        }
+      }
+    },
+    "Copy JSON snippet": {
+      "comment": "MCP tab — copies the mcpServers config",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制 JSON 片段"
+          }
+        }
+      }
+    },
+    "Copy helper path": {
+      "comment": "MCP tab — copies the bundled binary path",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制辅助进程路径"
+          }
+        }
+      }
+    },
+    "Core CPI YoY (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核心CPI同比(%)"
+          }
+        }
+      }
+    },
+    "Core PCE": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核心PCE"
+          }
+        }
+      }
+    },
+    "Core PCE YoY (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核心PCE同比(%)"
+          }
+        }
+      }
+    },
+    "Cost basis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成本"
+          }
+        }
+      }
+    },
+    "Couldn't read %@: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取 %1$@：%2$@"
+          }
+        }
+      }
+    },
+    "Coverage range": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "覆盖区间"
+          }
+        }
+      }
+    },
+    "Create": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建"
+          }
+        }
+      }
+    },
+    "Crypto": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密货币"
+          }
+        }
+      }
+    },
+    "Currency": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "货币"
+          }
+        }
+      }
+    },
+    "Dark": {
+      "comment": "Theme picker — dark mode",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深色"
+          }
+        }
+      }
+    },
+    "Data": {
+      "comment": "Settings tab — BYO data-source keys",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据"
+          }
+        }
+      }
+    },
+    "Data Sources": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据源总览"
+          }
+        }
+      }
+    },
+    "Date": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期"
+          }
+        }
+      }
+    },
+    "Days to cover": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回补天数"
+          }
+        }
+      }
+    },
+    "Days-to-Cover": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天数覆盖 · Days-to-Cover"
+          }
+        }
+      }
+    },
+    "Days-to-cover history": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回补天数历史"
+          }
+        }
+      }
+    },
+    "Debate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辩论"
+          }
+        }
+      }
+    },
+    "Debt ratio": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资产负债率"
+          }
+        }
+      }
+    },
+    "Decision": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "决策"
+          }
+        }
+      }
+    },
+    "Deep model:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深度模型："
+          }
+        }
+      }
+    },
+    "Defaults to our hosted instance once auth wiring lands. For now points at a local WickServer for development.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "认证接入后将默认指向我们的托管实例。目前指向本地 WickServer 用于开发。"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "comment": "Generic — delete row",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        }
+      }
+    },
+    "Delete current group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除当前分组"
+          }
+        }
+      }
+    },
+    "Demo · network unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "演示 · 网络不可用"
+          }
+        }
+      }
+    },
+    "Disabled analysts are skipped — fewer LLM calls per report.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被禁用的分析师会被跳过——每份报告更少的 LLM 调用。"
+          }
+        }
+      }
+    },
+    "Discretionary": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选消费"
+          }
+        }
+      }
+    },
+    "Discussion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讨论"
+          }
+        }
+      }
+    },
+    "Display": {
+      "comment": "Settings tab — appearance + chart prefs",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "Dragon-Tiger Board": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "龙虎榜"
+          }
+        }
+      }
+    },
+    "Drives the Wicker workflow by shelling out to your locally-installed `claude` CLI. Uses whichever subscription `claude login` is signed into — no API key here. Each desk run is ~10-20 s slower than a direct API call and bills against your Pro/Max quota; not recommended for high-frequency use.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过调用本机安装的 `claude` CLI 驱动 Wicker 工作流。使用 `claude login` 登录的订阅——此处无需 API Key。每次跑桌面分析比直接 API 调用慢约 10-20 秒，并计入你的 Pro/Max 额度；不建议高频使用。"
+          }
+        }
+      }
+    },
+    "Drop `.md` files with `name` and `description` frontmatter into this folder; same-name files override the bundled skill.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将带有 `name` 和 `description` frontmatter 的 `.md` 文件放入此目录；同名文件会覆盖内置技能。"
+          }
+        }
+      }
+    },
+    "EARLIER": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更早"
+          }
+        }
+      }
+    },
+    "EPS est.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预期EPS"
+          }
+        }
+      }
+    },
+    "EXACT DUP": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全重复"
+          }
+        }
+      }
+    },
+    "Each invocation is short-lived — your MCP client kills it when it disconnects.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每次调用都是短生命周期——MCP 客户端断开时会终止它。"
+          }
+        }
+      }
+    },
+    "EastMoney F10 financials": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EastMoney F10 财务"
+          }
+        }
+      }
+    },
+    "EastMoney fund flow": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EastMoney 资金流"
+          }
+        }
+      }
+    },
+    "EastMoney limit-up board": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EastMoney 涨停板"
+          }
+        }
+      }
+    },
+    "EastMoney northbound flow": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EastMoney 北向资金"
+          }
+        }
+      }
+    },
+    "EastMoney quotes & K-line": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EastMoney 行情 & K线"
+          }
+        }
+      }
+    },
+    "EastMoney top-list (龙虎榜)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EastMoney 龙虎榜"
+          }
+        }
+      }
+    },
+    "Edit holding": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑持仓"
+          }
+        }
+      }
+    },
+    "Enable Wicker browser tools": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用 Wicker 浏览器工具"
+          }
+        }
+      }
+    },
+    "Energy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能源"
+          }
+        }
+      }
+    },
+    "Europe": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "欧洲"
+          }
+        }
+      }
+    },
+    "Evidence": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "依据"
+          }
+        }
+      }
+    },
+    "Expose Wicker browser / social via MCP (read-only)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 MCP 暴露 Wicker 浏览器/社交(只读)"
+          }
+        }
+      }
+    },
+    "Extra-large": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "超大单"
+          }
+        }
+      }
+    },
+    "FMP API key:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FMP API 密钥："
+          }
+        }
+      }
+    },
+    "FRED API key:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FRED API 密钥："
+          }
+        }
+      }
+    },
+    "Fed Funds": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "联邦基金利率"
+          }
+        }
+      }
+    },
+    "Fed Funds (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "联邦基金利率(%)"
+          }
+        }
+      }
+    },
+    "Financials": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "财务"
+          }
+        }
+      }
+    },
+    "Finnhub API key:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finnhub API 密钥："
+          }
+        }
+      }
+    },
+    "Fixed width of the Wicker browser panel (height fills the window). It auto-shrinks on a narrow window so chat stays usable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wicker 浏览器面板的固定宽度(高度填满窗口)。窗口窄时会自动缩,保证聊天可用。"
+          }
+        }
+      }
+    },
+    "Fold your logged-in 雪球 per-stock discussion into sentiment analysis. Off by default; first connect a 雪球 login from a stock's Social tab.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把你登录的雪球个股讨论纳入情绪分析。默认关;需先在个股 Social tab 连接雪球登录。"
+          }
+        }
+      }
+    },
+    "Folder:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目录："
+          }
+        }
+      }
+    },
+    "Forex": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外汇"
+          }
+        }
+      }
+    },
+    "Forward": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前进"
+          }
+        }
+      }
+    },
+    "Free": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免费"
+          }
+        }
+      }
+    },
+    "Free = no key needed; Free · Key = fill in below; BYO account = sign in within the workflow. Planned = coming soon.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免费 = 无需 Key;免费·需Key = 在下方填写;自带账号 = 在工作流里登录。计划中 = 即将接入。"
+          }
+        }
+      }
+    },
+    "Free Agent": {
+      "comment": "Settings tab — Wicker chat agent",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自由智能体"
+          }
+        }
+      }
+    },
+    "Free · Key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免费·需Key"
+          }
+        }
+      }
+    },
+    "Front-month futures · Metals · Energy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近月期货 · 金属 · 能源"
+          }
+        }
+      }
+    },
+    "Fund Flow · Smart Money": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资金流 · 主力动向"
+          }
+        }
+      }
+    },
+    "Fund flow / dragon-tiger are not available for HK tickers.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "港股无资金流 / 龙虎榜数据。"
+          }
+        }
+      }
+    },
+    "Fundamental": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本面"
+          }
+        }
+      }
+    },
+    "Fundamentals & price (FMP)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本面 & 价格（FMP）"
+          }
+        }
+      }
+    },
+    "Gainers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "领涨"
+          }
+        }
+      }
+    },
+    "Go": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前往"
+          }
+        }
+      }
+    },
+    "Good afternoon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下午好"
+          }
+        }
+      }
+    },
+    "Good evening": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "晚上好"
+          }
+        }
+      }
+    },
+    "Good morning": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "早上好"
+          }
+        }
+      }
+    },
+    "Gross margin": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "毛利率"
+          }
+        }
+      }
+    },
+    "Group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组"
+          }
+        }
+      }
+    },
+    "Growth": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增长"
+          }
+        }
+      }
+    },
+    "Guardrail switch. Off = Wicker goes read-only: it can still navigate / read / snapshot pages, but won't click, type, or run scripts (it prompts you to enable instead). On by default. Only effective when the Wicker browser is enabled.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "护栏开关。关闭后 Wicker 进入只读模式:仍可导航 / 读取 / 快照页面,但不会点击、输入或执行脚本(改用提示让你去开启)。默认开。仅在已启用 Wicker 浏览器时生效。"
+          }
+        }
+      }
+    },
+    "HKEX CCASS": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "港交所 CCASS"
+          }
+        }
+      }
+    },
+    "HKEX short selling": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HKEX 沽空"
+          }
+        }
+      }
+    },
+    "Hard cap on how many tool round-trips the chat agent can take before it must answer. Belt-and-suspenders against runaway loops.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天智能体在必须作答前可执行的工具往返次数上限。用于防止循环失控的双重保险。"
+          }
+        }
+      }
+    },
+    "Headlines": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "头条"
+          }
+        }
+      }
+    },
+    "Health Care": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "医疗保健"
+          }
+        }
+      }
+    },
+    "Heatmap": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "热力图"
+          }
+        }
+      }
+    },
+    "Helper": {
+      "comment": "Settings → MCP → section header",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辅助进程"
+          }
+        }
+      }
+    },
+    "Helper is sandboxed: outbound HTTP + App Group only. No file-system, no listening sockets.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辅助进程运行在沙盒中：仅允许出站 HTTP + App Group。无文件系统访问，无监听端口。"
+          }
+        }
+      }
+    },
+    "Hi there": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你好"
+          }
+        }
+      }
+    },
+    "Hide history": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏历史"
+          }
+        }
+      }
+    },
+    "Hide history (⌘⇧H)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏历史 (⌘⇧H)"
+          }
+        }
+      }
+    },
+    "Higher days-to-cover = harder to unwind shorts (greater squeeze risk)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回补天数越高 = 平掉空头越难（挤空风险越高）"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史"
+          }
+        }
+      }
+    },
+    "History depth:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史深度："
+          }
+        }
+      }
+    },
+    "Holdings": {
+      "comment": "Sub-page — transaction list",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持仓"
+          }
+        }
+      }
+    },
+    "Holdings (%lld)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持仓 (%lld)"
+          }
+        }
+      }
+    },
+    "Holdings · P&L heatmap": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持仓 · 盈亏热图"
+          }
+        }
+      }
+    },
+    "Hong Kong short-sell data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "港股卖空数据"
+          }
+        }
+      }
+    },
+    "How is NVDA doing today?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NVDA 今天表现如何？"
+          }
+        }
+      }
+    },
+    "ID %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编号 %@"
+          }
+        }
+      }
+    },
+    "Import %lld transaction%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入 %lld 笔交易"
+          }
+        }
+      }
+    },
+    "Import complete": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入完成"
+          }
+        }
+      }
+    },
+    "Imported %lld transaction%@ from %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已从 %3$@ 导入 %1$lld 笔交易。"
+          }
+        }
+      }
+    },
+    "Importing %lld transactions…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导入 %lld 笔交易…"
+          }
+        }
+      }
+    },
+    "In Wick Server mode, FMP / Finnhub / FRED are provided by our backend — you don't need to supply data keys. Switch to a BYO provider on the Provider tab to manage your own data sources.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Wick Server 模式下，FMP / Finnhub / FRED 由我们的后端提供——无需自行填写数据 Key。如需管理自己的数据源，请在「服务商」标签页切换到 BYO 服务商。"
+          }
+        }
+      }
+    },
+    "Indicators": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指标"
+          }
+        }
+      }
+    },
+    "Industrials": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工业"
+          }
+        }
+      }
+    },
+    "Inflation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通胀"
+          }
+        }
+      }
+    },
+    "Information gathering": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信息收集"
+          }
+        }
+      }
+    },
+    "Initial Claims": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "初请失业金人数"
+          }
+        }
+      }
+    },
+    "Invalid base URL.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基础地址无效。"
+          }
+        }
+      }
+    },
+    "Keep browser panel open": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持浏览器面板打开"
+          }
+        }
+      }
+    },
+    "LIKELY DUP": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "疑似重复"
+          }
+        }
+      }
+    },
+    "LLM provider": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LLM 服务商"
+          }
+        }
+      }
+    },
+    "Labor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "就业"
+          }
+        }
+      }
+    },
+    "Language": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言"
+          }
+        }
+      }
+    },
+    "Large": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大单"
+          }
+        }
+      }
+    },
+    "Layout:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "布局："
+          }
+        }
+      }
+    },
+    "Leave blank to resolve from $PATH": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留空则从 $PATH 解析"
+          }
+        }
+      }
+    },
+    "Let Wicker navigate / read / operate web pages via embedded WebKit (navigate·read·snapshot·click·type·eval·fetchJSON). Once on, asking it to browse in chat slides out a live browser panel you can sign into / take over. Off by default, macOS 26+.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让 Wicker 通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。"
+          }
+        }
+      }
+    },
+    "Lets third-party MCP clients (Claude Code / Codex, etc.) drive your logged-in browser and 雪球/X sessions via the bundled wick-mcp — read-only: navigate / read / snapshot / 雪球·X discussion (no click / type / run scripts). ⚠️ This lets external agents operate your logged-in sessions. Off by default; first enable the Wicker browser above, macOS 26+.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许第三方 MCP 客户端(Claude Code / Codex 等)通过内置 wick-mcp 驱动你已登录的浏览器与雪球/X 会话——仅只读:导航 / 读取 / 快照 / 雪球·X 讨论(不含点击 / 输入 / 执行脚本)。⚠️ 这会让外部 agent 操作你的登录会话。默认关;需先启用上方「Wicker 浏览器」,macOS 26+。"
+          }
+        }
+      }
+    },
+    "Light": {
+      "comment": "Theme picker — light mode",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浅色"
+          }
+        }
+      }
+    },
+    "Live FRED data when a key is set in Settings (synthetic preview otherwise). Tap a chart's Overlay to compare against another series or the US market.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「设置」中配置密钥后显示实时 FRED 数据（否则为模拟预览）。点击图表的「叠加」可与另一序列或美股市场对比。"
+          }
+        }
+      }
+    },
+    "Live · %lldm ago": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时 · %lld 分钟前"
+          }
+        }
+      }
+    },
+    "Live · just now": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时 · 刚刚"
+          }
+        }
+      }
+    },
+    "Load sample portfolio": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载示例组合"
+          }
+        }
+      }
+    },
+    "Loaded skills": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加载技能"
+          }
+        }
+      }
+    },
+    "Loading FINRA short-interest data…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载 FINRA 空头数据…"
+          }
+        }
+      }
+    },
+    "Loading X discussion…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载 X 讨论…"
+          }
+        }
+      }
+    },
+    "Loading capital data…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载资金数据…"
+          }
+        }
+      }
+    },
+    "Loading 雪球 discussion…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载雪球讨论…"
+          }
+        }
+      }
+    },
+    "Loading…  (Demo)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载中…（演示）"
+          }
+        }
+      }
+    },
+    "London · Frankfurt · Paris": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伦敦 · 法兰克福 · 巴黎"
+          }
+        }
+      }
+    },
+    "Losers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "领跌"
+          }
+        }
+      }
+    },
+    "MCP": {
+      "comment": "Settings tab — MCP integration",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP"
+          }
+        }
+      }
+    },
+    "Macro": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宏观"
+          }
+        }
+      }
+    },
+    "Macro backdrop (FRED)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宏观背景（FRED）"
+          }
+        }
+      }
+    },
+    "Main net %": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主力净占比"
+          }
+        }
+      }
+    },
+    "Main net inflow": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主力净流入"
+          }
+        }
+      }
+    },
+    "Major pairs · Spot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主要货币对 · 现货"
+          }
+        }
+      }
+    },
+    "Manual": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动"
+          }
+        }
+      }
+    },
+    "Market": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "市场"
+          }
+        }
+      }
+    },
+    "Market value": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "市值"
+          }
+        }
+      }
+    },
+    "Materials": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "材料"
+          }
+        }
+      }
+    },
+    "Max tool turns:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大工具轮次："
+          }
+        }
+      }
+    },
+    "Medium": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中单"
+          }
+        }
+      }
+    },
+    "Mode": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模式"
+          }
+        }
+      }
+    },
+    "Mode:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模式："
+          }
+        }
+      }
+    },
+    "Model": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型"
+          }
+        }
+      }
+    },
+    "Models": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型"
+          }
+        }
+      }
+    },
+    "Most Active": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最活跃"
+          }
+        }
+      }
+    },
+    "Movers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "异动"
+          }
+        }
+      }
+    },
+    "NEW": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增"
+          }
+        }
+      }
+    },
+    "NYSE · NASDAQ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "纽交所 · 纳斯达克"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名称"
+          }
+        }
+      }
+    },
+    "Net buy ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "净买入 "
+          }
+        }
+      }
+    },
+    "Net margin": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "净利率"
+          }
+        }
+      }
+    },
+    "Net profit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归母净利"
+          }
+        }
+      }
+    },
+    "New chat (⌘N)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建对话 (⌘N)"
+          }
+        }
+      }
+    },
+    "New group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建分组"
+          }
+        }
+      }
+    },
+    "New group…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建分组…"
+          }
+        }
+      }
+    },
+    "New tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新标签页"
+          }
+        }
+      }
+    },
+    "New transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增交易"
+          }
+        }
+      }
+    },
+    "News": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新闻"
+          }
+        }
+      }
+    },
+    "News & sentiment (Finnhub)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新闻 & 情绪（Finnhub）"
+          }
+        }
+      }
+    },
+    "Next 10 days · preview": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未来 10 天 · 预览"
+          }
+        }
+      }
+    },
+    "No FINRA short-interest data (US only, bi-monthly)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无 FINRA 空头数据（仅美股，双月更新）"
+          }
+        }
+      }
+    },
+    "No analyses yet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无分析"
+          }
+        }
+      }
+    },
+    "No analyses yet for %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 暂无分析。"
+          }
+        }
+      }
+    },
+    "No computable days-to-cover": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无可计算的回补天数"
+          }
+        }
+      }
+    },
+    "No data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无数据"
+          }
+        }
+      }
+    },
+    "No discussion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无讨论"
+          }
+        }
+      }
+    },
+    "No messages yet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无消息"
+          }
+        }
+      }
+    },
+    "No open positions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无持仓"
+          }
+        }
+      }
+    },
+    "No provider configured.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未配置服务商。"
+          }
+        }
+      }
+    },
+    "No recent dragon-tiger listings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近期无龙虎榜上榜"
+          }
+        }
+      }
+    },
+    "No user groups yet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无自定义分组"
+          }
+        }
+      }
+    },
+    "None": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无"
+          }
+        }
+      }
+    },
+    "Nonfarm Payrolls (Δk)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非农就业(千人变动)"
+          }
+        }
+      }
+    },
+    "Not connected to 雪球": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接雪球"
+          }
+        }
+      }
+    },
+    "Not set — bundled only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未设置——仅使用内置技能"
+          }
+        }
+      }
+    },
+    "Not signed in to X": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未登录 X"
+          }
+        }
+      }
+    },
+    "Notes": {
+      "comment": "Settings → MCP → notes section",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说明"
+          }
+        }
+      }
+    },
+    "OK · %lld tools · %lld ms": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常 · %1$lld 个工具 · %2$lld ms"
+          }
+        }
+      }
+    },
+    "Open author profile in browser": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在浏览器中打开作者主页"
+          }
+        }
+      }
+    },
+    "Open in browser": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在浏览器中打开"
+          }
+        }
+      }
+    },
+    "Overlay": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "叠加"
+          }
+        }
+      }
+    },
+    "Overview": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "概览"
+          }
+        }
+      }
+    },
+    "P&L heatmap": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "盈亏热力图"
+          }
+        }
+      }
+    },
+    "Past calls on the same ticker (rating + position) are inlined into the trader's prompt so it can change its mind on contradicting evidence. 0 disables.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一标的的历史结论（评级 + 仓位）会内联到交易员的提示中，以便在出现相反证据时改变判断。设为 0 则禁用。"
+          }
+        }
+      }
+    },
+    "Percent": {
+      "comment": "Watchlist change-style — percent change",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "百分比"
+          }
+        }
+      }
+    },
+    "Planned": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划中"
+          }
+        }
+      }
+    },
+    "Policy · 政策面": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "政策面"
+          }
+        }
+      }
+    },
+    "Portfolio": {
+      "comment": "Main tab — portfolio overview",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "投资组合"
+          }
+        }
+      }
+    },
+    "Position": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仓位"
+          }
+        }
+      }
+    },
+    "Positions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持仓"
+          }
+        }
+      }
+    },
+    "Preview data. Live earnings calendar needs a Finnhub key in Settings → Agents.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览数据。实时财报日历需在「设置 → 智能体」中配置 Finnhub 密钥。"
+          }
+        }
+      }
+    },
+    "Price": {
+      "comment": "Watchlist change-style — absolute delta",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "价格"
+          }
+        }
+      }
+    },
+    "Provider": {
+      "comment": "Settings tab — LLM provider selection",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务商"
+          }
+        }
+      }
+    },
+    "Provider:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务商："
+          }
+        }
+      }
+    },
+    "Qty ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数量 "
+          }
+        }
+      }
+    },
+    "Quantity": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数量"
+          }
+        }
+      }
+    },
+    "Quick model:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速模型："
+          }
+        }
+      }
+    },
+    "Rates": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利率"
+          }
+        }
+      }
+    },
+    "Rates · Inflation · Labor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利率 · 通胀 · 就业"
+          }
+        }
+      }
+    },
+    "Read-only mode: browser write actions are turned off under Settings → Workflow → BYO browser. To let Wicker click / type / run scripts, enable \"Allow write actions\" there.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只读模式：已在「设置 → 工作流 → BYO 浏览器」中关闭浏览器写操作。如需让 Wicker 点击 / 输入 / 执行脚本，请在那里开启「允许写操作」。"
+          }
+        }
+      }
+    },
+    "Reading…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取中…"
+          }
+        }
+      }
+    },
+    "Ready when you are.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随时为你效劳。"
+          }
+        }
+      }
+    },
+    "Real Estate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房地产"
+          }
+        }
+      }
+    },
+    "Real GDP (QoQ ann. %)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实际GDP(环比年化%)"
+          }
+        }
+      }
+    },
+    "Realized P&L": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已实现盈亏"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "Refresh X discussion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新 X 讨论"
+          }
+        }
+      }
+    },
+    "Refresh models": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新模型列表"
+          }
+        }
+      }
+    },
+    "Refresh 雪球 discussion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新雪球讨论"
+          }
+        }
+      }
+    },
+    "Refreshing…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新中…"
+          }
+        }
+      }
+    },
+    "Reload": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "Remove from %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从 %@ 移除"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名"
+          }
+        }
+      }
+    },
+    "Rename session": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名会话"
+          }
+        }
+      }
+    },
+    "Rename…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名…"
+          }
+        }
+      }
+    },
+    "Reports": {
+      "comment": "Main tab — Wicker reports history",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报告"
+          }
+        }
+      }
+    },
+    "Requires macOS 26": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要 macOS 26"
+          }
+        }
+      }
+    },
+    "Research": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "研究"
+          }
+        }
+      }
+    },
+    "Retail Sales YoY (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "零售销售同比(%)"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
+        }
+      }
+    },
+    "Revenue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "营收"
+          }
+        }
+      }
+    },
+    "Revenue trend": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "营收趋势"
+          }
+        }
+      }
+    },
+    "Review transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核对交易"
+          }
+        }
+      }
+    },
+    "Risk": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风控"
+          }
+        }
+      }
+    },
+    "Risk gate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风险把关"
+          }
+        }
+      }
+    },
+    "Risk gate passed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过风控审核"
+          }
+        }
+      }
+    },
+    "Risk override": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风控否决"
+          }
+        }
+      }
+    },
+    "Round %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 轮"
+          }
+        }
+      }
+    },
+    "Run Analysis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行分析"
+          }
+        }
+      }
+    },
+    "Running…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行中…"
+          }
+        }
+      }
+    },
+    "SHORT": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "做空"
+          }
+        }
+      }
+    },
+    "SPDR sector ETFs · color ∝ today's change": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SPDR 行业 ETF · 颜色 ∝ 当日涨跌"
+          }
+        }
+      }
+    },
+    "Sampling": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采样"
+          }
+        }
+      }
+    },
+    "Save": {
+      "comment": "Generic — commit form",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
+    },
+    "Screen S&P 500 for P/E < 15": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选标普 500 中市盈率 < 15 的股票"
+          }
+        }
+      }
+    },
+    "Search stocks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索股票"
+          }
+        }
+      }
+    },
+    "Sectors": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "板块"
+          }
+        }
+      }
+    },
+    "Sectors · indices · macro": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "板块 · 指数 · 宏观"
+          }
+        }
+      }
+    },
+    "See More Data from Yahoo Finance": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Yahoo Finance 查看更多数据"
+          }
+        }
+      }
+    },
+    "Self-conditioning": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自我校准"
+          }
+        }
+      }
+    },
+    "Sell": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卖出"
+          }
+        }
+      }
+    },
+    "Sell price": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卖出价"
+          }
+        }
+      }
+    },
+    "Send (⌘⏎)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送 (⌘⏎)"
+          }
+        }
+      }
+    },
+    "Sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情绪面"
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器"
+          }
+        }
+      }
+    },
+    "Server URL:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器地址："
+          }
+        }
+      }
+    },
+    "Settlement": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结算日"
+          }
+        }
+      }
+    },
+    "Shares short": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "做空股数"
+          }
+        }
+      }
+    },
+    "Shares-short history (%lld periods, bi-monthly)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "做空股数历史（%lld 期，双月更新）"
+          }
+        }
+      }
+    },
+    "Sharing holdings + watchlist with helper (App Group active)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在与辅助进程共享持仓 + 自选（App Group 已启用）"
+          }
+        }
+      }
+    },
+    "Short": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空头"
+          }
+        }
+      }
+    },
+    "Short Interest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空头持仓 · Short Interest"
+          }
+        }
+      }
+    },
+    "Show analysis history": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示分析历史"
+          }
+        }
+      }
+    },
+    "Show history (⌘⇧H)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示历史 (⌘⇧H)"
+          }
+        }
+      }
+    },
+    "Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以绝对价差或百分比显示当日涨跌。仅影响侧边栏行。"
+          }
+        }
+      }
+    },
+    "Side": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方向"
+          }
+        }
+      }
+    },
+    "Side-by-side pane in Chart tab": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图表页并排显示面板"
+          }
+        }
+      }
+    },
+    "Sign in to X": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 X"
+          }
+        }
+      }
+    },
+    "Sign in to X (Twitter)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 X (Twitter)"
+          }
+        }
+      }
+    },
+    "Sign in to X (Twitter) to view discussion for this ticker. Your session stays on this device, is triggered on demand, and is never scraped automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 X (Twitter) 后即可查看该标的的讨论。登录态仅保存在本机，按需触发，不会自动抓取。"
+          }
+        }
+      }
+    },
+    "Sign in to 雪球": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录雪球"
+          }
+        }
+      }
+    },
+    "Sign in to 雪球 to view discussion for this ticker. Your session stays on this device, is triggered on demand, and is never scraped automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录雪球后即可查看该标的的讨论。登录态仅保存在本机，按需触发，不会自动抓取。"
+          }
+        }
+      }
+    },
+    "Sina / Tencent quotes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新浪 / 腾讯 报价"
+          }
+        }
+      }
+    },
+    "Single": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一览"
+          }
+        }
+      }
+    },
+    "Skills": {
+      "comment": "Settings tab — markdown skill files",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能"
+          }
+        }
+      }
+    },
+    "Skipped %lld duplicate%@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过 %lld 笔重复交易。"
+          }
+        }
+      }
+    },
+    "Small": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小单"
+          }
+        }
+      }
+    },
+    "Social": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "社交"
+          }
+        }
+      }
+    },
+    "Source unavailable · retrying (%lld)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源暂不可用 · 重试中 (%lld)"
+          }
+        }
+      }
+    },
+    "Source unavailable · showing demo data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源暂不可用 · 显示演示数据"
+          }
+        }
+      }
+    },
+    "Split: ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分歧："
+          }
+        }
+      }
+    },
+    "Spot · USD pairs": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现货 · 美元交易对"
+          }
+        }
+      }
+    },
+    "Staples": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必需消费"
+          }
+        }
+      }
+    },
+    "Stock Connect · foreign capital flow": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沪深港通 · 外资流向"
+          }
+        }
+      }
+    },
+    "Stored in your macOS Keychain. Each provider's key gets its own entry — switching providers preserves the others.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存在你的 macOS 钥匙串中。每个服务商的 Key 独立存储——切换服务商不会丢失其他 Key。"
+          }
+        }
+      }
+    },
+    "Strong Sell  ←  →  Strong Buy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强烈卖出  ←  →  强烈买入"
+          }
+        }
+      }
+    },
+    "Switches the interface language immediately. Some less-visited screens are still being translated.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即切换界面语言。部分次要页面仍在翻译中。"
+          }
+        }
+      }
+    },
+    "Symbol": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代码"
+          }
+        }
+      }
+    },
+    "System": {
+      "comment": "Theme picker — follow system",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随系统"
+          }
+        }
+      }
+    },
+    "THIS WEEK": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本周"
+          }
+        }
+      }
+    },
+    "TODAY": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今天"
+          }
+        }
+      }
+    },
+    "Tap refresh to load X discussion for this ticker.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击刷新以加载该标的的 X 讨论。"
+          }
+        }
+      }
+    },
+    "Tap refresh to load 雪球 discussion for this ticker.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击刷新以加载该标的的雪球讨论。"
+          }
+        }
+      }
+    },
+    "Tech": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "科技"
+          }
+        }
+      }
+    },
+    "Technical": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技术面"
+          }
+        }
+      }
+    },
+    "Temperature:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度："
+          }
+        }
+      }
+    },
+    "Test connection": {
+      "comment": "Button — spawn helper + probe",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试连接"
+          }
+        }
+      }
+    },
+    "Testing…": {
+      "comment": "Test connection button — running state",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试中…"
+          }
+        }
+      }
+    },
+    "The free agent uses the **Deep model** set in Provider.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自由智能体使用「服务商」中设置的**深度模型**。"
+          }
+        }
+      }
+    },
+    "Theme": {
+      "comment": "Settings → Display → theme picker section",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题"
+          }
+        }
+      }
+    },
+    "Time interval:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时间区间："
+          }
+        }
+      }
+    },
+    "Title": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标题"
+          }
+        }
+      }
+    },
+    "Tokyo · Hong Kong · Shanghai · Seoul": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "东京 · 香港 · 上海 · 首尔"
+          }
+        }
+      }
+    },
+    "Tool loop": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具循环"
+          }
+        }
+      }
+    },
+    "Track buys and sells manually · live prices via Yahoo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动记录买卖 · 实时价格来自 Yahoo"
+          }
+        }
+      }
+    },
+    "Trade synthesis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易综合"
+          }
+        }
+      }
+    },
+    "Transaction": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易"
+          }
+        }
+      }
+    },
+    "Transactions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易"
+          }
+        }
+      }
+    },
+    "Try: \"how is the semiconductor sector doing?\" · \"compare AAPL and MSFT margins\" · \"screen S&P 500 for P/E < 15 and ROE > 20%\".": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试试：「半导体板块表现如何？」·「对比 AAPL 与 MSFT 的利润率」·「筛选标普 500 中市盈率 < 15 且 ROE > 20% 的股票」。"
+          }
+        }
+      }
+    },
+    "Two-column": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两栏"
+          }
+        }
+      }
+    },
+    "Two-column layout shows two category panels side by side, each switchable independently. The time interval controls each chart's visible window.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两栏布局并排显示两个分类面板，各自独立切换。时间区间控制每个图表的可视窗口长度。"
+          }
+        }
+      }
+    },
+    "US": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "美股"
+          }
+        }
+      }
+    },
+    "USER": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户"
+          }
+        }
+      }
+    },
+    "Unemployment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失业率"
+          }
+        }
+      }
+    },
+    "Unemployment (%)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失业率(%)"
+          }
+        }
+      }
+    },
+    "Unpin browser panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消固定浏览器面板"
+          }
+        }
+      }
+    },
+    "Unrealized P&L": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浮动盈亏"
+          }
+        }
+      }
+    },
+    "Upcoming Earnings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即将公布财报"
+          }
+        }
+      }
+    },
+    "Utilities": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公用事业"
+          }
+        }
+      }
+    },
+    "Venue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上报场所"
+          }
+        }
+      }
+    },
+    "Watchlist": {
+      "comment": "Settings → Display → watchlist section",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自选"
+          }
+        }
+      }
+    },
+    "We'll snap to the most recent 1-hour bar whose open–close body covers this price.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将匹配到最近一根开盘—收盘价区间覆盖该价格的 1 小时 K 线。"
+          }
+        }
+      }
+    },
+    "What each analyst found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各分析师的结论"
+          }
+        }
+      }
+    },
+    "What's the macro setup for tech?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "科技板块的宏观环境如何？"
+          }
+        }
+      }
+    },
+    "Wick Server (managed)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wick Server（托管）"
+          }
+        }
+      }
+    },
+    "Wick doesn't need to be running. The helper spawns on demand.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wick 无需保持运行。辅助进程会按需启动。"
+          }
+        }
+      }
+    },
+    "Wick talks directly to the provider with your own key. Nothing touches our servers.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wick 使用你自己的 Key 直接与服务商通信。不经过我们的服务器。"
+          }
+        }
+      }
+    },
+    "Wicker is browsing…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wicker 正在浏览…"
+          }
+        }
+      }
+    },
+    "Workflow": {
+      "comment": "Settings tab — Wicker workflow knobs",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作流"
+          }
+        }
+      }
+    },
+    "X (Twitter) discussion uses the same BYO (bring-your-own account) approach. Enable the embedded browser under Settings → Workflow, then sign in to X to view discussion for this ticker.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X (Twitter) 讨论沿用同样的 BYO（自带账号）方式。请在「设置 → 工作流」中开启内嵌浏览器后，登录 X 即可查看该标的讨论。"
+          }
+        }
+      }
+    },
+    "X returned no recent discussion for this ticker. Try refreshing later.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X 未返回该标的的最新讨论。可稍后再刷新。"
+          }
+        }
+      }
+    },
+    "X user": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X 用户"
+          }
+        }
+      }
+    },
+    "YESTERDAY": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昨天"
+          }
+        }
+      }
+    },
+    "YOU": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你"
+          }
+        }
+      }
+    },
+    "Yesterday": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昨天"
+          }
+        }
+      }
+    },
+    "You: ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你："
+          }
+        }
+      }
+    },
+    "Your skill folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的技能目录"
+          }
+        }
+      }
+    },
+    "[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · 历史价格、基本面、公司概况。留空 = Wick 回退到 Yahoo，仅提供 K 线数据。"
+          }
+        }
+      }
+    },
+    "[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \\\"no data\\\".": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[finnhub.io](https://finnhub.io/dashboard) · 公司头条、情绪。留空 = 新闻/情绪分析师将报告「无数据」。"
+          }
+        }
+      }
+    },
+    "[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · Fed funds, 10y, 10y-2y spread, unemployment, CPI YoY. Free; commercial-OK with attribution. Empty = no macro context in reports.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) · 联邦基金利率、10年期、10年-2年利差、失业率、CPI 同比。免费；署名后可商用。留空 = 报告中无宏观背景。"
+          }
+        }
+      }
+    },
+    "`claude` path (optional):": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`claude` 路径（可选）："
+          }
+        }
+      }
+    },
+    "`wick-mcp` ships inside Wick.app": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`wick-mcp` 已内置于 Wick.app"
+          }
+        }
+      }
+    },
+    "analyst ratings · earnings dates · institutional holdings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析师评级 · 财报日 · 机构持股"
+          }
+        }
+      }
+    },
+    "calling %@…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调用 %@…"
+          }
+        }
+      }
+    },
+    "central clearing shareholding distribution": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中央结算持股分布"
+          }
+        }
+      }
+    },
+    "company headlines, sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公司头条、情绪"
+          }
+        }
+      }
+    },
+    "complete": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
+          }
+        }
+      }
+    },
+    "complete with caveat, %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成但有提示，%@"
+          }
+        }
+      }
+    },
+    "discussion · sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讨论 · 情绪"
+          }
+        }
+      }
+    },
+    "e.g. 10": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 10"
+          }
+        }
+      }
+    },
+    "e.g. 175.50": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 175.50"
+          }
+        }
+      }
+    },
+    "e.g. AAPL": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 AAPL"
+          }
+        }
+      }
+    },
+    "failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
+          }
+        }
+      }
+    },
+    "fundamentals · valuation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本面 · 估值"
+          }
+        }
+      }
+    },
+    "in progress": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进行中"
+          }
+        }
+      }
+    },
+    "insider trades (Form 4) · XBRL financials · filings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内部人交易(Form 4) · XBRL 财务 · filings"
+          }
+        }
+      }
+    },
+    "limit-up pool · consecutive boards · sealing orders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "涨停池 · 连板 · 封单额"
+          }
+        }
+      }
+    },
+    "listing reasons · net buy · seat analysis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上榜原因 · 净买入 · 席位解读"
+          }
+        }
+      }
+    },
+    "macro: rates/CPI/payrolls/GDP": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宏观:利率/CPI/非农/GDP"
+          }
+        }
+      }
+    },
+    "matches existing %@ %@ @ %@ (%@)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配已有 %@ %@ @ %@ (%@)"
+          }
+        }
+      }
+    },
+    "net inflow by main/super-large/large/medium/small orders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主力/超大/大/中/小单净流入"
+          }
+        }
+      }
+    },
+    "news · sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新闻 · 情绪"
+          }
+        }
+      }
+    },
+    "pending": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待执行"
+          }
+        }
+      }
+    },
+    "per-stock discussion · retail sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "个股讨论 · 散户情绪"
+          }
+        }
+      }
+    },
+    "price history, fundamentals, profile": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史价格、基本面、公司概况"
+          }
+        }
+      }
+    },
+    "quotes · K-line · search": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行情 · K线 · 搜索"
+          }
+        }
+      }
+    },
+    "rates, spreads, unemployment, CPI": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利率、利差、失业率、CPI"
+          }
+        }
+      }
+    },
+    "real-time quotes · daily/weekly/monthly/minute K-line": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时报价 · 日/周/月/分钟 K线"
+          }
+        }
+      }
+    },
+    "revenue/net profit/EPS/ROE/gross margin, etc.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "营收/净利/EPS/ROE/毛利率 等"
+          }
+        }
+      }
+    },
+    "thinking…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "思考中…"
+          }
+        }
+      }
+    },
+    "vs prior": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "较上期"
+          }
+        }
+      }
+    },
+    "· %lld%% cash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %lld%% 现金"
+          }
+        }
+      }
+    },
+    "· as of %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· 截至 %@"
+          }
+        }
+      }
+    },
+    "政策面 / 资金面 — only run for A-share (.SS/.SZ) and Hong Kong (.HK) tickers. 资金面 is A-share-only; HK has no main-force fund-flow data.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "政策面 / 资金面——仅对 A 股（.SS/.SZ）和港股（.HK）标的运行。资金面仅限 A 股；港股没有主力资金流向数据。"
+          }
+        }
+      }
+    },
+    "雪球 BYO discussion (sentiment source)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雪球 BYO 讨论(情绪源)"
+          }
+        }
+      }
+    },
+    "雪球 discussion relies on the embedded WebKit (WebPage) capability, which needs macOS 26 or later.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雪球讨论依赖内嵌 WebKit（WebPage）能力，需 macOS 26 及以上。"
+          }
+        }
+      }
+    },
+    "雪球 discussion/sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雪球 讨论/情绪"
+          }
+        }
+      }
+    },
+    "雪球 returned no recent discussion for this ticker. Try refreshing later.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雪球未返回该标的的最新讨论。可稍后再刷新。"
+          }
+        }
+      }
+    },
+    "雪球 user": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雪球用户"
+          }
+        }
+      }
+    },
+    "🌐 Browsing: %@…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "🌐 浏览中：%@…"
+          }
+        }
       }
     }
-  }
+  },
+  "version": "1.0"
 }

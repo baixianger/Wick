@@ -18,13 +18,13 @@ enum DetailTab: String, CaseIterable, Identifiable, Hashable {
     /// Localized tab label — `rawValue` stays fixed for `id`/persistence/gating.
     var label: String {
         switch self {
-        case .overview:      return L("Overview", "概览")
-        case .chart:         return L("Chart", "图表")
-        case .news:          return L("News", "新闻")
-        case .social:        return L("Social", "社交")
-        case .capital:       return L("Capital", "资金")
-        case .shortInterest: return L("Short", "空头")
-        case .ai:            return L("AI", "AI")
+        case .overview:      return String(localized: "Overview", locale: LocaleHolder.current)
+        case .chart:         return String(localized: "Chart", locale: LocaleHolder.current)
+        case .news:          return String(localized: "News", locale: LocaleHolder.current)
+        case .social:        return String(localized: "Social", locale: LocaleHolder.current)
+        case .capital:       return String(localized: "Capital", locale: LocaleHolder.current)
+        case .shortInterest: return String(localized: "Short", locale: LocaleHolder.current)
+        case .ai:            return String(localized: "AI", locale: LocaleHolder.current)
         }
     }
 
@@ -242,7 +242,7 @@ struct DetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help(L("Indicators", "指标"))
+                    .help("Indicators")
                     .accessibilityLabel("Indicators")
                     .accessibilityIdentifier("ChartIndicatorsButton")
                 }
@@ -319,23 +319,23 @@ struct DetailView: View {
         switch store.source(for: ticker.symbol, interval: active) {
         case .live(let t):
             let secs = max(0, Int(Date().timeIntervalSince(t)))
-            let label = secs < 60 ? L("Live · just now", "实时 · 刚刚") : L("Live · \(secs / 60)m ago", "实时 · \(secs / 60) 分钟前")
+            let label = secs < 60 ? String(localized: "Live · just now", locale: LocaleHolder.current) : String(localized: "Live · \(secs / 60)m ago", locale: LocaleHolder.current)
             badgePill(dot: .green, label: label, accent: .green)
         case .error:
-            badgePill(dot: .orange, label: L("Demo · network unavailable", "演示 · 网络不可用"),
+            badgePill(dot: .orange, label: String(localized: "Demo · network unavailable", locale: LocaleHolder.current),
                        accent: .orange)
         case .retrying(let attempt):
             // Transient throttle / blip — backing off and retrying. Amber so
             // it reads as "working on it", not a hard failure.
-            badgePill(dot: .yellow, label: L("Source unavailable · retrying (\(attempt))", "源暂不可用 · 重试中 (\(attempt))"),
+            badgePill(dot: .yellow, label: String(localized: "Source unavailable · retrying (\(attempt))", locale: LocaleHolder.current),
                        accent: .yellow)
         case .unavailable:
             // Backoff spent. Honest "temporarily down" — the synthetic series
             // is what's on screen; revisiting the symbol re-arms a fetch.
-            badgePill(dot: .red, label: L("Source unavailable · showing demo data", "源暂不可用 · 显示演示数据"),
+            badgePill(dot: .red, label: String(localized: "Source unavailable · showing demo data", locale: LocaleHolder.current),
                        accent: .red)
         case .demo:
-            badgePill(dot: .secondary, label: L("Loading…  (Demo)", "加载中…（演示）"),
+            badgePill(dot: .secondary, label: String(localized: "Loading…  (Demo)", locale: LocaleHolder.current),
                        accent: .secondary)
         }
     }

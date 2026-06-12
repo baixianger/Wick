@@ -39,8 +39,7 @@ struct CapitalView: View {
             } else if isHongKong {
                 // HK: 财务 only (no fund-flow / dragon-tiger on EastMoney).
                 financialsCard
-                Text(L("Fund flow / dragon-tiger are not available for HK tickers.",
-                       "港股无资金流 / 龙虎榜数据。"))
+                Text("Fund flow / dragon-tiger are not available for HK tickers.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             } else {
@@ -58,7 +57,7 @@ struct CapitalView: View {
     private var loadingState: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text(L("Loading capital data…", "正在加载资金数据…"))
+            Text("Loading capital data…")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -70,7 +69,7 @@ struct CapitalView: View {
 
     @ViewBuilder
     private var fundFlowCard: some View {
-        card(header: L("Fund Flow · Smart Money", "资金流 · 主力动向"), icon: "arrow.left.arrow.right") {
+        card(header: "Fund Flow · Smart Money", icon: "arrow.left.arrow.right") {
             let days = model.fundFlow
             if let latest = days.last {
                 let mainYi = latest.main
@@ -78,7 +77,7 @@ struct CapitalView: View {
                 // Headline: 主力净流入 (亿) + 主力净占比 %.
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L("Main net inflow", "主力净流入"))
+                        Text("Main net inflow")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                         Text(Self.signedYi(mainYi))
@@ -87,7 +86,7 @@ struct CapitalView: View {
                     }
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(L("Main net %", "主力净占比"))
+                        Text("Main net %")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                         Text(String(format: "%+.2f%%", latest.mainPct))
@@ -96,7 +95,7 @@ struct CapitalView: View {
                     }
                     if !latest.date.isEmpty {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(L("As of", "截至")).font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("As of").font(.system(size: 11)).foregroundStyle(.secondary)
                             Text(latest.date)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
@@ -115,10 +114,10 @@ struct CapitalView: View {
                 // Order-size split (亿).
                 let g = [GridItem(.flexible()), GridItem(.flexible())]
                 LazyVGrid(columns: g, alignment: .leading, spacing: 8) {
-                    splitMetric(L("Extra-large", "超大单"), latest.superBig)
-                    splitMetric(L("Large", "大单"), latest.big)
-                    splitMetric(L("Medium", "中单"), latest.medium)
-                    splitMetric(L("Small", "小单"), latest.small)
+                    splitMetric("Extra-large", latest.superBig)
+                    splitMetric("Large", latest.big)
+                    splitMetric("Medium", latest.medium)
+                    splitMetric("Small", latest.small)
                 }
             } else {
                 emptyInline
@@ -153,7 +152,7 @@ struct CapitalView: View {
         }
     }
 
-    private func splitMetric(_ label: String, _ valueYuan: Double) -> some View {
+    private func splitMetric(_ label: LocalizedStringKey, _ valueYuan: Double) -> some View {
         HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 12))
@@ -169,7 +168,7 @@ struct CapitalView: View {
 
     @ViewBuilder
     private var financialsCard: some View {
-        card(header: L("Financials", "财务"), icon: "doc.text.magnifyingglass") {
+        card(header: "Financials", icon: "doc.text.magnifyingglass") {
             let reports = model.financials
             if let latest = reports.first {
                 if let name = latest.reportName ?? latest.reportDate {
@@ -179,14 +178,14 @@ struct CapitalView: View {
                 }
                 let g = [GridItem(.flexible()), GridItem(.flexible())]
                 LazyVGrid(columns: g, alignment: .leading, spacing: 10) {
-                    metric(L("Revenue", "营收"), Self.yiOrDash(latest.revenue), sub: Self.yoy(latest.revenueYoY))
-                    metric(L("Net profit", "归母净利"), Self.yiOrDash(latest.netProfit), sub: Self.yoy(latest.netProfitYoY))
-                    metric("EPS", Self.numOrDash(latest.eps, suffix: L(" CNY", "元")))
+                    metric("Revenue", Self.yiOrDash(latest.revenue), sub: Self.yoy(latest.revenueYoY))
+                    metric("Net profit", Self.yiOrDash(latest.netProfit), sub: Self.yoy(latest.netProfitYoY))
+                    metric("EPS", Self.numOrDash(latest.eps, suffix: String(localized: " CNY", locale: LocaleHolder.current)))
                     metric("ROE", Self.pctOrDash(latest.roe))
-                    metric(L("Gross margin", "毛利率"), Self.pctOrDash(latest.grossMargin))
-                    metric(L("Net margin", "净利率"), Self.pctOrDash(latest.netMargin))
-                    metric(L("Debt ratio", "资产负债率"), Self.pctOrDash(latest.debtRatio))
-                    metric(L("BPS", "每股净资产"), Self.numOrDash(latest.bps, suffix: L(" CNY", "元")))
+                    metric("Gross margin", Self.pctOrDash(latest.grossMargin))
+                    metric("Net margin", Self.pctOrDash(latest.netMargin))
+                    metric("Debt ratio", Self.pctOrDash(latest.debtRatio))
+                    metric("BPS", Self.numOrDash(latest.bps, suffix: String(localized: " CNY", locale: LocaleHolder.current)))
                 }
 
                 // Revenue sparkline across returned periods (oldest → newest).
@@ -194,7 +193,7 @@ struct CapitalView: View {
                 if revs.count > 2 {
                     Divider().opacity(0.4).padding(.vertical, 2)
                     HStack(spacing: 8) {
-                        Text(L("Revenue trend", "营收趋势"))
+                        Text("Revenue trend")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                         sparkline(revs)
@@ -207,7 +206,7 @@ struct CapitalView: View {
         }
     }
 
-    private func metric(_ label: String, _ value: String, sub: String? = nil) -> some View {
+    private func metric(_ label: LocalizedStringKey, _ value: String, sub: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.system(size: 11))
@@ -249,10 +248,10 @@ struct CapitalView: View {
 
     @ViewBuilder
     private var dragonTigerCard: some View {
-        card(header: L("Dragon-Tiger Board", "龙虎榜"), icon: "list.star") {
+        card(header: "Dragon-Tiger Board", icon: "list.star") {
             let entries = model.dragonTiger
             if entries.isEmpty {
-                Text(L("No recent dragon-tiger listings", "近期无龙虎榜上榜"))
+                Text("No recent dragon-tiger listings")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -280,7 +279,7 @@ struct CapitalView: View {
                 }
                 Spacer(minLength: 0)
                 if let net = e.netAmount {
-                    Text(L("Net buy ", "净买入 ") + Self.signedYi(net))
+                    Text(String(localized: "Net buy ", locale: LocaleHolder.current) + Self.signedYi(net))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(net >= 0 ? .green : .red)
                 }
@@ -309,7 +308,7 @@ struct CapitalView: View {
 
     @ViewBuilder
     private func card<Content: View>(
-        header: String,
+        header: LocalizedStringKey,
         icon: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -331,7 +330,7 @@ struct CapitalView: View {
 
     /// Per-card "no data" inline state (EastMoney is best-effort).
     private var emptyInline: some View {
-        Text(L("No data", "暂无数据"))
+        Text("No data")
             .font(.system(size: 13))
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)

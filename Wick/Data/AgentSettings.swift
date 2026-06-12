@@ -326,10 +326,10 @@ final class AgentSettings {
         }
     }
 
-    /// Phase-1 i18n: the user's UI-language choice. `.system` follows the OS
-    /// preferred language; `.zh` / `.en` force a language. The host
-    /// (`WickApp`) maps this through `resolvedChinese` into the global
-    /// `appUILanguageIsChinese` flag + rebuilds the tree on change.
+    /// The user's UI-language choice. `.system` follows the OS preferred
+    /// language; `.zh` / `.en` force a language. The host (`WickApp`) maps this
+    /// through `resolvedLocale` onto the SwiftUI environment locale (driving the
+    /// String Catalog) + rebuilds the tree on change.
     var appLanguage: AppLanguage {
         didSet { UserDefaults.standard.set(appLanguage.rawValue, forKey: "ui.appLanguage") }
     }
@@ -343,6 +343,12 @@ final class AgentSettings {
         case .en:     return false
         }
     }
+
+    /// The SwiftUI environment locale for the chosen language. `.system` returns
+    /// `autoupdatingCurrent` (don't override the OS preference); `.zh` / `.en`
+    /// pin `zh-Hans` / `en`. Drives native String Catalog localization on the
+    /// roots, and feeds `LocaleHolder.current` for imperative `String(localized:)`.
+    var resolvedLocale: Locale { appLanguage.locale }
 
     // MARK: - Derived config
 
