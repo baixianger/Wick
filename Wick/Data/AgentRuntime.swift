@@ -175,8 +175,13 @@ final class AgentRuntime {
                         price: req.price,
                         currency: req.currency,
                         source: .manual))
+                    // The store canonicalises the symbol on the way in (e.g.
+                    // `BE:XNYS` → `BE`); report the CANONICAL form so the agent's
+                    // confirmation matches what was actually stored + charted.
+                    let stored = HoldingsStore.canonicalSymbol(req.symbol)
+                    let note = stored == req.symbol ? "" : " (from \(req.symbol))"
                     let verb = req.side == .buy ? "Bought" : "Sold"
-                    return "✅ \(verb) \(Self.trimNumber(req.quantity)) \(req.symbol) @ "
+                    return "✅ \(verb) \(Self.trimNumber(req.quantity)) \(stored)\(note) @ "
                         + "\(Self.trimNumber(req.price)) \(req.currency) "
                         + "(\(Self.dayString(req.date))). Added to portfolio."
                 }

@@ -64,6 +64,12 @@ struct Holding: Identifiable, Hashable, Codable {
     /// Provenance. Defaults to `.manual` so rows written before this
     /// field existed decode without losing data.
     var source: HoldingSource
+    /// The symbol exactly as it was entered / imported / agent-recorded, BEFORE
+    /// `HoldingsStore` canonicalised `symbol` into the app's Yahoo/EastMoney
+    /// namespace (e.g. raw `BE:XNYS` while `symbol` becomes `BE`). Audit only —
+    /// nil when the input was already canonical. Lets a re-import / debug trace
+    /// back to the broker's original string without losing it.
+    var originalSymbol: String?
 
     init(id: UUID = UUID(),
          symbol: String,
@@ -74,7 +80,8 @@ struct Holding: Identifiable, Hashable, Codable {
          price: Double,
          currency: String,
          externalId: String? = nil,
-         source: HoldingSource = .manual) {
+         source: HoldingSource = .manual,
+         originalSymbol: String? = nil) {
         self.id = id
         self.symbol = symbol
         self.name = name
@@ -85,11 +92,12 @@ struct Holding: Identifiable, Hashable, Codable {
         self.currency = currency
         self.externalId = externalId
         self.source = source
+        self.originalSymbol = originalSymbol
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, symbol, name, side, date, quantity, price, currency
-        case externalId, source
+        case externalId, source, originalSymbol
     }
 
     init(from decoder: Decoder) throws {
@@ -104,6 +112,7 @@ struct Holding: Identifiable, Hashable, Codable {
         self.currency = try c.decode(String.self, forKey: .currency)
         self.externalId = try c.decodeIfPresent(String.self, forKey: .externalId)
         self.source = try c.decodeIfPresent(HoldingSource.self, forKey: .source) ?? .manual
+        self.originalSymbol = try c.decodeIfPresent(String.self, forKey: .originalSymbol)
     }
 
     var signedQuantity: Double { side.sign * quantity }
@@ -138,6 +147,47 @@ final class HoldingsStore {
             self.holdings = []
         }
         migrateClearAutoSeededRowsIfNeeded()
+        migrateCanonicalizeSymbolsIfNeeded()
+    }
+
+    /// Canonical symbol for the app's data namespace: fold any broker `:MIC`
+    /// form (`BE:XNYS` → `BE`, `00100:XHKG` → `00100.HK`) via `BrokerSymbol`,
+    /// then normalise CN/HK codes via `CNSymbol` (`00100.HK` → `0100.HK`). This
+    /// is the join key shared with the watchlist/Ticker universe, so a held
+    /// symbol lines up with charts / quotes / Social / its watchlist row instead
+    /// of becoming a dataless ghost. Returns the input unchanged when already
+    /// canonical (idempotent).
+    static func canonicalSymbol(_ raw: String) -> String {
+        let mic = BrokerSymbol.canonical(raw)
+        return CNSymbol.parse(mic) ?? mic
+    }
+
+    /// Canonicalise a holding's `symbol` on the way into the store, preserving
+    /// the pre-canonical string in `originalSymbol` (audit) the first time.
+    private static func canonicalised(_ h: Holding) -> Holding {
+        let canon = canonicalSymbol(h.symbol)
+        guard canon != h.symbol else { return h }
+        var copy = h
+        if copy.originalSymbol == nil { copy.originalSymbol = h.symbol }
+        copy.symbol = canon
+        return copy
+    }
+
+    /// One-shot pass canonicalising every existing holding's symbol so legacy
+    /// rows (notably broker-`:MIC` imports recorded before this landed) join the
+    /// Ticker namespace and start resolving live data. Idempotent via the flag.
+    private let canonMigrationKey = "candlekit.holdings.migrate.v5-canonical-symbols"
+    private func migrateCanonicalizeSymbolsIfNeeded() {
+        let defaults = SharedStore.defaults
+        guard !defaults.bool(forKey: canonMigrationKey) else { return }
+        var changed = false
+        holdings = holdings.map { h in
+            let c = Self.canonicalised(h)
+            if c.symbol != h.symbol { changed = true }
+            return c
+        }
+        defaults.set(true, forKey: canonMigrationKey)
+        if changed { save() }
     }
 
     /// First-launch-after-upgrade pass. Drops any (symbol, day) pair that
@@ -271,12 +321,15 @@ final class HoldingsStore {
     ]
 
     func add(_ holding: Holding) {
-        holdings.append(holding)
+        // Canonicalise the symbol at the single store entry point so EVERY path
+        // (agent `portfolio.add`, manual editor, sample seed) lands in the
+        // Ticker namespace — no caller has to remember to normalise.
+        holdings.append(Self.canonicalised(holding))
     }
 
     func update(_ holding: Holding) {
         guard let idx = holdings.firstIndex(where: { $0.id == holding.id }) else { return }
-        holdings[idx] = holding
+        holdings[idx] = Self.canonicalised(holding)
     }
 
     func remove(id: UUID) {
@@ -401,7 +454,7 @@ extension HoldingsStore {
                 skipped.append(SkippedTransaction(incoming: tx, existing: existing, reason: reason))
                 continue
             }
-            let h = Holding(
+            let h = Self.canonicalised(Holding(
                 symbol: tx.symbol,
                 name: tx.name,
                 side: tx.side,
@@ -411,7 +464,7 @@ extension HoldingsStore {
                 currency: tx.currency,
                 externalId: tx.externalId,
                 source: .imported(broker: broker, document: document)
-            )
+            ))
             added.append(h)
             working.append(h)
             if let eid = h.externalId { byExternalId[eid] = h }
