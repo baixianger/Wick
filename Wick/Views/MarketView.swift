@@ -803,40 +803,87 @@ fileprivate struct MacroOverlayChart: View {
     let overlay: CandleSeries?
     let overlayColor: Color
 
+    /// FIXED window length: exactly one year. The window is fixed-width and
+    /// only pans left/right (no zoom).
+    private static let windowDays: Double = 366
+
+    /// How far the 1-year window is shifted BACK from the latest data, in days.
+    /// 0 = most recent year; dragging right increases it to reveal older data.
+    @State private var panDays: Double = 0
+    /// In-drag baseline (nil when no drag is in flight).
+    @State private var panStart: Double?
+
+    /// The visible 1-year slice given the current pan offset. Right edge =
+    /// last.time − panDays; left edge = right − 1 year.
+    private func windowed() -> [Candle] {
+        let c = primary.candles
+        guard let last = c.last else { return [] }
+        let right = last.time.addingTimeInterval(-panDays * 86_400)
+        let left = right.addingTimeInterval(-Self.windowDays * 86_400)
+        return c.filter { $0.time >= left && $0.time <= right }
+    }
+
+    /// Maximum look-back (days) so panning can't scroll past the data's start.
+    private var maxBackDays: Double {
+        let c = primary.candles
+        guard let first = c.first, let last = c.last else { return 0 }
+        return max(0, last.time.timeIntervalSince(first.time) / 86_400 - Self.windowDays)
+    }
+
     var body: some View {
-        VStack(spacing: 4) {
-            Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
-                let bars = Array(primary.candles.suffix(60))
-                guard !bars.isEmpty, size.width > 0, size.height > 0 else { return }
-                let times = bars.map(\.time)
+        GeometryReader { geo in
+            VStack(spacing: 4) {
+                Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+                    let bars = windowed()
+                    guard !bars.isEmpty, size.width > 0, size.height > 0 else { return }
+                    let times = bars.map(\.time)
 
-                // ── Primary ──
-                let pv = bars.map(\.close)
-                if primaryIsBar {
-                    drawBars(pv, in: &ctx, size: size, color: primaryTint)
-                } else {
-                    drawLine(pv.map { Optional($0) }, in: &ctx, size: size,
-                             color: primaryTint, width: 1.6, fill: true)
-                }
+                    // ── Primary ──
+                    let pv = bars.map(\.close)
+                    if primaryIsBar {
+                        drawBars(pv, in: &ctx, size: size, color: primaryTint)
+                    } else {
+                        drawLine(pv.map { Optional($0) }, in: &ctx, size: size,
+                                 color: primaryTint, width: 1.6, fill: true)
+                    }
 
-                // ── Overlay (independent scale, date-aligned) ──
-                if let overlay {
-                    let aligned = Self.align(Array(overlay.candles), to: times)
-                    drawLine(aligned, in: &ctx, size: size,
-                             color: overlayColor, width: 1.4, fill: false)
+                    // ── Overlay (independent scale, date-aligned) ──
+                    if let overlay {
+                        let aligned = Self.align(Array(overlay.candles), to: times)
+                        drawLine(aligned, in: &ctx, size: size,
+                                 color: overlayColor, width: 1.4, fill: false)
+                    }
                 }
+                timeAxis
             }
-            timeAxis
+            .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            // Horizontal-only pan of the fixed 1-year window. `simultaneousGesture`
+            // + the horizontal-dominance guard keep the vertical list scroll
+            // working; only sideways drags move the window.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { v in
+                        guard abs(v.translation.width) > abs(v.translation.height),
+                              maxBackDays > 0 else { return }
+                        let start = panStart ?? panDays
+                        if panStart == nil { panStart = start }
+                        let daysPerPt = Self.windowDays / Double(max(geo.size.width, 1))
+                        // Drag RIGHT → reveal OLDER data → look-back grows.
+                        let proposed = start + Double(v.translation.width) * daysPerPt
+                        panDays = min(max(proposed, 0), maxBackDays)
+                    }
+                    .onEnded { _ in panStart = nil }
+            )
         }
-        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    /// Evenly-spaced date labels under the chart. Bars are drawn at even index
-    /// positions, so four labels distributed leading→trailing line up with the
-    /// data. Year-only format for spans over ~2y, else `yyyy/M`.
+    /// Evenly-spaced date labels under the chart, reflecting the current window.
+    /// Bars are drawn at even index positions, so four labels distributed
+    /// leading→trailing line up with the data.
     private var timeAxis: some View {
-        let bars = Array(primary.candles.suffix(60))
+        let bars = windowed()
         let labels: [String] = {
             guard bars.count >= 2 else { return [] }
             let f = DateFormatter()
