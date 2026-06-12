@@ -20,7 +20,11 @@ enum YahooSymbol {
     /// form Yahoo's chart endpoint expects. Only substitutes `.`
     /// when the trailing token is *not* one of Yahoo's documented
     /// exchange suffixes.
-    static func map(_ id: String) -> String {
+    static func map(_ rawID: String) -> String {
+        // First fold any broker `SYMBOL:MIC` form (e.g. `BE:XNYS`,
+        // `NOVO-B:XCSE`) into canonical Yahoo/CN form, so imported / agent-
+        // recorded holdings resolve instead of 404-ing to a flat row.
+        let id = BrokerSymbol.canonical(rawID)
         if let dotIdx = id.lastIndex(of: ".") {
             let suffix = String(id[id.index(after: dotIdx)...]).uppercased()
             if exchangeSuffixes.contains(suffix) { return id }

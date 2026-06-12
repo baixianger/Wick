@@ -88,11 +88,16 @@ final class LiveDataStore {
         // slot just before it re-enters here, so the next attempt isn't blocked.)
         guard retryTasks[key] == nil else { return }
 
+        // Fold broker `SYMBOL:MIC` forms (e.g. `00100:XHKG`) to canonical first,
+        // so an imported HK / A-share holding routes to EastMoney instead of
+        // failing `CNSymbol.parse` and falling through to a flat Yahoo miss.
+        let resolved = BrokerSymbol.canonical(key.symbol)
+
         // Chinese A-share / HK tickers (`.SS` / `.SZ` / `.HK`, or any form
         // `CNSymbol.parse` recognizes) go to EastMoney — the same source the
         // analysts use — so the chart and the agent never disagree on price.
         // Everything else stays on Yahoo via CandleKit below.
-        if let canonical = CNSymbol.parse(key.symbol) {
+        if let canonical = CNSymbol.parse(resolved) {
             guard EastMoneyChartAdapter.supports(key.interval) else {
                 // e.g. 4h — no EastMoney equivalent. Mark demo so the UI
                 // stops retrying, matching the Yahoo unsupported-interval path.
