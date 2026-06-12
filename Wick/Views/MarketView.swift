@@ -101,14 +101,18 @@ struct MarketView: View {
     private var tabContent: some View {
         let specs = assetClass.specs()
         VStack(alignment: .leading, spacing: 22) {
-            cardsGrid(specs)
-            // Chart drilldown — skip for Macro since FRED returns
-            // daily-or-coarser series that don't render as K-lines.
-            // The Macro cards' sparklines already carry the trend.
-            if assetClass != .macro,
-               let active = activeSpec(in: specs)
-            {
-                MarketChartPane(spec: active, indicators: indicators)
+            // Macro has no K-line drilldown (FRED series aren't candles), so
+            // instead of the horizontal card rail it gets a dashboard LIST —
+            // one indicator per row with its own inline chart (line for
+            // levels/rates, bar for monthly/quarterly flows). Every other class
+            // keeps the flick-able card rail + chart pane.
+            if assetClass == .macro {
+                macroRowList(specs)
+            } else {
+                cardsGrid(specs)
+                if let active = activeSpec(in: specs) {
+                    MarketChartPane(spec: active, indicators: indicators)
+                }
             }
             if assetClass == .us {
                 sectorSection
@@ -150,6 +154,54 @@ struct MarketView: View {
         }
         .padding(.horizontal, -22)
     }
+
+    /// Macro dashboard: a vertical list, grouped by theme, one indicator per
+    /// row with its own inline chart. `barMacroSymbols` (Nonfarm Payrolls,
+    /// quarterly GDP) render as +/- bars off a zero baseline — they're discrete
+    /// period flows where the sign and per-period size are the story; the rest
+    /// are levels/rates and render as lines.
+    private func macroRowList(_ specs: [IndexSpec]) -> some View {
+        let bySymbol = Dictionary(specs.map { ($0.symbol, $0) },
+                                  uniquingKeysWith: { a, _ in a })
+        return VStack(alignment: .leading, spacing: 18) {
+            ForEach(Self.macroGroups, id: \.title) { group in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(group.title.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 6)
+                    VStack(spacing: 0) {
+                        ForEach(group.symbols, id: \.self) { sym in
+                            if let spec = bySymbol[sym] {
+                                MacroRow(spec: spec,
+                                         series: seriesFor(spec),
+                                         isBar: Self.barMacroSymbols.contains(sym))
+                                if sym != group.symbols.last {
+                                    Divider().opacity(0.4)
+                                }
+                            }
+                        }
+                    }
+                    .liquidGlass(cornerRadius: 12)
+                }
+            }
+        }
+    }
+
+    /// Macro indicators grouped by theme, in display order. Symbols resolve
+    /// against `macroIndicators`; a symbol missing from the spec list is simply
+    /// skipped.
+    static let macroGroups: [(title: String, symbols: [String])] = [
+        ("Rates & Curve",      ["DGS10", "DGS2", "FEDFUNDS", "T10Y2Y"]),
+        ("Inflation (YoY)",    ["CPIAUCSL", "CPILFESL", "PCEPILFE"]),
+        ("Labor",              ["UNRATE", "PAYEMS", "ICSA"]),
+        ("Growth & Activity",  ["A191RL1Q225SBEA", "RSAFS"]),
+    ]
+
+    /// Macro series that render as bars (discrete period flows, sign matters):
+    /// monthly Nonfarm-Payroll adds + quarterly Real-GDP growth.
+    static let barMacroSymbols: Set<String> = ["PAYEMS", "A191RL1Q225SBEA"]
 
     /// Pick the right cache per asset class — FRED for macro series
     /// IDs, Yahoo via `LiveDataStore` for everything else. CPI uses
@@ -583,6 +635,104 @@ fileprivate struct IndexCardView: View {
         }
         if abs(v) < 1 { return String(format: "%.4f", v) }
         return String(format: "%.2f", v)
+    }
+}
+
+// MARK: - Macro dashboard row
+
+/// One macro indicator as a list row: name + FRED id + latest value + change on
+/// the left, an inline chart on the right (line for levels/rates, +/- bars for
+/// flows). No drilldown — the row IS the data.
+fileprivate struct MacroRow: View {
+    let spec: IndexSpec
+    let series: CandleSeries
+    let isBar: Bool
+
+    var body: some View {
+        let snap = IndexSnapshot(series: series)
+        let tint: Color = snap.isUp ? .green : .red
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(spec.shortName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(Self.format(snap.last))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                    Text(snap.changeString)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(tint)
+                }
+            }
+            Spacer(minLength: 10)
+            Group {
+                if isBar {
+                    MacroBarSparkline(values: snap.closes)
+                } else {
+                    SparklineView(closes: snap.closes,
+                                  baseline: snap.closes.first ?? snap.last,
+                                  style: .line,
+                                  tint: tint,
+                                  lineWidth: 1.5)
+                }
+            }
+            .frame(width: 132, height: 38)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
+    }
+
+    /// Compact value: thousands grouped, sub-1 to 2 dp, else 2 dp; a leading
+    /// `+` for positive flow prints reads naturally next to a bar chart.
+    static func format(_ v: Double) -> String {
+        if abs(v) >= 1000 {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal; f.maximumFractionDigits = 0
+            return f.string(from: NSNumber(value: v)) ?? String(format: "%.0f", v)
+        }
+        if abs(v) < 1 { return String(format: "%.2f", v) }
+        return String(format: "%.1f", v)
+    }
+}
+
+/// Inline +/- bar chart off a zero baseline (positive green, negative red).
+/// For discrete period flows (Nonfarm Payrolls, GDP) where each bar is one
+/// month/quarter's print and the sign is meaningful.
+fileprivate struct MacroBarSparkline: View {
+    let values: [Double]
+
+    var body: some View {
+        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+            // Cap to the most recent ~26 prints so bars stay legible.
+            let vals = Array(values.suffix(26))
+            guard !vals.isEmpty, size.width > 0, size.height > 0 else { return }
+            let lo = min(0, vals.min() ?? 0)
+            let hi = max(0, vals.max() ?? 0)
+            let range = max(hi - lo, 0.0001)
+            func y(_ v: Double) -> CGFloat {
+                size.height - CGFloat((v - lo) / range) * size.height
+            }
+            let zeroY = y(0)
+            let gap: CGFloat = 1.5
+            let n = vals.count
+            let barW = max(1, (size.width - gap * CGFloat(n - 1)) / CGFloat(n))
+            for (i, v) in vals.enumerated() {
+                let x = CGFloat(i) * (barW + gap)
+                let top = min(zeroY, y(v))
+                let h = max(0.5, abs(zeroY - y(v)))
+                let rect = CGRect(x: x, y: top, width: barW, height: h)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: min(1.5, barW / 2)),
+                         with: .color(v >= 0 ? .green : .red))
+            }
+            // Zero baseline.
+            var zero = Path()
+            zero.move(to: CGPoint(x: 0, y: zeroY))
+            zero.addLine(to: CGPoint(x: size.width, y: zeroY))
+            ctx.stroke(zero, with: .color(.secondary.opacity(0.35)), lineWidth: 0.5)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
