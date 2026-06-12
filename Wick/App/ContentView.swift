@@ -34,6 +34,10 @@ struct ContentView: View {
     @State private var searchResults: [YahooSearchResult] = []
     /// One process-wide search adapter — Actor, so no `@State` ceremony.
     private let searchAdapter = YahooSearchAdapter()
+    /// Validate-on-failure resolver: when a held symbol's live fetch fails, it
+    /// searches the real provider for the authoritative ticker and rewrites the
+    /// holding (covers broker formats the mechanical MIC table can't map).
+    @State private var holdingResolver = HoldingSymbolResolver()
     @Environment(LiveDataStore.self) private var store
     /// Shared agent runtime (created in `WickApp`). Read here so the
     /// window-scoped `HoldingsStore` can be wired into Wicker's
@@ -174,6 +178,14 @@ struct ContentView: View {
             // Wire Wicker's portfolio.* tools over this window's live
             // HoldingsStore so the agent can read/write 持仓 (idempotent).
             agentRuntime.attachPortfolio(holdings)
+            // Validate-on-failure: any held symbol whose fetch fails gets
+            // resolved against the real provider search + rewritten.
+            holdingResolver.reconcile(holdings: holdings, store: store)
+        }
+        .onChange(of: holdings.holdings) { _, _ in
+            // A newly-added holding (e.g. agent portfolio.add) gets the same
+            // resolve-on-failure treatment; already-attempted symbols are skipped.
+            holdingResolver.reconcile(holdings: holdings, store: store)
         }
     }
 

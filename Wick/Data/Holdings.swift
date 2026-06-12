@@ -332,6 +332,25 @@ final class HoldingsStore {
         holdings[idx] = Self.canonicalised(holding)
     }
 
+    /// Rewrite every transaction on `oldSymbol` to `newSymbol`, preserving the
+    /// pre-rename string in `originalSymbol` (audit). Used by the
+    /// `HoldingSymbolResolver` "validate-on-failure" pass when the mechanical
+    /// canonical symbol didn't resolve and a provider search found the real one.
+    func rename(from oldSymbol: String, to newSymbol: String) {
+        let canon = Self.canonicalSymbol(newSymbol)
+        guard oldSymbol != canon else { return }
+        var changed = false
+        holdings = holdings.map { h in
+            guard h.symbol == oldSymbol else { return h }
+            changed = true
+            var c = h
+            if c.originalSymbol == nil { c.originalSymbol = oldSymbol }
+            c.symbol = canon
+            return c
+        }
+        if changed { save() }
+    }
+
     func remove(id: UUID) {
         holdings.removeAll { $0.id == id }
     }
