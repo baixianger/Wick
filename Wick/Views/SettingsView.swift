@@ -537,8 +537,8 @@ private struct DataSourcesTab: View {
         .init(symbol: "building.columns",                 name: "FRED",                 provides: "宏观:利率/CPI/非农/GDP",          access: .freeKey, status: .active),
         .init(symbol: "building.columns",                 name: "FINRA",                provides: "空头 / Short Interest",          access: .free,    status: .active),
         .init(symbol: "bubble.left.and.bubble.right",     name: "X (Twitter)",          provides: "讨论 · 情绪",                    access: .byo,     status: .active),
-        .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: "内部人交易(Form 4) · XBRL 财务 · filings", access: .free, status: .planned),
-        .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: "分析师评级 · 财报日 · 机构持股",   access: .free,    status: .planned),
+        .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: "内部人交易(Form 4) · XBRL 财务 · filings", access: .free, status: .active),
+        .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: "分析师评级 · 财报日 · 机构持股",   access: .free,    status: .active),
     ]
 
     private var sources: [DataSourceEntry] {

@@ -77,7 +77,15 @@ final class AgentRuntime {
             // Always-on free FINRA US 空头持仓 (short interest) — `us.short_interest`.
             // No key; the agent calls it when a US ticker is in play. Returns
             // a "仅美股" message for CN / HK / intl symbols.
-            + ShortInterestTools.all())
+            + ShortInterestTools.all()
+            // Always-on free SEC EDGAR US tools (official, no-key, descriptive-UA):
+            // `us.insider` (Form 4 内部人交易) + `us.financials` (XBRL 财务).
+            // US-only; "未找到 SEC 备案" for CN / HK / intl symbols.
+            + USEdgarTools.all()
+            // Always-on free Yahoo quoteSummary analyst tool — `us.analyst`
+            // (评级分布 / 目标价 / 推荐 / 下次财报日). Cookie+crumb flow; reports
+            // 暂不可用 when Yahoo throttles or changes the flow.
+            + USAnalystTools.all())
             await skills.reload()
         }
     }
