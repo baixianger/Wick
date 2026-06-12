@@ -99,6 +99,23 @@ public enum CNSymbol {
         return "\(hkSecidCode(code)).HK"
     }
 
+    /// Canonical → EastMoney datacenter `SECUCODE` filter (`CODE.SH` / `CODE.SZ`
+    /// / `CODE.HK`). The `datacenter-web` F10 tables key on this dotted-suffix
+    /// form — note `SH`/`SZ` (NOT Yahoo's `SS`) and the 5-digit HK code. Used by
+    /// the F10 financial-indicator table (`RPT_F10_FINANCE_MAINFINADATA`), which
+    /// filters on `(SECUCODE="600519.SH")`. Returns `nil` for non-CN inputs.
+    public static func eastMoneyF10Secucode(_ input: String) -> String? {
+        let canonical = market(input) != nil ? input : (parse(input) ?? input)
+        guard let market = market(canonical) else { return nil }
+        let code = canonical.split(separator: ".").first.map(String.init) ?? ""
+        guard !code.isEmpty else { return nil }
+        switch market {
+        case .shanghai: return "\(code).SH"
+        case .shenzhen: return "\(code).SZ"
+        case .hongKong: return "\(hkSecidCode(code)).HK"
+        }
+    }
+
     /// Any CN/HK symbol form → 雪球 (Xueqiu) symbol form, the prefix/path shape
     /// 雪球's web API + stock pages use:
     ///   • Shanghai `600519.SS` → `SH600519`

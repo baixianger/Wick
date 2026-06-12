@@ -68,7 +68,12 @@ final class AgentRuntime {
                 SocialSentimentTool(
                     providers: [StubSocialSentimentProvider()],
                     interactive: true),
-            ])
+            ]
+            // Always-on free EastMoney CN extras (资金流 / F10财务 / 龙虎榜 /
+            // 涨停板) — a free replacement for tushare's points-gated data. No
+            // key; the agent calls them when a CN ticker is in play. One shared
+            // fetcher across the four tools.
+            + EastMoneyExtrasTools.all())
             await skills.reload()
         }
     }
