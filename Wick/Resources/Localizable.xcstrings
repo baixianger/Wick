@@ -453,12 +453,32 @@
         }
       }
     },
+    "Ask Wicker": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向旺财提问"
+          }
+        }
+      }
+    },
+    "Ask Wicker (⌘⏎)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向旺财提问 (⌘⏎)"
+          }
+        }
+      }
+    },
     "Ask Wicker about %@…": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 Wicker 询问 %@…"
+            "value": "向旺财询问 %@…"
           }
         }
       }
@@ -468,7 +488,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让 Wicker 「对 %@ 做一次完整分析」——多智能体团队（基本面 / 技术面 / 情绪面 / 新闻面 → 多空辩论 → 交易 → 风控）就会启动。完成的报告会归档在此，便于对比。"
+            "value": "让旺财「对 %@ 做一次完整分析」——多智能体团队（基本面 / 技术面 / 情绪面 / 新闻面 → 多空辩论 → 交易 → 风控）就会启动。完成的报告会归档在此，便于对比。"
           }
         }
       }
@@ -478,7 +498,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 Wicker 提问…"
+            "value": "向旺财提问…"
           }
         }
       }
@@ -1257,7 +1277,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "通过调用本机安装的 `claude` CLI 驱动 Wicker 工作流。使用 `claude login` 登录的订阅——此处无需 API Key。每次跑桌面分析比直接 API 调用慢约 10-20 秒，并计入你的 Pro/Max 额度；不建议高频使用。"
+            "value": "通过调用本机安装的 `claude` CLI 驱动旺财工作流。使用 `claude login` 登录的订阅——此处无需 API Key。每次跑桌面分析比直接 API 调用慢约 10-20 秒，并计入你的 Pro/Max 额度；不建议高频使用。"
           }
         }
       }
@@ -1387,7 +1407,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "启用 Wicker 浏览器工具"
+            "value": "启用旺财浏览器工具"
           }
         }
       }
@@ -1427,7 +1447,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "通过 MCP 暴露 Wicker 浏览器/社交(只读)"
+            "value": "通过 MCP 暴露旺财浏览器/社交(只读)"
           }
         }
       }
@@ -1507,7 +1527,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wicker 浏览器面板的固定宽度(高度填满窗口)。窗口窄时会自动缩,保证聊天可用。"
+            "value": "旺财浏览器面板的固定宽度(高度填满窗口)。窗口窄时会自动缩,保证聊天可用。"
           }
         }
       }
@@ -1728,7 +1748,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "护栏开关。关闭后 Wicker 进入只读模式:仍可导航 / 读取 / 快照页面,但不会点击、输入或执行脚本(改用提示让你去开启)。默认开。仅在已启用 Wicker 浏览器时生效。"
+            "value": "护栏开关。关闭后旺财进入只读模式:仍可导航 / 读取 / 快照页面,但不会点击、输入或执行脚本(改用提示让你去开启)。默认开。仅在已启用旺财浏览器时生效。"
           }
         }
       }
@@ -2130,7 +2150,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让 Wicker 通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。"
+            "value": "让旺财通过内嵌 WebKit 导航 / 读取 / 操作网页(navigate·read·snapshot·click·type·eval·fetchJSON)。开启后,在聊天里要它浏览时会自动滑出实时浏览面板,可登录/接管。默认关,macOS 26+。"
           }
         }
       }
@@ -2140,7 +2160,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "允许第三方 MCP 客户端(Claude Code / Codex 等)通过内置 wick-mcp 驱动你已登录的浏览器与雪球/X 会话——仅只读:导航 / 读取 / 快照 / 雪球·X 讨论(不含点击 / 输入 / 执行脚本)。⚠️ 这会让外部 agent 操作你的登录会话。默认关;需先启用上方「Wicker 浏览器」,macOS 26+。"
+            "value": "允许第三方 MCP 客户端(Claude Code / Codex 等)通过内置 wick-mcp 驱动你已登录的浏览器与雪球/X 会话——仅只读:导航 / 读取 / 快照 / 雪球·X 讨论(不含点击 / 输入 / 执行脚本)。⚠️ 这会让外部 agent 操作你的登录会话。默认关;需先启用上方「旺财浏览器」,macOS 26+。"
           }
         }
       }
@@ -2997,7 +3017,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只读模式：已在「设置 → 工作流 → BYO 浏览器」中关闭浏览器写操作。如需让 Wicker 点击 / 输入 / 执行脚本，请在那里开启「允许写操作」。"
+            "value": "只读模式：已在「设置 → 工作流 → BYO 浏览器」中关闭浏览器写操作。如需让旺财点击 / 输入 / 执行脚本，请在那里开启「允许写操作」。"
           }
         }
       }
@@ -4180,12 +4200,22 @@
         }
       }
     },
+    "Wicker": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旺财"
+          }
+        }
+      }
+    },
     "Wicker is browsing…": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wicker 正在浏览…"
+            "value": "旺财正在浏览…"
           }
         }
       }
