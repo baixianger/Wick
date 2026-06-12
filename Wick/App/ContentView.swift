@@ -54,8 +54,15 @@ struct ContentView: View {
             if case .ticker(let id) = route { return id }
             return nil
         }()
+        // Detail lookup must include HELD surrogate tickers (symbols held but not
+        // in the sample/custom universe), or tapping one in the Holdings list
+        // fails the `allTickers` lookup and silently falls back to allTickers[0]
+        // (Apple) — e.g. tapping BE or 07666 opened Apple's page.
+        let lookupUniverse = allTickers
+            + ContentView.heldSurrogateTickers(allTickers: allTickers,
+                                                holdings: holdings.holdings)
         let selectedTicker = selectedTickerId
-            .flatMap { id in allTickers.first { $0.id == id } }
+            .flatMap { id in lookupUniverse.first { $0.id == id } }
             ?? allTickers[0]
 
         NavigationSplitView {
@@ -177,6 +184,22 @@ struct ContentView: View {
         let net = Dictionary(grouping: holdings, by: \.symbol)
             .mapValues { $0.reduce(0.0) { $0 + $1.signedQuantity } }
         return Set(net.filter { abs($0.value) < 1e-9 }.map(\.key))
+    }
+
+    /// Surrogate `Ticker`s for HELD symbols absent from the sample/custom
+    /// universe (`allTickers`). The Holdings list shows these rows; the detail
+    /// pane resolves a tapped row against `allTickers + these`, so a held-only
+    /// symbol opens ITS page instead of falling back to allTickers[0]. Empty
+    /// series → `LiveDataStore` fills live data on appear.
+    static func heldSurrogateTickers(allTickers: [Ticker],
+                                     holdings: [Holding]) -> [Ticker] {
+        let knownIDs = Set(allTickers.map(\.id))
+        var seen = Set<String>()
+        return holdings.compactMap { h -> Ticker? in
+            guard !knownIDs.contains(h.symbol),
+                  seen.insert(h.symbol).inserted else { return nil }
+            return Ticker(id: h.symbol, symbol: h.symbol, name: h.name, series: [:])
+        }
     }
 
     /// Drop Yahoo results whose symbol is already in the watchlist —
