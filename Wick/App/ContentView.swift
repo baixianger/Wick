@@ -191,6 +191,10 @@ struct ContentView: View {
             // EastMoney→Yahoo chart fallback cover the real cases safely; a
             // best-effort fuzzy rename must never overwrite the user's symbol.
         }
+        // Pin the native window tab bar visible even at one stock tab, so the
+        // toolbar → tab-bar → content band is consistent (no "有时出现有时不
+        // 出现"). Zero-size background reaches the hosting NSWindow.
+        .background(AlwaysShowTabBar())
     }
 
     /// Symbols whose net signed quantity is ~0 — fully closed (平仓) but still

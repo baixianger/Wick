@@ -838,23 +838,12 @@ private struct ConversationView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            // Soft top edge: instead of bubbles hard-cutting at the top of the
-            // scroll view, fade the content to transparent over the top ~64pt so
-            // text dissolves gently as it scrolls up (and tucks softly behind the
-            // headerActions capsule). A fixed-height fade band over a fully-opaque
-            // remainder keeps the fade a constant thickness regardless of panel
-            // height; masking to transparency reveals the real window background
-            // underneath, so it reads as a true fade-out, not a coloured overlay.
-            .mask(
-                VStack(spacing: 0) {
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.35), .black],
-                        startPoint: .top, endPoint: .bottom)
-                        .frame(height: 64)
-                    Rectangle().fill(.black)
-                }
-                .ignoresSafeArea()
-            )
+            // (Removed the top fade-out `.mask`.) It existed to dissolve bubbles
+            // behind the floating headerActions capsule + soften the scroll top
+            // edge — but the window now reserves a top safe-area band above the
+            // pane, and the headerActions capsule is Liquid Glass (its material
+            // blur already separates passing bubbles). The mask was redundant and
+            // had a side effect: on short transcripts it dimmed real top content.
             .onChange(of: live.messages.count) { _, _ in
                 scrollToBottom(proxy)
             }
