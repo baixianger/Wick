@@ -1,15 +1,7 @@
 import SwiftUI
-import AppKit
 
 @main
 struct WickApp: App {
-
-    /// Single-window app — turn OFF macOS automatic window tabbing so the
-    /// system tab bar (a "Wick / +" strip) never injects itself under the
-    /// toolbar and overlap the detail content. Set once at app construction.
-    init() {
-        NSWindow.allowsAutomaticWindowTabbing = false
-    }
 
     /// Process-wide live-data cache. Passed through the environment so
     /// every view can pull the freshest Yahoo series without prop drilling.
@@ -141,7 +133,11 @@ struct WickApp: App {
                     LocaleHolder.current = agentSettings.resolvedLocale
                 }
         }
-        .windowStyle(.hiddenTitleBar)
+        // Standard titled window (NOT hiddenTitleBar): the toolbar keeps its
+        // safe-area height at the top, the macOS window tab bar sits below it
+        // (Apple Stocks layout), and content stacks underneath — no overlap,
+        // no fullscreen clipping. Window tabbing is left at its macOS default
+        // (enabled), so multiple stock tabs work.
         .windowToolbarStyle(.unified)
         // Dev-only: expose the 雪球 WebPage BYO-cookie probe behind a
         // "Developer" menu command that opens its own window. The whole

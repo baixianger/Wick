@@ -120,7 +120,12 @@ struct ContentView: View {
                         .id(selectedTicker.id)
                 }
             }
-            .ignoresSafeArea(.container, edges: .top)
+            // Respect the top safe area on EVERY route so the toolbar (and the
+            // window tab bar below it) keep their height and content stacks
+            // underneath — no overlap, and no top-content clipping in fullscreen.
+            // (Was `.ignoresSafeArea(.container, edges: .top)`, which clawed back
+            // space under the old hidden title bar but let the tab bar / notch
+            // overlap the content.)
             .overlay(alignment: .bottomTrailing) {
                 if shouldShowFloatingComposer {
                     FloatingWickerComposer(
