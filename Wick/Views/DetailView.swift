@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreCharts
 import IndicatorKit
+import TradingFloor
 
 // MARK: - Tab definition
 
@@ -9,8 +10,20 @@ enum DetailTab: String, CaseIterable, Identifiable, Hashable {
     case chart    = "Chart"
     case news     = "News"
     case social   = "Social"
+    case capital  = "资金"
     case ai       = "AI"
     var id: String { rawValue }
+
+    /// Tabs available for a given ticker. The CN-only **资金** tab (free
+    /// EastMoney A-share / HK fund-flow + financials + 龙虎榜) is shown
+    /// only for tickers that `CNSymbol.parse` recognises — US / intl
+    /// tickers never see it (and never trigger an EastMoney fetch).
+    static func tabs(for ticker: Ticker) -> [DetailTab] {
+        guard CNSymbol.parse(ticker.symbol) != nil else {
+            return allCases.filter { $0 != .capital }
+        }
+        return allCases
+    }
 }
 
 // MARK: - Detail container
@@ -109,6 +122,8 @@ struct DetailView: View {
                             NewsTab(ticker: ticker)
                         case .social:
                             SocialView(ticker: ticker)
+                        case .capital:
+                            CapitalView(ticker: ticker)
                         case .ai:
                             AITab(ticker: ticker,
                                   range: range,
@@ -134,6 +149,14 @@ struct DetailView: View {
         // on the right), gated by `historyOpen`.
         .onChange(of: tab) { _, new in
             if new != .ai { historyOpen = false }
+        }
+        // The `tab` binding is owned by ContentView and survives ticker
+        // switches (DetailView is rebuilt via `.id`). If the previously
+        // selected tab is no longer available for this ticker — e.g. was
+        // `.capital` on a CN ticker, then switched to a US one — fall back
+        // to Overview so we never render a stale / hidden tab.
+        .onAppear {
+            if !DetailTab.tabs(for: ticker).contains(tab) { tab = .overview }
         }
         .modifier(ChartStateBindings(
             ticker: ticker,
@@ -193,14 +216,14 @@ struct DetailView: View {
                     .accessibilityIdentifier("ChartIndicatorsButton")
                 }
                 Picker("Tab", selection: $tab) {
-                    ForEach(DetailTab.allCases) { item in
+                    ForEach(DetailTab.tabs(for: ticker)) { item in
                         Text(item.rawValue).tag(item)
                     }
                 }
                 .pickerStyle(.segmented)
-                // Widened from 280 → 340 to absorb the fifth tab (Social)
-                // without crowding the segment labels.
-                .frame(width: 340)
+                // Widened from 280 → 340 to absorb the extra tabs (Social,
+                // and the CN-only 资金 tab) without crowding the segments.
+                .frame(width: 380)
                 .labelsHidden()
             }
             // Title sub row — exchange + source badge on left,

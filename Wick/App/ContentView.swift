@@ -290,14 +290,17 @@ struct ContentView: View {
 
     /// Detail-tab picker. Lives in the window toolbar — segmented style
     /// is the native macOS / iOS expression for a 3–4 option switch.
-    private var tabPicker: some View {
+    private func tabPicker(for ticker: Ticker) -> some View {
         Picker("Tab", selection: $tab) {
-            ForEach(DetailTab.allCases) { item in
+            // CN-only 资金 tab is hidden for non-CN tickers (see
+            // DetailTab.tabs(for:)) so the toolbar picker matches the
+            // in-pane picker in DetailView.header.
+            ForEach(DetailTab.tabs(for: ticker)) { item in
                 Text(item.rawValue).tag(item)
             }
         }
         .pickerStyle(.segmented)
-        .frame(width: 280)
+        .frame(width: 380)
         .labelsHidden()
     }
 
