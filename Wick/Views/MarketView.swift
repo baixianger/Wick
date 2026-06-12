@@ -40,6 +40,9 @@ struct MarketView: View {
     // @State can't read the environment at init time.
     @State private var macroCat1: MacroCategory = .rates
     @State private var macroCat2: MacroCategory = .inflation
+    /// Shared horizontal pan for ALL macro charts — dragging any one chart pans
+    /// every macro chart to the same time window (both columns, all rows).
+    @State private var macroPanDays: Double = 0
     @State private var moverTab: MoverTab = .gainers
     /// Per-asset-class card selection so each tab remembers its own
     /// active card across tab switches.
@@ -208,7 +211,8 @@ struct MarketView: View {
                         MacroDetailRow(spec: spec,
                                        series: seriesFor(spec),
                                        isBar: Self.barMacroSymbols.contains(sym),
-                                       windowDays: macroWindowDays)
+                                       windowDays: macroWindowDays,
+                                       panDays: $macroPanDays)
                         if sym != symbols.last { Divider().opacity(0.4) }
                     }
                 }
@@ -689,6 +693,8 @@ fileprivate struct MacroDetailRow: View {
     let isBar: Bool
     /// Visible chart window length in days (from the user's interval pref).
     let windowDays: Double
+    /// Shared pan offset for all macro charts (threaded from `MarketView`).
+    @Binding var panDays: Double
 
     @Environment(FredDataStore.self) private var fredStore
     @State private var overlay: MacroOverlay = .none
@@ -731,7 +737,8 @@ fileprivate struct MacroDetailRow: View {
                               primaryTint: tint,
                               overlay: overlaySeries,
                               overlayColor: overlay.color,
-                              windowDays: windowDays)
+                              windowDays: windowDays,
+                              panDays: $panDays)
                 .frame(maxWidth: .infinity)
                 .frame(height: 88)
             // Overlay picker + legend.
@@ -843,11 +850,15 @@ fileprivate struct MacroOverlayChart: View {
     /// pref). The window is fixed-width and only pans left/right (no zoom).
     let windowDays: Double
 
-    /// How far the 1-year window is shifted BACK from the latest data, in days.
-    /// 0 = most recent year; dragging right increases it to reveal older data.
-    @State private var panDays: Double = 0
+    /// How far the window is shifted BACK from the latest data, in days. 0 =
+    /// most recent window; dragging right increases it to reveal older data.
+    /// SHARED across every macro chart so they pan together (bound from
+    /// `MarketView.macroPanDays` via `MacroDetailRow`).
+    @Binding var panDays: Double
     /// In-drag baseline (nil when no drag is in flight).
     @State private var panStart: Double?
+    /// Pointer x within the chart while hovering (nil when not hovering).
+    @State private var hoverX: CGFloat?
 
     /// The visible 1-year slice given the current pan offset. Right edge =
     /// last.time − panDays; left edge = right − 1 year.
@@ -884,15 +895,41 @@ fileprivate struct MacroOverlayChart: View {
                     }
 
                     // ── Overlay (independent scale, date-aligned) ──
-                    if let overlay {
-                        let aligned = Self.align(Array(overlay.candles), to: times)
+                    let aligned: [Double?]? = overlay.map {
+                        Self.align(Array($0.candles), to: times)
+                    }
+                    if let aligned {
                         drawLine(aligned, in: &ctx, size: size,
                                  color: overlayColor, width: 1.4, fill: false)
+                    }
+
+                    // ── Hover crosshair + value markers ──
+                    if let hx = hoverX, let hi = nearestIndex(to: hx, count: bars.count,
+                                                              width: size.width) {
+                        let cx = barX(hi, count: bars.count, width: size.width)
+                        var cross = Path()
+                        cross.move(to: CGPoint(x: cx, y: 0))
+                        cross.addLine(to: CGPoint(x: cx, y: size.height))
+                        ctx.stroke(cross, with: .color(.secondary.opacity(0.4)),
+                                   lineWidth: 1)
+                        markDot(pv[hi], values: pv.map { Optional($0) }, at: hi,
+                                in: &ctx, size: size, color: primaryTint)
+                        if let aligned, hi < aligned.count, let ov = aligned[hi] {
+                            markDot(ov, values: aligned, at: hi,
+                                    in: &ctx, size: size, color: overlayColor)
+                        }
+                    }
+                }
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let p): hoverX = p.x
+                    case .ended:         hoverX = nil
                     }
                 }
                 timeAxis
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .overlay(alignment: .topLeading) { hoverTooltip(width: geo.size.width) }
             .contentShape(Rectangle())
             // Horizontal-only pan of the fixed 1-year window. `simultaneousGesture`
             // + the horizontal-dominance guard keep the vertical list scroll
@@ -938,6 +975,106 @@ fileprivate struct MacroOverlayChart: View {
             }
         }
         .frame(height: 11)
+    }
+
+    // MARK: - Hover helpers
+
+    /// X of bar `i` — the same mapping `drawLine`/`drawBars` use for plotting.
+    /// `drawBars` centres each bar; for a crosshair the line/dot mapping (evenly
+    /// spaced across the full width) is close enough and consistent for both.
+    private func barX(_ i: Int, count n: Int, width: CGFloat) -> CGFloat {
+        guard n > 1 else { return width / 2 }
+        return width * CGFloat(i) / CGFloat(n - 1)
+    }
+
+    /// Index of the visible bar whose plotted x is nearest the pointer.
+    private func nearestIndex(to x: CGFloat, count n: Int, width: CGFloat) -> Int? {
+        guard n > 0 else { return nil }
+        if n == 1 { return 0 }
+        let raw = Int((x / width * CGFloat(n - 1)).rounded())
+        return min(max(raw, 0), n - 1)
+    }
+
+    /// Filled ring on a series' value at index `i`, using that series' own
+    /// min/max scale (so the marker sits exactly on the drawn line).
+    private func markDot(_ v: Double, values: [Double?], at i: Int,
+                         in ctx: inout GraphicsContext, size: CGSize, color: Color) {
+        let present = values.compactMap { $0 }
+        guard let lo = present.min(), let hi = present.max() else { return }
+        let range = max(hi - lo, 0.0001)
+        let x = barX(i, count: values.count, width: size.width)
+        let y = size.height - CGFloat((v - lo) / range) * (size.height - 2) - 1
+        let r: CGFloat = 3
+        ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                 with: .color(color))
+        ctx.stroke(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                   with: .color(.white.opacity(0.9)), lineWidth: 1)
+    }
+
+    /// Imperative readout for the hovered bar (date string + primary/overlay
+    /// values + clamped capsule x), or nil when not hovering. Kept out of the
+    /// `@ViewBuilder` so its mutating setup (DateFormatter) is legal.
+    private func hoverReadout(width: CGFloat)
+        -> (date: String, primary: String, overlay: String?, x: CGFloat)? {
+        let bars = windowed()
+        guard let hx = hoverX,
+              let i = nearestIndex(to: hx, count: bars.count, width: width),
+              i < bars.count else { return nil }
+        let bar = bars[i]
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.dateFormat = windowDays < 730 ? "yyyy/M/d" : "yyyy/M"
+        var overlayStr: String?
+        if let overlay {
+            let aligned = Self.align(Array(overlay.candles), to: bars.map(\.time))
+            if i < aligned.count, let ov = aligned[i] { overlayStr = Self.hoverFormat(ov) }
+        }
+        let inset: CGFloat = 6
+        let capW: CGFloat = 96
+        let clampedX = min(max(hx, capW / 2 + inset), width - capW / 2 - inset)
+        return (df.string(from: bar.time), Self.hoverFormat(bar.close), overlayStr, clampedX)
+    }
+
+    /// Compact tooltip capsule near the pointer showing the hovered bar's date,
+    /// primary value, and (if present) the date-aligned overlay value.
+    @ViewBuilder
+    private func hoverTooltip(width: CGFloat) -> some View {
+        if let r = hoverReadout(width: width) {
+            let capW: CGFloat = 96
+            VStack(alignment: .leading, spacing: 1) {
+                Text(r.date)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Circle().fill(primaryTint).frame(width: 5, height: 5)
+                    Text(r.primary).foregroundStyle(.primary)
+                }
+                if let ov = r.overlay {
+                    HStack(spacing: 4) {
+                        Circle().fill(overlayColor).frame(width: 5, height: 5)
+                        Text(ov).foregroundStyle(.primary)
+                    }
+                }
+            }
+            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 7))
+            .fixedSize()
+            .offset(x: r.x - capW / 2, y: 2)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Tooltip value format — mirrors `MacroDetailRow.format`: thousands grouped,
+    /// sub-1 → 2 dp, else 1 dp.
+    static func hoverFormat(_ v: Double) -> String {
+        if abs(v) >= 1000 {
+            let f = NumberFormatter()
+            f.numberStyle = .decimal; f.maximumFractionDigits = 0
+            return f.string(from: NSNumber(value: v)) ?? String(format: "%.0f", v)
+        }
+        if abs(v) < 1 { return String(format: "%.2f", v) }
+        return String(format: "%.1f", v)
     }
 
     /// Sample `candles` at-or-before each target time (step-hold), giving one
