@@ -758,6 +758,19 @@ final class BrowserSessionManager: XueqiuScraping {
         return await live.extractPosts(symbol: symbol, timeout: timeout)
     }
 
+    /// STRUCTURED 雪球 NEWS for the per-stock **News** tab (#54) — the per-symbol
+    /// 资讯/新闻 timeline, surfaced ALONGSIDE the 东方财富 news for CN/HK tickers
+    /// (clearly source-badged 雪球). Same BYO/best-effort contract as
+    /// `posts(for:)`: returns `[]` (never throws) when the 雪球 session isn't
+    /// scrapable, the symbol isn't CN/HK, or the in-WebKit `fetch` is empty /
+    /// times out — so the News tab silently degrades to 东方财富-only (no
+    /// regression, no prompt, no auto-poll).
+    func news(for symbol: String) async -> [XueqiuNewsItem] {
+        guard status.canScrape else { return [] }
+        guard CNSymbol.isCN(symbol) else { return [] }
+        return await live.extractNews(symbol: symbol, timeout: timeout)
+    }
+
     // MARK: - X (Twitter) login / status / posts (Social tab)
 
     /// Expose the visible X page for the user to sign in (password / 2FA / any

@@ -428,6 +428,7 @@ struct NewsTab: View {
     let ticker: Ticker
 
     @Environment(NewsStore.self) private var news
+    @Environment(AgentRuntime.self) private var runtime
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -437,7 +438,10 @@ struct NewsTab: View {
                       spacing: 20) {
                 // Real fetched news when available, else the fixture fallback so
                 // the tab is never blank while the background fetch is in flight.
-                ForEach(news.display(for: ticker.symbol)) { item in
+                // For CN/HK tickers the 雪球 BYO feed (#54) merges in when logged
+                // in — `runtime.browserSession` is nil below macOS 26 / when not
+                // connected, in which case this is the 东方财富 list unchanged.
+                ForEach(news.display(for: ticker.symbol, session: runtime.browserSession)) { item in
                     NewsRow(item: item, expanded: true)
                 }
             }
@@ -490,9 +494,21 @@ struct NewsRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(item.source)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                // Per-row source badge so a 雪球 (BYO, #54) headline is visibly
+                // distinct from a 东方财富 / Yahoo one when the feeds are merged.
+                if let provider = item.provider {
+                    Text(provider.badge)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(provider == .xueqiu ? Color.blue : .secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill((provider == .xueqiu ? Color.blue : .secondary).opacity(0.14)))
+                }
+                Text(item.source)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
             Text(item.headline)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)

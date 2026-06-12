@@ -155,29 +155,70 @@ final class XLiveScraper: XLiveScraping {
     func probeStatus(timeout: Duration) async -> XueqiuSessionStatus {
         guard let page = await readyPage(timeout: timeout) else { return .unknown }
         do {
-            // Self-reporting JS (XProbe's session-check pattern). X marks the auth
-            // cookies HttpOnly, so `document.cookie` won't expose `auth_token`. We
-            // read what JS CAN see — the `ct0` cookie (present for any session) —
-            // plus a logged-in DOM marker X renders only when authed. Both ⇒ live.
-            let verdict = try await page.callJavaScript("""
+            // Self-reporting JS. X marks the auth cookies HttpOnly, so
+            // `document.cookie` won't expose `auth_token` — we read what JS CAN
+            // see plus DOM/API signals, and we are DELIBERATELY LENIENT to avoid
+            // a false-negative "not connected" on a genuinely-logged-in user
+            // (the bug being fixed): the parked `/home` page may have been built
+            // BEFORE the user logged in (so its painted DOM is the logged-out
+            // wall) or may not have rendered the nav chrome yet, even though the
+            // SESSION (cookie jar) is live. So we treat ANY of these as logged-in:
+            //
+            //   • `ct0` cookie present (X sets it for any authenticated web
+            //     session; absent when logged out) — the strongest cheap signal, OR
+            //   • a logged-in-only DOM marker is on the page (covers the case
+            //     where cookies are momentarily not yet visible to JS), OR
+            //   • an authenticated same-origin API probe (`/i/api/1.1/account/
+            //     settings.json`) returns 2xx — the snowball-style cookie-carrying
+            //     fetch, which works even if `/home` never painted the nav.
+            //
+            // Only when ALL THREE say "no" do we report `.expired`. `bodyHint` is
+            // logged so a surprising verdict is explainable from the user's Console.
+            let obj = try await page.callJavaScript("""
                 try {
                     const ck = document.cookie || '';
                     const hasCt0 = /(?:^|;\\s*)ct0=/.test(ck);
-                    const marker = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
+                    const marker = !!(document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
                                 || document.querySelector('[data-testid="AppTabBar_Home_Link"]')
+                                || document.querySelector('[data-testid="primaryColumn"]')
                                 || document.querySelector('[data-testid="tweetButtonInline"]')
-                                || document.querySelector('[aria-label="Home timeline"]');
-                    if (hasCt0 && marker) return 'valid';
-                    return 'expired';
+                                || document.querySelector('[aria-label="Home timeline"]'));
+                    // Authenticated same-origin API probe — cookie rides along, so a
+                    // 2xx proves a live session regardless of what /home painted. A
+                    // logged-out session 401/403s here.
+                    let apiOK = false, apiStatus = -1;
+                    try {
+                        const r = await fetch('/i/api/1.1/account/settings.json', {
+                            method: 'GET', credentials: 'include',
+                            headers: { 'x-twitter-active-user': 'yes' }
+                        });
+                        apiStatus = r.status;
+                        apiOK = (r.status >= 200 && r.status < 300);
+                    } catch (e) { /* network/CORS — fall back to cookie+marker */ }
+                    const verdict = (hasCt0 || marker || apiOK) ? 'valid' : 'expired';
+                    return {
+                        verdict: verdict,
+                        hasCt0: hasCt0, marker: marker, apiOK: apiOK, apiStatus: apiStatus,
+                        url: location.href,
+                        bodyHint: (document.body ? document.body.innerText.slice(0, 100) : '')
+                    };
                 } catch (e) {
-                    return 'JSERR: ' + ((e && e.message) ? e.message : String(e));
+                    return { verdict: 'JSERR: ' + ((e && e.message) ? e.message : String(e)) };
                 }
-            """) as? String
+            """) as? [String: Any]
+            let verdict = obj?["verdict"] as? String
+            let hasCt0 = obj?["hasCt0"] as? Bool ?? false
+            let marker = obj?["marker"] as? Bool ?? false
+            let apiOK = obj?["apiOK"] as? Bool ?? false
+            let apiStatus = obj?["apiStatus"] as? Int ?? -1
+            let url = obj?["url"] as? String ?? "?"
+            let hint = obj?["bodyHint"] as? String ?? ""
+            log.info("[X] status probe → \(verdict ?? "nil", privacy: .public) (ct0=\(hasCt0, privacy: .public) marker=\(marker, privacy: .public) apiOK=\(apiOK, privacy: .public) apiStatus=\(apiStatus, privacy: .public) url=\(url, privacy: .public) hint=\(hint, privacy: .public))")
             switch verdict {
             case .some("valid"):   return .valid
             case .some("expired"): return .expired
             default:
-                log.error("[X] status probe → \(verdict ?? "nil", privacy: .public)")
+                log.error("[X] status probe inconclusive → \(verdict ?? "nil", privacy: .public)")
                 return .unknown
             }
         } catch {
@@ -220,18 +261,48 @@ final class XLiveScraper: XLiveScraping {
         // Same selectors as XProbe Path A: `article[data-testid="tweet"]` → per
         // node `[data-testid="tweetText"]` innerText + the `@handle` from the
         // `[data-testid="User-Name"]` block. Self-reporting, null-guarded JS.
+        //
+        // CRITICAL (the empty-result fix): a `load(_:)` that reaches `.finished`
+        // has only COMMITTED + painted the search SHELL — X then issues its own
+        // GraphQL search XHR and renders the `<article>` tweets ASYNCHRONOUSLY,
+        // milliseconds-to-seconds later. Reading the DOM the instant nav settles
+        // therefore finds `arts=0` from a perfectly-good session (this is what the
+        // user is hitting). The dev `XProbe.searchStock` worked only because a
+        // HUMAN clicked it after eyeballing the rendered page; `searchStockViaElement`
+        // already encoded the fix as an in-JS poll. We carry that poll here: a
+        // SINGLE `callJavaScript` that waits IN-PAGE (≤ ~9s, re-checking every
+        // ~300ms) for tweet `<article>` nodes to appear (or a login wall / "no
+        // results" empty-state to settle), THEN reads. This is still ONE DOM read
+        // per navigation — the wait is inside the one script, no extra host calls,
+        // no extra navigation — so the ban-safety contract is unchanged.
         do {
             let domObj = try await page.callJavaScript("""
                 try {
+                    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+                    // Poll in-page for the async-rendered results. Stop early when
+                    // tweets paint, a login wall appears, or X's "no results" empty
+                    // state settles — so a genuinely-empty query doesn't burn ~9s.
+                    let waited = 0;
+                    for (let i = 0; i < 30; i++) {
+                        const have = document.querySelectorAll('article[data-testid="tweet"]').length;
+                        const wall = !!document.querySelector('[data-testid="loginButton"], [href="/login"], input[name="text"]');
+                        const empty = !!document.querySelector('[data-testid="empty_state_header_text"]');
+                        if (have > 0 || wall || empty) break;
+                        await sleep(300);
+                        waited += 300;
+                    }
                     const arts = document.querySelectorAll('article[data-testid="tweet"]');
                     // DIAGNOSTIC signals so an empty result is explainable: how many
-                    // tweet nodes the DOM had, the URL we actually landed on (a login
-                    // wall redirects away from /search), and whether a login prompt
-                    // is on screen.
+                    // tweet nodes the DOM had, how long we polled, the URL we actually
+                    // landed on (a login wall redirects away from /search), whether a
+                    // login prompt is on screen, and whether X rendered its own
+                    // "no results" empty state (a real zero vs a not-rendered-yet zero).
                     const _diag = {
                         arts: arts.length,
+                        waitedMs: waited,
                         url: location.href,
                         loginWall: !!document.querySelector('[data-testid="loginButton"], [href="/login"], input[name="text"]'),
+                        emptyState: !!document.querySelector('[data-testid="empty_state_header_text"]'),
                         bodyHint: (document.body ? document.body.innerText.slice(0, 120) : '')
                     };
                     const out = [];
@@ -272,12 +343,14 @@ final class XLiveScraper: XLiveScraping {
             // / not rendered yet".
             if posts.isEmpty, let diag = domObj?["diag"] as? [String: Any] {
                 let arts = diag["arts"] as? Int ?? -1
+                let waited = diag["waitedMs"] as? Int ?? -1
                 let url = diag["url"] as? String ?? "?"
                 let wall = diag["loginWall"] as? Bool ?? false
+                let empty = diag["emptyState"] as? Bool ?? false
                 let hint = diag["bodyHint"] as? String ?? ""
-                log.error("[X] EMPTY posts — arts=\(arts, privacy: .public) loginWall=\(wall, privacy: .public) url=\(url, privacy: .public) hint=\(hint, privacy: .public)")
+                log.error("[X] EMPTY posts \(trimmed, privacy: .public) — arts=\(arts, privacy: .public) waitedMs=\(waited, privacy: .public) loginWall=\(wall, privacy: .public) emptyState=\(empty, privacy: .public) url=\(url, privacy: .public) hint=\(hint, privacy: .public)")
             } else {
-                log.info("[X] searchPosts → \(posts.count) posts")
+                log.info("[X] searchPosts \(trimmed, privacy: .public) → \(posts.count) posts (arts read OK)")
             }
             return posts
         } catch {

@@ -54,6 +54,13 @@ protocol XueqiuLiveScraping: Sendable {
     /// for the Social tab's card UI instead of the decorator's flat news lines.
     /// Best-effort: `[]` on no-session / empty / timeout / error; never throws.
     func extractPosts(symbol: String, timeout: Duration) async -> [XueqiuPost]
+    /// STRUCTURED 雪球 NEWS (the per-stock 资讯/新闻 timeline, distinct from the
+    /// discussion posts) for a canonical CN/HK symbol — a same-origin
+    /// `/statuses/stock_timeline.json?symbol_id=<symbol>&source=自选股新闻` fetch parsed
+    /// by the package's pure `XueqiuNewsParser`. Surfaces in the News tab next to
+    /// the 东方财富 items. Best-effort: `[]` on no-session / empty / timeout /
+    /// error; never throws.
+    func extractNews(symbol: String, timeout: Duration) async -> [XueqiuNewsItem]
 }
 
 /// Live, WebKit-backed implementation. Owns the ONE persistent headless
@@ -154,7 +161,10 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
             // Self-reporting JS (probe pattern): a well-formed JSON body without
             // an `error_code` ⇒ the page inherited a working session (.valid);
             // a non-zero `error_code` / non-JSON ⇒ logged out / walled (.expired).
-            let verdict = try await page.callJavaScript("""
+            // Diagnostics (http status, error_code, body prefix) are logged so a
+            // surprising verdict is explainable from the user's Console — distinct
+            // from "page never readied" (.unknown).
+            let obj = try await page.callJavaScript("""
                 try {
                     const r = await fetch('/statuses/hots.json?a=1&count=1&page=1&scope=day&type=status&meigu=0', {
                         credentials: 'include',
@@ -162,18 +172,29 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
                     });
                     const text = await r.text();
                     let json = null; try { json = JSON.parse(text); } catch (e) {}
-                    if (!json)       return 'expired';
-                    if (json.error_code && json.error_code != 0) return 'expired';
-                    return 'valid';
+                    let verdict = 'valid';
+                    if (!json) verdict = 'expired';
+                    else if (json.error_code && json.error_code != 0) verdict = 'expired';
+                    return {
+                        verdict: verdict,
+                        http: r.status,
+                        error_code: (json && json.error_code != null) ? json.error_code : null,
+                        hint: text.slice(0, 100)
+                    };
                 } catch (e) {
-                    return 'JSERR: ' + ((e && e.message) ? e.message : String(e));
+                    return { verdict: 'JSERR: ' + ((e && e.message) ? e.message : String(e)) };
                 }
-            """) as? String
+            """) as? [String: Any]
+            let verdict = obj?["verdict"] as? String
+            let http = obj?["http"] as? Int ?? -1
+            let errCode = obj?["error_code"] as? Int
+            let hint = obj?["hint"] as? String ?? ""
+            log.info("[Xueqiu] status probe → \(verdict ?? "nil", privacy: .public) (http=\(http, privacy: .public) error_code=\(errCode.map(String.init) ?? "nil", privacy: .public) hint=\(hint, privacy: .public))")
             switch verdict {
             case .some("valid"):   return .valid
             case .some("expired"): return .expired
             default:
-                log.error("[Xueqiu] status probe → \(verdict ?? "nil", privacy: .public)")
+                log.error("[Xueqiu] status probe inconclusive → \(verdict ?? "nil", privacy: .public)")
                 return .unknown
             }
         } catch {
@@ -201,7 +222,10 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
             // symbol (snowball-cli `searchPosts`, sorted newest-first). Returns
             // the raw JSON body as a string; parsing happens in the package's
             // pure `XueqiuPostParser` so it's unit-testable.
-            let body = try await page.callJavaScript("""
+            // Return BOTH the body and the HTTP status so an empty result is
+            // explainable: a 200 with an empty `list` (real "no discussion") is
+            // different from a 400/403 (login wall / anti-bot) or an HTML redirect.
+            let obj = try await page.callJavaScript("""
                 try {
                     const url = '/statuses/search.json?q=' + encodeURIComponent(q)
                         + '&count=' + count + '&page=1&sort=time&source=all';
@@ -209,29 +233,78 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
                         credentials: 'include',
                         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                     });
-                    return await r.text();
+                    const text = await r.text();
+                    return { http: r.status, body: text };
                 } catch (e) {
-                    return 'JSERR: ' + ((e && e.message) ? e.message : String(e));
+                    return { body: 'JSERR: ' + ((e && e.message) ? e.message : String(e)) };
                 }
-            """, arguments: ["q": xq, "count": Self.postCount]) as? String
+            """, arguments: ["q": xq, "count": Self.postCount]) as? [String: Any]
 
-            guard let body, !body.hasPrefix("JSERR:") else {
-                if let body { log.error("[Xueqiu] posts fetch → \(body, privacy: .public)") }
+            let body = (obj?["body"] as? String) ?? ""
+            let http = obj?["http"] as? Int ?? -1
+            guard !body.isEmpty, !body.hasPrefix("JSERR:") else {
+                log.error("[Xueqiu] posts fetch \(xq, privacy: .public) → http=\(http, privacy: .public) \(body, privacy: .public)")
                 return []
             }
             let posts = XueqiuPostParser.parse(jsonString: body)
-            // DIAGNOSTIC: when the parse yields nothing, log the raw body prefix
-            // so we can tell "genuinely empty list" from an auth-failure
-            // (`error_code`/登录失效) or an anti-bot HTML redirect — the three look
-            // identical (no cards) in the UI otherwise.
+            // DIAGNOSTIC: when the parse yields nothing, log the http status + raw
+            // body prefix so we can tell "genuinely empty list" (http 200, valid
+            // JSON, empty `list`) from an auth-failure (`error_code`/登录失效) or an
+            // anti-bot HTML redirect — the three look identical (no cards) in the UI.
             if posts.isEmpty {
-                log.error("[Xueqiu] EMPTY posts for \(xq, privacy: .public) — body[0..<500]: \(String(body.prefix(500)), privacy: .public)")
+                log.error("[Xueqiu] EMPTY posts for \(xq, privacy: .public) — http=\(http, privacy: .public) body[0..<500]: \(String(body.prefix(500)), privacy: .public)")
             } else {
-                log.info("[Xueqiu] \(posts.count, privacy: .public) posts for \(xq, privacy: .public)")
+                log.info("[Xueqiu] \(posts.count, privacy: .public) posts for \(xq, privacy: .public) (http=\(http, privacy: .public))")
             }
             return posts
         } catch {
             log.error("[Xueqiu] posts extract failed: \(Self.errorDetail(error), privacy: .public)")
+            return []
+        }
+    }
+
+    // MARK: - News extract (per-call fetch on the persistent page)
+
+    func extractNews(symbol: String, timeout: Duration) async -> [XueqiuNewsItem] {
+        guard let xq = Self.xueqiuSymbol(forCanonical: symbol) else { return [] }
+        guard let page = await readyPage(timeout: timeout) else { return [] }
+
+        do {
+            // SAME-ORIGIN per-stock NEWS timeline: `/statuses/stock_timeline.json`
+            // keyed by `symbol_id`, scoped to the 自选股新闻 (watchlist-news) source —
+            // 雪球's per-symbol media feed (the 资讯 tab on a stock page). Returns
+            // the raw JSON body + http status; parsing happens in the package's
+            // pure `XueqiuNewsParser` so it's unit-testable.
+            let obj = try await page.callJavaScript("""
+                try {
+                    const url = '/statuses/stock_timeline.json?symbol_id=' + encodeURIComponent(q)
+                        + '&count=' + count + '&source=' + encodeURIComponent('自选股新闻');
+                    const r = await fetch(url, {
+                        credentials: 'include',
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const text = await r.text();
+                    return { http: r.status, body: text };
+                } catch (e) {
+                    return { body: 'JSERR: ' + ((e && e.message) ? e.message : String(e)) };
+                }
+            """, arguments: ["q": xq, "count": Self.postCount]) as? [String: Any]
+
+            let body = (obj?["body"] as? String) ?? ""
+            let http = obj?["http"] as? Int ?? -1
+            guard !body.isEmpty, !body.hasPrefix("JSERR:") else {
+                log.error("[Xueqiu] news fetch \(xq, privacy: .public) → http=\(http, privacy: .public) \(body, privacy: .public)")
+                return []
+            }
+            let items = XueqiuNewsParser.parse(jsonString: body)
+            if items.isEmpty {
+                log.error("[Xueqiu] EMPTY news for \(xq, privacy: .public) — http=\(http, privacy: .public) body[0..<500]: \(String(body.prefix(500)), privacy: .public)")
+            } else {
+                log.info("[Xueqiu] \(items.count, privacy: .public) news for \(xq, privacy: .public) (http=\(http, privacy: .public))")
+            }
+            return items
+        } catch {
+            log.error("[Xueqiu] news extract failed: \(Self.errorDetail(error), privacy: .public)")
             return []
         }
     }

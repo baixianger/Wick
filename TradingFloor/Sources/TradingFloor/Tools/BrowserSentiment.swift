@@ -190,6 +190,107 @@ public enum XueqiuPostParser {
     }
 }
 
+/// One parsed 雪球 NEWS item (the per-stock 资讯/新闻 timeline, distinct from the
+/// discussion posts above) reduced to the fields the News tab renders. Pure
+/// Foundation value type so the JSON parser is unit-testable without WebKit; the
+/// live WebKit scraper feeds the in-WebKit `fetch(...)` JSON through
+/// `XueqiuNewsParser` and the app maps these into its own `NewsItem`, badged 雪球
+/// alongside the 东方财富 items.
+public struct XueqiuNewsItem: Sendable, Equatable, Identifiable {
+    /// Headline (`title`, falling back to the post `text`/`description` for the
+    /// timeline shape that carries no separate title) — HTML stripped.
+    public let title: String
+    /// Optional one-line summary/body (`description`/`text`), HTML stripped.
+    public let summary: String?
+    /// Source/媒体 name (`source`/`user.screen_name`); empty when 雪球 omits it.
+    public let source: String
+    /// Permalink to the article on xueqiu.com, resolved absolute. `nil` when 雪球
+    /// omits it — the News row then renders non-tappable.
+    public let url: URL?
+    /// Publish time (`created_at`, 雪球 epoch **milliseconds**). `nil` when absent.
+    public let createdAt: Date?
+
+    /// Stable identity — the URL when present (the natural key), else the title.
+    public var id: String { url?.absoluteString ?? title }
+
+    public init(title: String, summary: String?, source: String,
+                url: URL?, createdAt: Date?) {
+        self.title = title
+        self.summary = summary
+        self.source = source
+        self.url = url
+        self.createdAt = createdAt
+    }
+}
+
+/// Pure, WebKit-free parser for the 雪球 per-stock NEWS timeline JSON
+/// (`/statuses/stock_timeline.json?symbol_id=<symbol>&source=自选股新闻`, same-origin
+/// on `xueqiu.com`). Sibling of `XueqiuPostParser` — same tolerant shape
+/// (`list`/`statuses`/`data.list`), HTML-stripped via the shared
+/// `XueqiuPostParser.stripHTML`. Any malformed entry is skipped (best-effort).
+public enum XueqiuNewsParser {
+
+    /// Parse a raw JSON body into news items. `[]` on non-JSON / `error_code` /
+    /// an absent list — so the caller degrades to the EastMoney-only News tab.
+    public static func parse(_ data: Data) -> [XueqiuNewsItem] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        if let code = root["error_code"] as? Int, code != 0 { return [] }
+        return postArray(in: root).compactMap(item(from:))
+    }
+
+    /// Convenience overload for a decoded JSON string.
+    public static func parse(jsonString: String) -> [XueqiuNewsItem] {
+        parse(Data(jsonString.utf8))
+    }
+
+    private static func postArray(in root: [String: Any]) -> [[String: Any]] {
+        if let l = root["list"] as? [[String: Any]] { return l }
+        if let l = root["statuses"] as? [[String: Any]] { return l }
+        if let data = root["data"] as? [String: Any] {
+            if let l = data["list"] as? [[String: Any]] { return l }
+            if let l = data["statuses"] as? [[String: Any]] { return l }
+        }
+        return []
+    }
+
+    private static func item(from raw: [String: Any]) -> XueqiuNewsItem? {
+        // The news timeline carries a `title`; some entries are plain statuses
+        // with only `description`/`text` — fall back so we never drop a headline.
+        let rawTitle = (raw["title"] as? String) ?? (raw["description"] as? String)
+            ?? (raw["text"] as? String) ?? ""
+        let title = XueqiuPostParser.stripHTML(rawTitle)
+        guard !title.isEmpty else { return nil }
+        let rawSummary = (raw["description"] as? String) ?? (raw["text"] as? String) ?? ""
+        let summary = XueqiuPostParser.stripHTML(rawSummary)
+        // 雪球 news carries `source` (媒体 name); statuses carry `user.screen_name`.
+        let source = (raw["source"] as? String)
+            ?? ((raw["user"] as? [String: Any])?["screen_name"] as? String) ?? ""
+        return XueqiuNewsItem(
+            title: title,
+            summary: (summary.isEmpty || summary == title) ? nil : summary,
+            source: source,
+            url: permalink(from: raw),
+            createdAt: createdAt(from: raw))
+    }
+
+    private static func createdAt(from raw: [String: Any]) -> Date? {
+        let ms: Double
+        if let v = raw["created_at"] as? Double { ms = v }
+        else if let v = raw["created_at"] as? Int { ms = Double(v) }
+        else { return nil }
+        guard ms > 0 else { return nil }
+        return Date(timeIntervalSince1970: ms / 1000)
+    }
+
+    private static func permalink(from raw: [String: Any]) -> URL? {
+        let path = (raw["target_url"] as? String) ?? (raw["target"] as? String)
+        guard let path, !path.isEmpty else { return nil }
+        if path.hasPrefix("http") { return URL(string: path) }
+        return URL(string: "https://xueqiu.com" + (path.hasPrefix("/") ? path : "/" + path))
+    }
+}
+
 /// Foundation-only seam over the app-side browser scraper. The Wick app target
 /// supplies the live, WebKit-backed implementation (`BrowserSessionManager`);
 /// tests supply a deterministic mock. Keeping the seam in the package lets the

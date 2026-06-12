@@ -11,12 +11,34 @@ struct NewsItem: Identifiable, Hashable {
     let summary: String
     let ageMinutes: Int
     var url: URL? = nil
+    /// Which feed this headline came from — drives the per-row source badge so a
+    /// 雪球 item (BYO, #54) is visibly distinct from a 东方财富 / Yahoo item when
+    /// the two are merged in the News tab. `nil` for fixtures (no badge).
+    var provider: NewsProvider? = nil
 
     var ageLabel: String {
         switch ageMinutes {
         case 0..<60:      return "\(ageMinutes)m ago"
         case 60..<1440:   return "\(ageMinutes / 60)h ago"
         default:          return "\(ageMinutes / 1440)d ago"
+        }
+    }
+}
+
+/// Origin feed of a `NewsItem`, for the per-row source badge in the News tab.
+/// CN/HK headlines can now come from EITHER 东方财富 (always) OR 雪球 (when the
+/// BYO 雪球 session is logged in, #54); badging keeps the merge honest.
+enum NewsProvider: Hashable {
+    case eastMoney
+    case xueqiu
+    case yahoo
+
+    /// Short badge label.
+    var badge: String {
+        switch self {
+        case .eastMoney: return "东方财富"
+        case .xueqiu:    return "雪球"
+        case .yahoo:     return "Yahoo"
         }
     }
 }
