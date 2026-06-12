@@ -14,6 +14,9 @@ struct SidebarView: View {
     let onPickResult: (YahooSearchResult) -> Void
     @Bindable var watchlist: WatchlistStore
     let holdingsCount: Int
+    /// Symbols that are fully closed (net 0) — only flagged with a "已平仓"
+    /// marker while viewing the Holdings list.
+    var closedHoldingSymbols: Set<String> = []
     @State private var showSparkline: Bool = true
     @State private var newGroupPromptShown: Bool = false
     @State private var newGroupName: String = ""
@@ -46,7 +49,10 @@ struct SidebarView: View {
                     }
                     Section {
                         ForEach(tickers) { ticker in
-                            TickerRow(ticker: ticker, showSparkline: showSparkline)
+                            TickerRow(ticker: ticker,
+                                      showSparkline: showSparkline,
+                                      isClosed: watchlist.selection == .holdings
+                                          && closedHoldingSymbols.contains(ticker.symbol))
                                 .tag(SidebarRoute.ticker(ticker.id))
                                 .accessibilityElement(children: .combine)
                                 .accessibilityAddTraits(.isButton)
@@ -323,6 +329,8 @@ struct SidebarView: View {
 private struct TickerRow: View {
     let ticker: Ticker
     let showSparkline: Bool
+    /// Fully-closed holding (net 0) — shows a dimmed "已平仓" marker.
+    var isClosed: Bool = false
     @Environment(LiveDataStore.self) private var store
     @Environment(AgentSettings.self) private var settings
 
@@ -375,13 +383,27 @@ private struct TickerRow: View {
 
     private var symbolBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(ticker.symbol)
-                .font(.system(size: 16, weight: .semibold))
+            HStack(spacing: 6) {
+                Text(ticker.symbol)
+                    .font(.system(size: 16, weight: .semibold))
+                if isClosed {
+                    // Dimmed "已平仓" chip so a fully-closed (net-0) holding reads
+                    // as history at a glance while still living in the list.
+                    Text("已平仓")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(.quaternary))
+                }
+            }
             Text(ticker.name)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+        // Fade the whole closed row slightly so live rows lead the eye.
+        .opacity(isClosed ? 0.6 : 1)
     }
 
     private func priceBlock(lastPrice: Double,

@@ -94,14 +94,25 @@ final class WatchlistStore {
             // `HoldingsStore.positions()` ordering.
             let known = Dictionary(all.map { ($0.symbol, $0) },
                                    uniquingKeysWith: { first, _ in first })
+            // Net signed quantity per symbol — `≈ 0` ⇒ fully closed (平仓). The
+            // user keeps closed positions visible but wants them sorted to the
+            // BOTTOM, so order open (net ≠ 0) first then closed, each by symbol.
+            let netBySymbol = Dictionary(grouping: holdings, by: \.symbol)
+                .mapValues { $0.reduce(0.0) { $0 + $1.signedQuantity } }
+            let isClosed: (String) -> Bool = { abs(netBySymbol[$0] ?? 0) < 1e-9 }
             var seen = Set<String>()
-            return holdings
-                .sorted { $0.symbol < $1.symbol }
-                .compactMap { h -> Ticker? in
-                    guard seen.insert(h.symbol).inserted else { return nil }
-                    return known[h.symbol]
-                        ?? Ticker(id: h.symbol, symbol: h.symbol, name: h.name, series: [:])
-                }
+            let uniqueSymbols = holdings.map(\.symbol).filter { seen.insert($0).inserted }
+            let ordered = uniqueSymbols.sorted { a, b in
+                let ca = isClosed(a), cb = isClosed(b)
+                if ca != cb { return !ca }   // open first
+                return a < b                 // then alphabetical within each group
+            }
+            return ordered.map { sym in
+                known[sym]
+                    ?? Ticker(id: sym, symbol: sym,
+                              name: holdings.first { $0.symbol == sym }?.name ?? sym,
+                              series: [:])
+            }
         case .user(let id):
             guard let group = groups.first(where: { $0.id == id }) else { return all }
             let allowed = Set(group.symbols)

@@ -46,6 +46,9 @@ struct ContentView: View {
         let allTickers = Ticker.samples + customTickers
         let scoped = watchlist.filter(tickers: allTickers, holdings: holdings.holdings)
         let filtered = filteredTickers(scoped)
+        // Symbols whose net position is flat (fully closed / 平仓) — surfaced so
+        // the Holdings sidebar rows can carry a dimmed "已平仓" marker.
+        let closedHoldingSymbols = ContentView.closedSymbols(in: holdings.holdings)
         let remote = remoteSearchResults(against: allTickers)
         let selectedTickerId: String? = {
             if case .ticker(let id) = route { return id }
@@ -62,7 +65,8 @@ struct ContentView: View {
                         searchResults: remote,
                         onPickResult: pickRemoteResult,
                         watchlist: watchlist,
-                        holdingsCount: Set(holdings.holdings.map(\.symbol)).count)
+                        holdingsCount: Set(holdings.holdings.map(\.symbol)).count,
+                        closedHoldingSymbols: closedHoldingSymbols)
                 .navigationTitle("Stocks")
                 // Default the sidebar above the 240pt sparkline
                 // threshold (SidebarView.sparklineMinWidth) so the
@@ -148,10 +152,31 @@ struct ContentView: View {
                                  interval: .d1,
                                  fallback: t.dailySeries)
             }
+            // ALSO warm any HELD symbol that isn't in the ticker universe (a
+            // position Wicker recorded, a CN ticker never searched). These show
+            // in the Holdings list as surrogate rows with an empty series, so
+            // without this they'd render flat ("no 涨跌") until first scrolled
+            // into view — warming kicks the live fetch at launch so their price
+            // + change populate like every other row.
+            let known = Set(allTickers.map(\.symbol))
+            for sym in Set(holdings.holdings.map(\.symbol)) where !known.contains(sym) {
+                _ = store.series(for: sym,
+                                 interval: .d1,
+                                 fallback: CandleSeries(symbol: sym, interval: .d1, candles: []))
+            }
             // Wire Wicker's portfolio.* tools over this window's live
             // HoldingsStore so the agent can read/write 持仓 (idempotent).
             agentRuntime.attachPortfolio(holdings)
         }
+    }
+
+    /// Symbols whose net signed quantity is ~0 — fully closed (平仓) but still
+    /// carrying transaction history. Drives the Holdings list's "已平仓" marker
+    /// and its sort-to-bottom ordering.
+    static func closedSymbols(in holdings: [Holding]) -> Set<String> {
+        let net = Dictionary(grouping: holdings, by: \.symbol)
+            .mapValues { $0.reduce(0.0) { $0 + $1.signedQuantity } }
+        return Set(net.filter { abs($0.value) < 1e-9 }.map(\.key))
     }
 
     /// Drop Yahoo results whose symbol is already in the watchlist —
