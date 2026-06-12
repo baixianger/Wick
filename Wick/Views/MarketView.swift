@@ -804,31 +804,57 @@ fileprivate struct MacroOverlayChart: View {
     let overlayColor: Color
 
     var body: some View {
-        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
-            let bars = Array(primary.candles.suffix(60))
-            guard !bars.isEmpty, size.width > 0, size.height > 0 else { return }
-            let times = bars.map(\.time)
-            let n = bars.count
+        VStack(spacing: 4) {
+            Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+                let bars = Array(primary.candles.suffix(60))
+                guard !bars.isEmpty, size.width > 0, size.height > 0 else { return }
+                let times = bars.map(\.time)
 
-            // ── Primary ──
-            let pv = bars.map(\.close)
-            if primaryIsBar {
-                drawBars(pv, in: &ctx, size: size, color: primaryTint)
-            } else {
-                drawLine(pv.map { Optional($0) }, in: &ctx, size: size,
-                         color: primaryTint, width: 1.6, fill: true)
-            }
+                // ── Primary ──
+                let pv = bars.map(\.close)
+                if primaryIsBar {
+                    drawBars(pv, in: &ctx, size: size, color: primaryTint)
+                } else {
+                    drawLine(pv.map { Optional($0) }, in: &ctx, size: size,
+                             color: primaryTint, width: 1.6, fill: true)
+                }
 
-            // ── Overlay (independent scale, date-aligned) ──
-            if let overlay {
-                let aligned = Self.align(Array(overlay.candles), to: times)
-                drawLine(aligned, in: &ctx, size: size,
-                         color: overlayColor, width: 1.4, fill: false)
+                // ── Overlay (independent scale, date-aligned) ──
+                if let overlay {
+                    let aligned = Self.align(Array(overlay.candles), to: times)
+                    drawLine(aligned, in: &ctx, size: size,
+                             color: overlayColor, width: 1.4, fill: false)
+                }
             }
-            _ = n
+            timeAxis
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// Evenly-spaced date labels under the chart. Bars are drawn at even index
+    /// positions, so four labels distributed leading→trailing line up with the
+    /// data. Year-only format for spans over ~2y, else `yyyy/M`.
+    private var timeAxis: some View {
+        let bars = Array(primary.candles.suffix(60))
+        let labels: [String] = {
+            guard bars.count >= 2 else { return [] }
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            let spanDays = bars.last!.time.timeIntervalSince(bars.first!.time) / 86_400
+            f.dateFormat = spanDays > 730 ? "yyyy" : "yyyy/M"
+            let idxs = [0, bars.count / 3, 2 * bars.count / 3, bars.count - 1]
+            return idxs.map { f.string(from: bars[$0].time) }
+        }()
+        return HStack(spacing: 0) {
+            ForEach(Array(labels.enumerated()), id: \.offset) { i, label in
+                Text(label)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                if i != labels.count - 1 { Spacer(minLength: 0) }
+            }
+        }
+        .frame(height: 11)
     }
 
     /// Sample `candles` at-or-before each target time (step-hold), giving one
