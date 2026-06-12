@@ -73,7 +73,11 @@ final class AgentRuntime {
             // 涨停板) — a free replacement for tushare's points-gated data. No
             // key; the agent calls them when a CN ticker is in play. One shared
             // fetcher across the four tools.
-            + EastMoneyExtrasTools.all())
+            + EastMoneyExtrasTools.all()
+            // Always-on free FINRA US 空头持仓 (short interest) — `us.short_interest`.
+            // No key; the agent calls it when a US ticker is in play. Returns
+            // a "仅美股" message for CN / HK / intl symbols.
+            + ShortInterestTools.all())
             await skills.reload()
         }
     }

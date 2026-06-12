@@ -11,18 +11,34 @@ enum DetailTab: String, CaseIterable, Identifiable, Hashable {
     case news     = "News"
     case social   = "Social"
     case capital  = "资金"
+    case shortInterest = "空头"
     case ai       = "AI"
     var id: String { rawValue }
 
-    /// Tabs available for a given ticker. The CN-only **资金** tab (free
-    /// EastMoney A-share / HK fund-flow + financials + 龙虎榜) is shown
-    /// only for tickers that `CNSymbol.parse` recognises — US / intl
-    /// tickers never see it (and never trigger an EastMoney fetch).
+    /// Tabs available for a given ticker. Two market-gated tabs are mutually
+    /// exclusive:
+    ///
+    ///   • **资金** (CN-only): free EastMoney A-share / HK fund-flow +
+    ///     financials + 龙虎榜 — shown only for tickers `CNSymbol.parse`
+    ///     recognises.
+    ///   • **空头** (US-only): free FINRA short-interest history — shown only
+    ///     for bare US symbols (`AAPL` / `MSFT`): not CN/HK and carrying no
+    ///     exchange-suffix dot (so intl listings like `VOD.L` / `BMW.DE` are
+    ///     excluded too).
+    ///
+    /// A CN ticker sees 资金 (not 空头); a US ticker sees 空头 (not 资金); an
+    /// international ticker sees neither.
     static func tabs(for ticker: Ticker) -> [DetailTab] {
-        guard CNSymbol.parse(ticker.symbol) != nil else {
-            return allCases.filter { $0 != .capital }
+        let symbol = ticker.symbol
+        let isCN = CNSymbol.parse(symbol) != nil
+        let isUS = !isCN && !symbol.contains(".")
+        return allCases.filter {
+            switch $0 {
+            case .capital:       return isCN
+            case .shortInterest: return isUS
+            default:             return true
+            }
         }
-        return allCases
     }
 }
 
@@ -124,6 +140,8 @@ struct DetailView: View {
                             SocialView(ticker: ticker)
                         case .capital:
                             CapitalView(ticker: ticker)
+                        case .shortInterest:
+                            ShortInterestView(ticker: ticker)
                         case .ai:
                             AITab(ticker: ticker,
                                   range: range,
