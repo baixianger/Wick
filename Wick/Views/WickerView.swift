@@ -47,21 +47,21 @@ struct WickerView: View {
     /// per-view state the moment `isAgentBrowsing` flips false.
     @State private var browserPinnedOpen: Bool = false
 
-    /// User-draggable width of the CHAT pane when the browser is open. The chat
-    /// is the FIXED-width side and the browser FILLS the remaining space — that
-    /// way the browser absorbs any extra width instead of the chat leaving a
-    /// dead gap between its (narrow) bubbles and the browser. The drag handle
-    /// writes this (clamped to `chatWidthRange`); hoisted so it survives the
+    /// User-draggable, FIXED width of the browser panel. The browser is the
+    /// fixed side so its viewport stays a stable size as the window resizes; the
+    /// chat takes the remaining width but caps + centres its content (so no dead
+    /// gap forms between the narrow bubbles and the browser). The drag handle
+    /// writes this (clamped to `browserWidthRange`); hoisted so it survives the
     /// panel mounting / unmounting.
-    @State private var chatPaneWidth: CGFloat = 520
+    @State private var browserPanelWidth: CGFloat = 600
     /// In-drag baseline so the gesture is relative to where the divider was
     /// when the drag began, not absolute pointer position (avoids a jump on
     /// grab). nil when no drag is in flight.
-    @State private var chatDragStartWidth: CGFloat?
+    @State private var browserDragStartWidth: CGFloat?
 
-    /// Clamp for the chat pane width. Lower bound keeps the chat readable;
-    /// upper bound keeps ≥~360pt for the browser on the 1180pt minimum window.
-    private let chatWidthRange: ClosedRange<CGFloat> = 380...820
+    /// Clamp for the browser panel width. Lower bound keeps the page usable;
+    /// upper bound keeps the chat readable on the 1180pt minimum window.
+    private let browserWidthRange: ClosedRange<CGFloat> = 380...900
 
     /// True while a `web.*` tool is mid-flight (macOS 26 + flag on +
     /// a live `BrowserSessionManager`). Drives the right-region hand-off:
@@ -96,8 +96,7 @@ struct WickerView: View {
         }()
         return HStack(spacing: 0) {
             conversationPane
-                .frame(maxWidth: browserShown ? nil : .infinity, maxHeight: .infinity)
-                .frame(width: browserShown ? chatPaneWidth : nil)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .topTrailing) {
                     // Liquid Glass capsule around the action cluster
                     // means message bubbles scrolling past it look
@@ -127,12 +126,11 @@ struct WickerView: View {
                 // `browserWidthRange` so neither pane collapses. Replaces the
                 // former fixed 560pt divider.
                 browserResizeHandle
-                // Browser FILLS the remaining width (chat is the fixed,
-                // draggable side) so no dead gap appears between the chat
-                // bubbles and the page. `minWidth` keeps the page usable when
-                // the user drags the chat wide.
+                // Browser is the FIXED-width side (stable viewport across window
+                // resizes); the chat absorbs the rest but centres its capped
+                // content so no dead gap forms.
                 WickerBrowserPanel(manager: manager, pinnedOpen: $browserPinnedOpen)
-                    .frame(minWidth: 360, maxWidth: .infinity)
+                    .frame(width: browserPanelWidth)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if showHistoryDrawer {
                 Divider()
@@ -178,8 +176,8 @@ struct WickerView: View {
     /// Draggable split handle between the conversation pane and the browser.
     /// A crisp 1pt vertical hairline sits centred in an 11pt transparent hit
     /// strip (easy to grab); the pointer becomes the `resizeLeftRight` cursor on
-    /// hover. The CHAT is the fixed side, so dragging RIGHT widens the chat
-    /// (browser shrinks) and LEFT narrows it — `chatPaneWidth += translation.x`.
+    /// hover. The BROWSER is the fixed trailing side, so dragging LEFT widens it
+    /// and RIGHT narrows it — `browserPanelWidth -= translation.x`.
     @available(macOS 26.0, *)
     private var browserResizeHandle: some View {
         Rectangle()
@@ -198,14 +196,14 @@ struct WickerView: View {
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
-                        let base = chatDragStartWidth ?? chatPaneWidth
-                        if chatDragStartWidth == nil { chatDragStartWidth = base }
-                        // Chat is the leading fixed side: drag right → wider chat.
-                        let proposed = base + value.translation.width
-                        chatPaneWidth = min(max(proposed, chatWidthRange.lowerBound),
-                                            chatWidthRange.upperBound)
+                        let base = browserDragStartWidth ?? browserPanelWidth
+                        if browserDragStartWidth == nil { browserDragStartWidth = base }
+                        // Browser is the trailing fixed side: drag left → wider.
+                        let proposed = base - value.translation.width
+                        browserPanelWidth = min(max(proposed, browserWidthRange.lowerBound),
+                                                browserWidthRange.upperBound)
                     }
-                    .onEnded { _ in chatDragStartWidth = nil }
+                    .onEnded { _ in browserDragStartWidth = nil }
             )
     }
 
@@ -580,6 +578,12 @@ private struct ConversationView: View {
                 }
             }
         }
+        // Cap the chat to a comfortable reading column and CENTRE it. On a wide
+        // pane (and especially with the fixed browser open beside it) this stops
+        // the narrow bubbles from leaving a lopsided dead gap on the right —
+        // symmetric margins instead, the Claude / ChatGPT layout.
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
         .frame(maxHeight: .infinity)
         // Auto-continue: if the session opens with an unanswered user
         // turn (typical when the FloatingWickerComposer kicked off a
@@ -1768,9 +1772,13 @@ private struct WickerBrowserPanel: View {
             Text(Self.chipLabel(title: title, url: url))
                 .font(.system(size: 11, weight: isActive ? .semibold : .regular))
                 .lineLimit(1)
-                .foregroundStyle(isActive
-                                 ? AnyShapeStyle(Color.accentColor)
-                                 : AnyShapeStyle(HierarchicalShapeStyle.secondary))
+                // Safari-style: the active tab reads in primary ink on a milky
+                // raised chip; inactive tabs are secondary grey on the bar. NO
+                // accent colour — that's the tint that turned blue AND dimmed
+                // when the window lost focus. Materials/semantic greys stay
+                // consistent focused vs. unfocused.
+                .foregroundStyle(isActive ? AnyShapeStyle(.primary)
+                                          : AnyShapeStyle(.secondary))
             Button {
                 Task { _ = await manager.closeTab(ref: id.uuidString) }
             } label: {
@@ -1785,7 +1793,18 @@ private struct WickerBrowserPanel: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .liquidGlass(cornerRadius: 8, tint: isActive ? Color.accentColor : nil)
+        .background {
+            // Active = milky raised chip (regularMaterial reads off-white in
+            // light, a lighter shade in dark) with a hairline edge; inactive =
+            // no fill, just the grey label, so it recedes into the strip.
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isActive ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(.clear))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(isActive ? 0.10 : 0),
+                                      lineWidth: 0.5)
+                )
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             Task { _ = await manager.switchTab(ref: id.uuidString) }
