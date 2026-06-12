@@ -32,6 +32,27 @@ import WebKit
 /// off-by-default decorator (`BYODiscussionNewsDecorator`) can pull discussion
 /// lines without importing WebKit. All WebKit work is delegated to the injected
 /// `XueqiuLiveScraping` (live impl by default; a mock in tests).
+/// One tab in the Wicker agent browser. Wraps a single driveable `WebPage`
+/// (all tabs share the SAME persistent `agentStoreID` store, so cookies/logins
+/// are common across tabs) plus the lightweight `title`/`url` the tab strip
+/// chips render. `@Observable` so chip text/active tint update when the active
+/// tab's navigation refreshes these after each load.
+///
+/// `page` is `@ObservationIgnored`: the reference never changes for a tab's
+/// lifetime, and the macro can't synthesise an init-accessor for a
+/// non-trivially-initialised stored property (same constraint as the manager's
+/// `loginPage`).
+@available(macOS 26.0, *)
+@MainActor
+@Observable
+final class AgentTab: Identifiable {
+    let id = UUID()
+    @ObservationIgnored let page: WebPage   // on shared agentStoreID store
+    var title: String = ""
+    var url: URL?
+    init(page: WebPage) { self.page = page }
+}
+
 @available(macOS 26.0, *)
 @MainActor
 @Observable
@@ -54,6 +75,35 @@ final class BrowserSessionManager: XueqiuScraping {
     @ObservationIgnored private let live: any XueqiuLiveScraping
     @ObservationIgnored private let log = Logger(subsystem: "me.impai.wick", category: "BrowserSession")
 
+    // MARK: - X (Twitter) BYO session (Social tab, US/intl markets)
+    //
+    // The X sibling of the 雪球 path above. Same BYO shape — the user logs into X
+    // ONCE in the visible `xLoginPage` and the cookie persists in the X named
+    // store; the injected `XLiveScraping` owns the persistent headless page that
+    // every per-stock search runs against. The CRITICAL difference is the
+    // technique: X's private GraphQL needs an unforgeable `x-client-transaction-id`,
+    // so we do NOT raw-fetch it. Instead each search NAVIGATES the headless page
+    // ONCE to the human `/search?q=$SYMBOL&f=live` URL and does ONE DOM read of the
+    // rendered tweets (the validated, ban-safe `XProbe.searchStock` technique).
+
+    /// The visible X login page — built once and held so `WebView(xLoginPage)`
+    /// backs the same `WebPage` across redraws. The user signs into X here once
+    /// (password / 2FA / any automation challenge, all human-in-the-loop).
+    /// `@ObservationIgnored` for the same reason as `loginPage`.
+    @ObservationIgnored private(set) var xLoginPage: WebPage
+
+    /// The injected X scraper (live WebKit impl by default; a mock in tests).
+    @ObservationIgnored private let xLive: any XLiveScraping
+
+    /// X session status, surfaced as `@Observable` state for the Social tab's X
+    /// section state machine (reuses the 雪球 `XueqiuSessionStatus` enum since the
+    /// states — needsLogin / valid / expired — are identical). Starts
+    /// `needsLogin` until the first probe says otherwise.
+    private(set) var xStatus: XueqiuSessionStatus = .needsLogin
+
+    /// In-flight X status refresh, so concurrent callers coalesce.
+    @ObservationIgnored private var xRefreshTask: Task<Void, Never>?
+
     /// Navigation/JS settle budget. Headless SPA renders can lag; bounded so a
     /// hung load still returns.
     @ObservationIgnored private let timeout: Duration
@@ -73,13 +123,29 @@ final class BrowserSessionManager: XueqiuScraping {
     /// and a forum don't share cookies) is a hardening follow-up.
     static let agentStoreID = UUID(uuidString: "C4A7E218-6B93-4F0D-9E31-1A8D5C20F7B6")!
 
-    /// The general-purpose driveable `WebPage` the `web.*` tools operate on and
-    /// the live panel renders. Navigable to ANY url (unlike the 雪球 `loginPage`,
-    /// pinned to xueqiu.com). Built once, held so the same instance backs both
-    /// the tools and `WebView(agentPage)` across redraws. `@ObservationIgnored`
-    /// for the same reason as `loginPage`: the reference never changes and the
-    /// macro can't synthesise an init-accessor for a non-trivial stored prop.
-    @ObservationIgnored private(set) var agentPage: WebPage
+    /// The open agent-browser tabs. The general-purpose driveable `WebPage`s the
+    /// `web.*` tools operate on and the live panel renders. Each is navigable to
+    /// ANY url (unlike the 雪球 `loginPage`, pinned to xueqiu.com) and all share
+    /// the SAME persistent `agentStoreID` store (common cookies/logins). Always
+    /// holds AT LEAST one tab — closing the last replaces it with a fresh blank.
+    /// `@Observable` (NOT ignored) so the tab strip + active `WebView` re-render
+    /// when tabs are opened/closed/switched.
+    private(set) var tabs: [AgentTab]
+
+    /// The id of the active tab — the one the `web.*` tools drive and the panel
+    /// displays. Observable so switching swaps the rendered `WebView`.
+    private(set) var activeTabID: UUID
+
+    /// The active tab, guarded against a stale `activeTabID` (falls back to the
+    /// first tab, which always exists). Never force-unwraps.
+    private var activeTab: AgentTab { tabs.first { $0.id == activeTabID } ?? tabs[0] }
+
+    /// The active tab's `WebPage` — every driver method below operates on this.
+    var activePage: WebPage { activeTab.page }
+
+    /// Back-compat computed alias for the old single-page accessor, so existing
+    /// references (e.g. the UI host) keep compiling. Always the ACTIVE page.
+    var agentPage: WebPage { activePage }
 
     /// `true` while a `web.*` tool is mid-flight (a navigation, read, click,
     /// type, eval, or fetch). Drives the WickerView live panel: it slides in
@@ -96,15 +162,23 @@ final class BrowserSessionManager: XueqiuScraping {
     @ObservationIgnored private let agentTimeout: Duration = .seconds(25)
 
     init(live: any XueqiuLiveScraping = XueqiuLiveScraper(),
+         xLive: any XLiveScraping = XLiveScraper(),
          timeout: Duration = .seconds(20))
     {
         self.live = live
+        self.xLive = xLive
         self.timeout = timeout
         self.loginPage = live.makeLoginPage()
-        self.agentPage = Self.makeAgentPage()
+        self.xLoginPage = xLive.makeLoginPage()
+        // Build exactly ONE tab, parked on about:blank (unchanged opt-in load
+        // behaviour — no navigation fires until the agent/user asks).
+        let firstTab = AgentTab(page: Self.makeAgentPage())
+        self.tabs = [firstTab]
+        self.activeTabID = firstTab.id
         // Start as needsLogin until the first probe says otherwise; the host
-        // can call `refreshStatus()` after the user connects.
+        // can call `refreshStatus()` / `xRefreshStatus()` after the user connects.
         self.status = .needsLogin
+        self.xStatus = .needsLogin
     }
 
     /// Build the general agent `WebPage` on the named "Wicker browser" store.
@@ -141,6 +215,114 @@ final class BrowserSessionManager: XueqiuScraping {
         return await body()
     }
 
+    // MARK: - Wicker agent browser: tabs
+    //
+    // All `@MainActor` (inherited), all best-effort: each returns a readable
+    // string and NEVER throws / crashes / force-unwraps. The tab set always holds
+    // at least one tab; closing the last replaces it with a fresh blank. Every
+    // tab shares the SAME persistent `agentStoreID` store, so a login in one tab
+    // is visible in all others.
+
+    /// Open a NEW tab on the shared store, make it active, optionally navigate it.
+    /// Returns a one-line summary (`Opened tab N: <title> (<url>)`).
+    func newTab(url: String?) async -> String {
+        let tab = AgentTab(page: Self.makeAgentPage())
+        tabs.append(tab)
+        activeTabID = tab.id
+        let index = tabs.count
+        if let url, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Drive the existing nav path (now on the active page) so the same
+            // settle/verdict + active-tab title/url refresh applies.
+            _ = await navigate(to: url)
+        } else {
+            syncAgentURL(fallback: nil)
+        }
+        let title = tab.title.isEmpty ? "(new tab)" : tab.title
+        let shown = tab.url?.absoluteString ?? "about:blank"
+        return "Opened tab \(index): \(title) (\(shown))"
+    }
+
+    /// Make the tab referenced by `ref` (1-based index OR id string) active.
+    /// Subsequent `web.read`/`web.click`/etc operate on it. Bad ref → clear error.
+    func switchTab(ref: String) async -> String {
+        guard let tab = resolveTab(ref) else { return "ERROR: no tab \(ref)" }
+        activeTabID = tab.id
+        syncAgentURL(fallback: tab.url)
+        let title = tab.title.isEmpty ? "(new tab)" : tab.title
+        return "Switched to tab \(indexOf(tab) ?? 0): \(title) (\(tab.url?.absoluteString ?? "about:blank"))"
+    }
+
+    /// Close the tab referenced by `ref` (1-based index OR id string). If it was
+    /// the active tab, a neighbour becomes active; if it was the LAST tab, the set
+    /// is replaced with one fresh blank tab (never zero). Bad ref → clear error.
+    func closeTab(ref: String) async -> String {
+        guard let tab = resolveTab(ref), let idx = indexOf(tab) else {
+            return "ERROR: no tab \(ref)"
+        }
+        let wasActive = tab.id == activeTabID
+        let closedLabel = "tab \(idx): \(tab.title.isEmpty ? "(new tab)" : tab.title)"
+        tabs.removeAll { $0.id == tab.id }
+        if tabs.isEmpty {
+            // Never zero — replace with a fresh blank tab.
+            let fresh = AgentTab(page: Self.makeAgentPage())
+            tabs = [fresh]
+            activeTabID = fresh.id
+            syncAgentURL(fallback: nil)
+            return "Closed \(closedLabel). Opened a fresh blank tab (it was the last one)."
+        }
+        if wasActive {
+            // Pick a neighbour: the tab now at the closed slot, clamped.
+            let newIndex = min(idx - 1, tabs.count - 1)   // idx is 1-based
+            let neighbour = tabs[max(0, newIndex)]
+            activeTabID = neighbour.id
+            syncAgentURL(fallback: neighbour.url)
+        }
+        return "Closed \(closedLabel). \(tabs.count) tab(s) open."
+    }
+
+    /// Structured list of open tabs for the UI tab strip.
+    func listTabs() -> [(index: Int, id: UUID, title: String, url: String, isActive: Bool)] {
+        tabs.enumerated().map { (offset, tab) in
+            (index: offset + 1,
+             id: tab.id,
+             title: tab.title,
+             url: tab.url?.absoluteString ?? "about:blank",
+             isActive: tab.id == activeTabID)
+        }
+    }
+
+    /// Human-readable tab list for the `web.tabs` tool.
+    func listTabsFormatted() -> String {
+        let rows = listTabs().map { row -> String in
+            let marker = row.isActive ? "* " : "  "
+            let title = row.title.isEmpty ? "(new tab)" : row.title
+            return "\(marker)\(row.index). \(title) — \(row.url)  [id \(row.id.uuidString)]"
+        }
+        return "Open tabs (\(rows.count)):\n" + rows.joined(separator: "\n")
+    }
+
+    /// Resolve a `ref` (1-based index OR full id string) to a tab, or nil.
+    private func resolveTab(_ ref: String) -> AgentTab? {
+        let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let n = Int(trimmed), n >= 1, n <= tabs.count { return tabs[n - 1] }
+        if let id = UUID(uuidString: trimmed) { return tabs.first { $0.id == id } }
+        return nil
+    }
+
+    /// 1-based index of `tab` in the current set, or nil if absent.
+    private func indexOf(_ tab: AgentTab) -> Int? {
+        tabs.firstIndex { $0.id == tab.id }.map { $0 + 1 }
+    }
+
+    /// Refresh the ACTIVE tab's `title`/`url` from its page so chips update.
+    /// Best-effort; called after navigation settles.
+    private func refreshActiveTabMeta() async {
+        let tab = activeTab
+        tab.url = tab.page.url ?? agentCurrentURL
+        let title = (try? await tab.page.callJavaScript("return document.title")) as? String
+        if let title, !title.isEmpty { tab.title = title }
+    }
+
     /// Navigate the agent page to `urlString` and report the outcome (final URL
     /// + page title once settled). Tolerates one superseded (-999) nav.
     func navigate(to urlString: String) async -> String {
@@ -149,10 +331,11 @@ final class BrowserSessionManager: XueqiuScraping {
                 return "ERROR: not a valid URL: \(urlString)"
             }
             log.info("[AgentBrowser] navigate → \(url.absoluteString, privacy: .public)")
-            let events = agentPage.load(URLRequest(url: url))
+            let events = activePage.load(URLRequest(url: url))
             let outcome = await awaitAgentNavigation(events)
             agentCurrentURL = url
-            let title = (try? await agentPage.callJavaScript("return document.title")) as? String
+            let title = (try? await activePage.callJavaScript("return document.title")) as? String
+            await refreshActiveTabMeta()
             switch outcome {
             case .finished:
                 return "Navigated to \(url.absoluteString)\nTitle: \(title ?? "(none)")"
@@ -171,7 +354,7 @@ final class BrowserSessionManager: XueqiuScraping {
     func readText(selector: String?) async -> String {
         await withBrowsing {
             do {
-                let text = try await agentPage.callJavaScript("""
+                let text = try await activePage.callJavaScript("""
                     try {
                         const sel = (s && s.length) ? s : null;
                         const root = sel ? document.querySelector(sel) : (document.body || document.documentElement);
@@ -187,53 +370,61 @@ final class BrowserSessionManager: XueqiuScraping {
         }
     }
 
-    /// A compact DOM outline — interactive + structural elements with their
-    /// role, accessible name, and a stable selector hint — for the LLM to plan
-    /// clicks/types against. Deliberately lossy: headings, links, buttons,
-    /// inputs, and landmark roles only, capped in count.
-    func snapshotOutline() async -> String {
+    /// Token-efficient incremental AX/DOM snapshot (TODO #42, spec
+    /// `docs/research/webtool-snapshot-incremental-ax.md` §4–§8). Routes the
+    /// page-side `window.__wick` singleton: the FIRST call after a (real)
+    /// navigation returns the full compact tree as an NDJSON `base`; subsequent
+    /// calls return only the `+`/`-`/`~` delta lines keyed on stable `ref:N`
+    /// handles. `full` forces a fresh baseline; `viewportOnly` walks only the
+    /// visible region (+~1 screen) for big pages; `verbose` includes decorative
+    /// nodes for debugging.
+    ///
+    /// `__wick` lives as a `window` global so it persists across `callJavaScript`
+    /// calls and SPA navigations; a real navigation drops it → next call
+    /// re-bootstraps and returns a fresh `base`, which is correct. The bootstrap
+    /// is idempotent (`window.__wick ||= …`), so prepending it every time is safe.
+    func snapshotOutline(full: Bool = false, viewportOnly: Bool = false, verbose: Bool = false) async -> String {
         await withBrowsing {
             do {
-                let outline = try await agentPage.callJavaScript("""
+                let js = WickSnapshotJS.bootstrap + """
+
                     try {
-                        const out = [];
-                        const max = 120;
-                        const sel = 'a,button,input,textarea,select,[role="button"],[role="link"],[role="textbox"],h1,h2,h3,[data-testid]';
-                        const nodes = document.querySelectorAll(sel);
-                        for (let i = 0; i < nodes.length && out.length < max; i++) {
-                            const n = nodes[i];
-                            const tag = n.tagName.toLowerCase();
-                            const role = n.getAttribute('role') || tag;
-                            let name = (n.getAttribute('aria-label') || n.getAttribute('placeholder') || n.innerText || n.value || '').trim();
-                            name = name.replace(/\\s+/g, ' ').slice(0, 80);
-                            if (!name && tag !== 'input' && tag !== 'textarea' && tag !== 'select') continue;
-                            // Stable-ish locator hint: prefer id, then data-testid, then name attr.
-                            let loc = '';
-                            if (n.id) loc = '#' + n.id;
-                            else if (n.getAttribute('data-testid')) loc = '[data-testid="' + n.getAttribute('data-testid') + '"]';
-                            else if (n.getAttribute('name')) loc = tag + '[name="' + n.getAttribute('name') + '"]';
-                            const type = (tag === 'input' && n.type) ? (':' + n.type) : '';
-                            out.push('- ' + role + type + (name ? ' "' + name + '"' : '') + (loc ? '  → ' + loc : ''));
-                        }
-                        const title = document.title || '';
-                        const url = location.href;
-                        return 'URL: ' + url + '\\nTitle: ' + title + '\\nElements (' + out.length + '):\\n' + out.join('\\n');
+                        return window.__wick.snapshot({ full: \(full), viewportOnly: \(viewportOnly), verbose: \(verbose) });
                     } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
-                """) as? String
-                return outline ?? "(empty outline)"
+                """
+                let outline = try await activePage.callJavaScript(js) as? String
+                return outline ?? "(empty snapshot)"
             } catch {
                 return "ERROR: \(Self.agentErrorDetail(error))"
             }
         }
     }
 
-    /// Click the first element matching `selector`. Reports whether a match was
-    /// found and clicked. Best-effort; no navigation is awaited (SPA clicks
-    /// often route client-side) — follow with `snapshotOutline`/`readText`.
-    func click(selector: String) async -> String {
+    /// Click an element addressed EITHER by its stable `ref:N` (from
+    /// `web.snapshot`) OR by a CSS `selector` (legacy / hand-driven). The ref
+    /// path resolves through `__wick.click(ref)` → live element →
+    /// scrollIntoView → real pointer/click events, with stale-ref safety: if the
+    /// recorded element is gone or now presents a different `(role,name)`, it
+    /// returns a `RefStale` string so the agent re-snapshots rather than acting
+    /// on the wrong control. Best-effort; no navigation is awaited (SPA clicks
+    /// route client-side) — follow with `web.snapshot`/`web.read`.
+    func click(ref: Int? = nil, selector: String? = nil) async -> String {
         await withBrowsing {
             do {
-                let res = try await agentPage.callJavaScript("""
+                if let ref {
+                    let js = WickSnapshotJS.bootstrap + """
+
+                        try {
+                            return window.__wick.click(\(ref));
+                        } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                    """
+                    let res = try await activePage.callJavaScript(js) as? String
+                    return res ?? "Click ref:\(ref): no result"
+                }
+                guard let selector, !selector.isEmpty else {
+                    return "ERROR: web.click needs a `ref` (from web.snapshot) or a `selector`."
+                }
+                let res = try await activePage.callJavaScript("""
                     try {
                         const el = document.querySelector(sel);
                         if (!el) return 'NO_MATCH';
@@ -253,12 +444,29 @@ final class BrowserSessionManager: XueqiuScraping {
         }
     }
 
-    /// Type `text` into the first element matching `selector` via the React-safe
-    /// native value-setter (the XProbe idiom), optionally pressing Enter after.
-    func type(selector: String, text: String, enter: Bool) async -> String {
+    /// Type `text` into an element addressed EITHER by its stable `ref:N` (from
+    /// `web.snapshot`) OR by a CSS `selector` (legacy), optionally pressing
+    /// Enter. The ref path runs `__wick.type(ref,…)` (focus → React-safe native
+    /// value-setter → input/change events → optional Enter) with the same
+    /// stale-ref safety as `click`; the selector path keeps the original XProbe
+    /// idiom.
+    func type(ref: Int? = nil, selector: String? = nil, text: String, enter: Bool) async -> String {
         await withBrowsing {
             do {
-                let res = try await agentPage.callJavaScript("""
+                if let ref {
+                    let js = WickSnapshotJS.bootstrap + """
+
+                        try {
+                            return window.__wick.type(\(ref), txt, doEnter);
+                        } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
+                    """
+                    let res = try await activePage.callJavaScript(js, arguments: ["txt": text, "doEnter": enter]) as? String
+                    return res ?? "Type ref:\(ref): no result"
+                }
+                guard let selector, !selector.isEmpty else {
+                    return "ERROR: web.type needs a `ref` (from web.snapshot) or a `selector`."
+                }
+                let res = try await activePage.callJavaScript("""
                     try {
                         const el = document.querySelector(sel);
                         if (!el) return 'NO_MATCH';
@@ -304,7 +512,7 @@ final class BrowserSessionManager: XueqiuScraping {
                         try { return JSON.stringify(__r); } catch (e) { return String(__r); }
                     } catch (e) { return 'JSERR: ' + ((e && e.message) ? e.message : String(e)); }
                 """
-                let res = try await agentPage.callJavaScript(wrapped)
+                let res = try await activePage.callJavaScript(wrapped)
                 if let s = res as? String { return s }
                 if let n = res { return String(describing: n) }
                 return "(no result)"
@@ -321,7 +529,7 @@ final class BrowserSessionManager: XueqiuScraping {
     func fetchJSON(url: String) async -> String {
         await withBrowsing {
             do {
-                let obj = try await agentPage.callJavaScript("""
+                let obj = try await activePage.callJavaScript("""
                     try {
                         const r = await fetch(u, { method: 'GET', credentials: 'include' });
                         const text = await r.text();
@@ -358,9 +566,10 @@ final class BrowserSessionManager: XueqiuScraping {
     /// non-throwing, like every other driver here.
     func userNavigate(_ url: URL) async {
         log.info("[AgentBrowser] userNavigate → \(url.absoluteString, privacy: .public)")
-        let events = agentPage.load(URLRequest(url: url))
+        let events = activePage.load(URLRequest(url: url))
         _ = await awaitAgentNavigation(events)
         syncAgentURL(fallback: url)
+        await refreshActiveTabMeta()
     }
 
     /// Reload the current page (address-bar reload button). Uses `WebPage`'s native
@@ -368,9 +577,10 @@ final class BrowserSessionManager: XueqiuScraping {
     /// `load` does — settle it through the shared helper, then re-sync the URL.
     func reload() async {
         log.info("[AgentBrowser] reload")
-        let events = agentPage.reload()
+        let events = activePage.reload()
         _ = await awaitAgentNavigation(events)
         syncAgentURL(fallback: agentCurrentURL)
+        await refreshActiveTabMeta()
     }
 
     /// Step back in `agentPage`'s history (address-bar back button). The macOS 26
@@ -380,7 +590,7 @@ final class BrowserSessionManager: XueqiuScraping {
     /// briefly, then re-sync the URL. Best-effort.
     func goBack() async {
         log.info("[AgentBrowser] goBack")
-        _ = try? await agentPage.callJavaScript("history.back()")
+        _ = try? await activePage.callJavaScript("history.back()")
         await settleAndSyncURL()
     }
 
@@ -389,7 +599,7 @@ final class BrowserSessionManager: XueqiuScraping {
     /// in-page, settle, and re-sync the URL. Best-effort.
     func goForward() async {
         log.info("[AgentBrowser] goForward")
-        _ = try? await agentPage.callJavaScript("history.forward()")
+        _ = try? await activePage.callJavaScript("history.forward()")
         await settleAndSyncURL()
     }
 
@@ -399,13 +609,14 @@ final class BrowserSessionManager: XueqiuScraping {
     private func settleAndSyncURL() async {
         try? await Task.sleep(for: .milliseconds(150))
         syncAgentURL(fallback: agentCurrentURL)
+        await refreshActiveTabMeta()
     }
 
     /// Pull the page's authoritative current URL into `agentCurrentURL` so the
     /// address bar mirrors redirects / history hops, falling back to the supplied
     /// value when the page hasn't published one yet (e.g. about:blank).
     private func syncAgentURL(fallback: URL?) {
-        if let live = agentPage.url {
+        if let live = activePage.url {
             agentCurrentURL = live
         } else if let fallback {
             agentCurrentURL = fallback
@@ -545,5 +756,69 @@ final class BrowserSessionManager: XueqiuScraping {
         guard status.canScrape else { return [] }
         guard CNSymbol.isCN(symbol) else { return [] }
         return await live.extractPosts(symbol: symbol, timeout: timeout)
+    }
+
+    // MARK: - X (Twitter) login / status / posts (Social tab)
+
+    /// Expose the visible X page for the user to sign in (password / 2FA / any
+    /// automation challenge — all human-in-the-loop). The View renders
+    /// `WebView(manager.xLoginPage)`. Reloads `/home` so a stale page doesn't
+    /// strand the user.
+    func xLogin() {
+        log.info("[BrowserSession] xLogin: presenting visible X page")
+        xLoginPage.load(URLRequest(url: XLiveScraper.homeURL))
+    }
+
+    /// Clear the X named store's cookies so the X session is forgotten, then flip
+    /// `xStatus` to `needsLogin`. Independent of the 雪球 jar — clears only X.
+    /// Best-effort — failure just leaves the status as-is.
+    func xLogout() async {
+        log.info("[BrowserSession] xLogout: clearing X session cookies")
+        #if canImport(WebKit)
+        let store = WKWebsiteDataStore(forIdentifier: XLiveScraper.storeID)
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        let records = await store.dataRecords(ofTypes: types)
+        await store.removeData(ofTypes: types, for: records)
+        #endif
+        xStatus = .needsLogin
+    }
+
+    /// Cheap logged-in X probe → updates `xStatus`. Coalesces concurrent calls.
+    /// Mirrors `refreshStatus()` for the 雪球 path.
+    func xRefreshStatus() async {
+        if let task = xRefreshTask { return await task.value }
+        let task = Task { @MainActor in
+            let probed = await xLive.probeStatus(timeout: timeout)
+            self.xStatus = probed
+            self.log.info("[BrowserSession] xRefreshStatus → \(probed.rawValue, privacy: .public)")
+            self.xRefreshTask = nil
+        }
+        xRefreshTask = task
+        await task.value
+    }
+
+    /// Recent X discussion posts for the per-stock **Social** tab (US / intl
+    /// markets). Builds the `$SYMBOL` cashtag and runs the validated, ban-safe
+    /// single-shot navigation-driven search + DOM read via the injected scraper.
+    /// Same best-effort contract as the 雪球 `posts(for:)`: returns `[]` (never
+    /// throws) when the X session isn't scrapable or the single search came back
+    /// empty / timed out — so the Social UI degrades to its empty state. The
+    /// symbol is reduced to its bare ticker before the `$` (US tickers are bare;
+    /// any exchange suffix like `.US` is dropped) so the cashtag matches X usage.
+    func xPosts(for symbol: String) async -> [XPost] {
+        guard xStatus.canScrape else { return [] }
+        let cashtag = Self.cashtag(for: symbol)
+        guard !cashtag.isEmpty else { return [] }
+        return await xLive.searchPosts(cashtag: cashtag, timeout: timeout)
+    }
+
+    /// Build the X cashtag (`$TSLA`) from a stored symbol. Strips any exchange
+    /// suffix (`AAPL.US` → `AAPL`) and uppercases, since X cashtags are the bare
+    /// ticker. Returns `""` for an empty/garbage symbol so `xPosts` can bail.
+    static func cashtag(for symbol: String) -> String {
+        let bare = symbol.split(separator: ".").first.map(String.init) ?? symbol
+        let cleaned = bare.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !cleaned.isEmpty else { return "" }
+        return "$\(cleaned)"
     }
 }

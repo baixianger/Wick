@@ -871,12 +871,37 @@ private struct WorkflowTab: View {
                     Toggle("", isOn: $settings.enableWickerBrowser)
                         .labelsHidden()
                 }
+                // One-switch write guardrail. ON (default) = Wicker may
+                // click / type / run scripts on pages. OFF = read-only: it can
+                // still navigate / read / snapshot, but click·type·eval are
+                // refused with a hint back to this switch.
+                SettingsRow(systemImage: settings.allowWickerBrowserWrites
+                                ? "hand.tap" : "hand.raised",
+                            tint: settings.allowWickerBrowserWrites ? .orange : .secondary,
+                            title: "允许浏览器写操作(点击 / 输入 / 执行脚本)",
+                            subtitle: "护栏开关。关闭后 Wicker 进入只读模式:仍可导航 / 读取 / 快照页面,但不会点击、输入或执行脚本(改用提示让你去开启)。默认开。仅在已启用 Wicker 浏览器时生效。") {
+                    Toggle("", isOn: $settings.allowWickerBrowserWrites)
+                        .labelsHidden()
+                        .disabled(!settings.enableWickerBrowser)
+                }
                 SettingsRow(systemImage: "bubble.left.and.text.bubble.right",
                             tint: .green,
                             title: "雪球 BYO 讨论(情绪源)",
                             subtitle: "把你登录的雪球个股讨论纳入情绪分析。默认关;需先在个股 Social tab 连接雪球登录。") {
                     Toggle("", isOn: $settings.enableXueqiuSentiment)
                         .labelsHidden()
+                }
+                // Cross-process MCP bridge exposure (TODO #39). Lets third-party
+                // MCP clients (Claude Code / Codex / …) drive the user's
+                // logged-in browser + 雪球/X session over the bundled wick-mcp
+                // server. Sensitive — default OFF, gated by the browser switch.
+                SettingsRow(systemImage: "antenna.radiowaves.left.and.right",
+                            tint: .red,
+                            title: "通过 MCP 暴露 Wicker 浏览器/社交(只读)",
+                            subtitle: "允许第三方 MCP 客户端(Claude Code / Codex 等)通过内置 wick-mcp 驱动你已登录的浏览器与雪球/X 会话——仅只读:导航 / 读取 / 快照 / 雪球·X 讨论(不含点击 / 输入 / 执行脚本)。⚠️ 这会让外部 agent 操作你的登录会话。默认关;需先启用上方「Wicker 浏览器」,macOS 26+。") {
+                    Toggle("", isOn: $settings.exposeWickerViaMCP)
+                        .labelsHidden()
+                        .disabled(!settings.enableWickerBrowser)
                 }
             }
         }

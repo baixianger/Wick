@@ -11,12 +11,37 @@ struct ChatMessage: Identifiable, Codable, Equatable, Hashable {
     let role: Role
     var text: String
     let createdAt: Date
+    /// Files the user attached to this turn (images Wicker sees via vision,
+    /// documents folded into the prompt as extracted text). Empty for every
+    /// assistant/system message and for plain text-only user turns. Decoded
+    /// with `decodeIfPresent` so sessions persisted before attachments existed
+    /// still load (the key is simply absent → `[]`).
+    var attachments: [ChatAttachment]
 
-    init(id: UUID = UUID(), role: Role, text: String, createdAt: Date = .now) {
+    init(id: UUID = UUID(),
+         role: Role,
+         text: String,
+         createdAt: Date = .now,
+         attachments: [ChatAttachment] = [])
+    {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
+        self.attachments = attachments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, role, text, createdAt, attachments
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.role = try c.decode(Role.self, forKey: .role)
+        self.text = try c.decode(String.self, forKey: .text)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .attachments) ?? []
     }
 }
 

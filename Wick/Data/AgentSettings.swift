@@ -225,6 +225,30 @@ final class AgentSettings {
         didSet { UserDefaults.standard.set(enableWickerBrowser, forKey: "tf.enableWickerBrowser") }
     }
 
+    /// One-switch write guardrail for the agent browser. When ON (the default),
+    /// Wicker may perform page-mutating actions — `web.click` / `web.type` /
+    /// `web.eval`. When OFF, those three are swapped for a refusal that points
+    /// the user back here, putting the browser into a **read-only** mode
+    /// (navigate / read / snapshot / fetchJSON / tab management still work) so a
+    /// cautious user can let the agent look but not touch, without per-action
+    /// prompts. Defaults TRUE so the feature works out of the box once
+    /// `enableWickerBrowser` is on; flipping it off is the kill-switch.
+    var allowWickerBrowserWrites: Bool {
+        didSet { UserDefaults.standard.set(allowWickerBrowserWrites, forKey: "tf.allowWickerBrowserWrites") }
+    }
+
+    /// Expose Wicker's READ-only browser ops (navigate / read / snapshot) and
+    /// the 雪球 / X discussion reads to THIRD-PARTY MCP clients (Claude Code /
+    /// Codex / etc.) over the bundled `wick-mcp` stdio server, via the
+    /// cross-process App-Group bridge. **Default FALSE** — this lets an external
+    /// agent drive your logged-in browser/社交 session, so it stays inert until
+    /// you opt in. Effective only when ALSO `enableWickerBrowser` is on and
+    /// we're on macOS 26 (the bridge server's activation gate). No page-mutating
+    /// ops (click/type/eval) are ever exposed over MCP.
+    var exposeWickerViaMCP: Bool {
+        didSet { UserDefaults.standard.set(exposeWickerViaMCP, forKey: "tf.exposeWickerViaMCP") }
+    }
+
     // MARK: - Skills (user-supplied playbooks)
 
     var userSkillsDirectoryPath: String? {
@@ -353,6 +377,14 @@ final class AgentSettings {
         // Off by default — Wicker's browser-operation tools + live panel stay
         // inert until the user opts in (and the app is on macOS 26+).
         self.enableWickerBrowser = ud.bool(forKey: "tf.enableWickerBrowser")
+        // Default TRUE: writes allowed once the browser is enabled. `ud.bool`
+        // returns false for an unset key, so default-true needs the presence
+        // check.
+        self.allowWickerBrowserWrites = ud.object(forKey: "tf.allowWickerBrowserWrites") == nil
+            ? true : ud.bool(forKey: "tf.allowWickerBrowserWrites")
+        // Off by default — exposing the logged-in browser/社交 session to
+        // third-party MCP clients is strictly opt-in.
+        self.exposeWickerViaMCP = ud.bool(forKey: "tf.exposeWickerViaMCP")
         self.userSkillsDirectoryPath = ud.string(forKey: "tf.userSkillsDir")
 
         self.chartSplitView = ud.bool(forKey: "ui.chartSplitView")

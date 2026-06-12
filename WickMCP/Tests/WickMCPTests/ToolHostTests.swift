@@ -58,7 +58,12 @@ private func wipeSharedStore() {
         "wick.watchlist",
         "wick.portfolio",
         "wick.methodology",
-        "wick.write_report"
+        "wick.write_report",
+        "wick.web_navigate",
+        "wick.web_read",
+        "wick.web_snapshot",
+        "wick.xueqiu_discussion",
+        "wick.x_discussion"
     ])
 }
 

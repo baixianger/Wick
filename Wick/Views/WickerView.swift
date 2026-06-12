@@ -47,6 +47,22 @@ struct WickerView: View {
     /// per-view state the moment `isAgentBrowsing` flips false.
     @State private var browserPinnedOpen: Bool = false
 
+    /// User-draggable width of the right-side browser panel. Seeded at the
+    /// former fixed 560pt; the draggable divider between chat and browser
+    /// writes the live value here (clamped to `browserWidthRange`) and the
+    /// panel `.frame(width:)` reads it, so the split is resizable. Hoisted to
+    /// WickerView so it persists across the panel mounting / unmounting.
+    @State private var browserPanelWidth: CGFloat = 560
+    /// In-drag baseline so the gesture is relative to where the divider was
+    /// when the drag began, not absolute pointer position (avoids a jump on
+    /// grab). nil when no drag is in flight.
+    @State private var browserDragStartWidth: CGFloat?
+
+    /// Clamp for the browser panel width. Lower bound keeps the live page
+    /// usable; upper bound guarantees the conversation keeps ≥520pt on the
+    /// 1180pt minimum window.
+    private let browserWidthRange: ClosedRange<CGFloat> = 360...820
+
     /// True while a `web.*` tool is mid-flight (macOS 26 + flag on +
     /// a live `BrowserSessionManager`). Drives the right-region hand-off:
     /// when this flips true we collapse the history drawer. Returns false
@@ -95,14 +111,18 @@ struct WickerView: View {
                let manager = runtime.browserSession as? BrowserSessionManager,
                browserPanelRevealed(manager)
             {
-                Divider()
+                // Draggable split handle between chat and browser. Grab and
+                // drag left/right to rebalance — width is clamped to
+                // `browserWidthRange` so neither pane collapses. Replaces the
+                // former fixed 560pt divider.
+                browserResizeHandle
                 // Browser gets the LARGER share of the workspace when open —
                 // the user is logging in / watching a real page, so the
-                // conversation narrows to give the live page room. The main
-                // window is ≥1180pt wide, so a 560pt browser still leaves a
-                // usable ≥620pt for chat.
+                // conversation narrows to give the live page room. Width is
+                // user-set via the handle (defaults 560pt); on the 1180pt
+                // minimum window even the 820pt max still leaves ≥360pt chat.
                 WickerBrowserPanel(manager: manager, pinnedOpen: $browserPinnedOpen)
-                    .frame(width: 560)
+                    .frame(width: browserPanelWidth)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if showHistoryDrawer {
                 Divider()
@@ -143,6 +163,39 @@ struct WickerView: View {
             Button("Cancel", role: .cancel) { renamingSessionID = nil }
             Button("Rename") { commitRename() }
         }
+    }
+
+    /// Draggable split handle between the conversation pane and the browser
+    /// panel. A 1pt visible divider sits inside a wider (8pt) transparent hit
+    /// area so it's easy to grab; the pointer turns into the
+    /// `resizeLeftRight` cursor on hover. Dragging writes `browserPanelWidth`
+    /// — the browser is on the trailing edge, so dragging LEFT (negative x)
+    /// widens it and dragging RIGHT narrows it.
+    @available(macOS 26.0, *)
+    private var browserResizeHandle: some View {
+        ZStack {
+            Color.clear
+                .frame(width: 8)
+                .contentShape(Rectangle())
+            Divider()
+        }
+        .frame(maxHeight: .infinity)
+        .onHover { inside in
+            if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    let base = browserDragStartWidth ?? browserPanelWidth
+                    if browserDragStartWidth == nil { browserDragStartWidth = base }
+                    // Trailing panel: leftward drag (negative translation)
+                    // should ENLARGE it, so subtract the x translation.
+                    let proposed = base - value.translation.width
+                    browserPanelWidth = min(max(proposed, browserWidthRange.lowerBound),
+                                            browserWidthRange.upperBound)
+                }
+                .onEnded { _ in browserDragStartWidth = nil }
+        )
     }
 
     /// Two-icon control cluster in the top-right of the conversation
@@ -463,7 +516,6 @@ private struct ConversationView: View {
 
     @Environment(AgentSettings.self) private var settings
     @Environment(AgentRuntime.self) private var runtime
-    @Environment(HoldingsStore.self) private var holdings
     @State private var draft: String = ""
     @State private var pending: Bool = false
     /// Live label shown in the pending indicator — switches between
@@ -473,15 +525,22 @@ private struct ConversationView: View {
     @State private var lastError: String?
     @FocusState private var inputFocused: Bool
 
-    // Document-import state. The composer accepts PDF / CSV drops + a
-    // 📎 file picker; on file received we run `LLMDocumentImporter`,
-    // surface `extractedDocument` via a sheet, and let
-    // `TransactionImportSheet` commit the batch to `HoldingsStore`.
+    // General attachment state (Phase B). The composer accepts images +
+    // PDF / CSV / Excel / text via a 📎 multi-select picker and drag-drop;
+    // each file is run through `AttachmentExtractor` (images → downscaled
+    // base64 for vision; docs → extracted text) and parked as a chip in
+    // `pendingAttachments` until the user sends. On send they ride on the
+    // user `ChatMessage` — images become `LLMImage` parts, docs are folded
+    // into the prompt text. Decoupled from the portfolio: Wicker reads the
+    // content and composes behaviour with its existing tools.
     @State private var showFilePicker: Bool = false
-    @State private var isExtracting: Bool = false
-    @State private var extractedDocument: ExtractedDocument?
-    @State private var importError: String?
+    @State private var pendingAttachments: [ChatAttachment] = []
+    /// Count of in-flight extractions — drives the spinner; >0 ⇒ busy.
+    @State private var extractingCount: Int = 0
+    @State private var attachmentError: String?
     @State private var isDropTargeted: Bool = false
+
+    private var isExtracting: Bool { extractingCount > 0 }
 
     private var live: ChatSession {
         store.session(for: session.id) ?? session
@@ -535,21 +594,19 @@ private struct ConversationView: View {
         // Easiest way: temporarily set draft, clear it, then run
         // the dispatch path directly so the user message stays the
         // one ChatStore already has.
-        dispatchExistingUserTurn(text: last.text)
+        dispatchExistingUserTurn(message: last)
     }
 
     /// Same body as `submit()` minus the user-message append + draft
     /// reset. Used by `autoContinueIfNeeded` to drive the LLM call
     /// against a user message that's already in the store.
-    private func dispatchExistingUserTurn(text: String) {
+    private func dispatchExistingUserTurn(message: ChatMessage) {
         lastError = nil
         pending = true
         pendingLabel = "thinking…"
+        let text = message.text
         let prior = Array(live.messages.dropLast())
-        let history: [LLMMessage] = prior.map {
-            LLMMessage(role: $0.role == .assistant ? .assistant : .user,
-                       content: $0.text)
-        }
+        let history: [LLMMessage] = prior.map(Self.llmMessage(from:))
         guard let provider = WickerLLM.provider(for: settings) else {
             pending = false
             pendingLabel = nil
@@ -559,11 +616,14 @@ private struct ConversationView: View {
         let config: TradingFloorConfig = settings.workflowConfig()
         let agent = runtime.makeChatAgent(llm: provider, config: config)
         let sessionID = session.id
+        let folded = Self.foldedContent(text: text, attachments: message.attachments)
+        let images = Self.llmImages(from: message.attachments)
         Task {
             var conversation = history
             do {
                 let reply = try await agent.respond(
-                    to: text,
+                    to: folded,
+                    images: images,
                     conversation: &conversation,
                     onEvent: { event in
                         Task { @MainActor in handleAgentEvent(event) }
@@ -743,6 +803,23 @@ private struct ConversationView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            // Soft top edge: instead of bubbles hard-cutting at the top of the
+            // scroll view, fade the content to transparent over the top ~64pt so
+            // text dissolves gently as it scrolls up (and tucks softly behind the
+            // headerActions capsule). A fixed-height fade band over a fully-opaque
+            // remainder keeps the fade a constant thickness regardless of panel
+            // height; masking to transparency reveals the real window background
+            // underneath, so it reads as a true fade-out, not a coloured overlay.
+            .mask(
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.35), .black],
+                        startPoint: .top, endPoint: .bottom)
+                        .frame(height: 64)
+                    Rectangle().fill(.black)
+                }
+                .ignoresSafeArea()
+            )
             .onChange(of: live.messages.count) { _, _ in
                 scrollToBottom(proxy)
             }
@@ -800,10 +877,10 @@ private struct ConversationView: View {
             if !settings.canRun {
                 providerHint
             }
-            if isExtracting {
-                extractingHint
+            if !pendingAttachments.isEmpty || isExtracting {
+                attachmentChipsRow(outerHPad: outerHPad)
             }
-            if let err = importError {
+            if let err = attachmentError {
                 importErrorBanner(err)
             }
             HStack(alignment: .bottom, spacing: 10) {
@@ -816,10 +893,10 @@ private struct ConversationView: View {
                         .padding(.bottom, hero ? 4 : 2)
                 }
                 .buttonStyle(.plain)
-                .disabled(isExtracting || !settings.canRun)
-                .help("Import broker statement (PDF / CSV)")
-                .accessibilityLabel("Import document")
-                .accessibilityIdentifier("WickerImportButton")
+                .disabled(!settings.canRun)
+                .help("Attach images or documents (PDF / CSV / Excel / text)")
+                .accessibilityLabel("Attach file")
+                .accessibilityIdentifier("WickerAttachButton")
 
                 TextField("Ask anything…", text: $draft, axis: .vertical)
                     .lineLimit(lines)
@@ -872,40 +949,59 @@ private struct ConversationView: View {
             handleDroppedProviders(providers)
         }
         .fileImporter(isPresented: $showFilePicker,
-                      allowedContentTypes: Self.importableTypes,
-                      allowsMultipleSelection: false) { result in
+                      allowedContentTypes: Self.attachableTypes,
+                      allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls):
-                if let first = urls.first { startExtraction(from: first) }
+                for url in urls { startExtraction(from: url, fromPicker: true) }
             case .failure(let err):
-                importError = err.localizedDescription
+                attachmentError = err.localizedDescription
             }
-        }
-        .sheet(item: $extractedDocument) { doc in
-            TransactionImportSheet(document: doc, onImported: { _ in })
-                .environment(holdings)
         }
     }
 
-    /// File extensions / UTTypes the composer accepts via drop + picker.
-    /// PDF is the main case (broker statements); CSV/plain-text are
-    /// included so future broker exports drop in without code changes.
-    static let importableTypes: [UTType] = [
-        .pdf,
-        .commaSeparatedText,
-        .plainText,
-        .text,
-    ]
+    /// UTTypes the composer accepts via drop + picker: images + the document
+    /// formats the extractor can read. `.spreadsheet` covers `.xlsx`; the
+    /// explicit `xlsx` filename type is added so the picker shows it even when
+    /// the system maps the extension loosely.
+    static let attachableTypes: [UTType] = {
+        var types: [UTType] = [
+            .image,
+            .pdf,
+            .commaSeparatedText,
+            .plainText,
+            .text,
+            .spreadsheet,
+        ]
+        if let xlsx = UTType(filenameExtension: "xlsx") { types.append(xlsx) }
+        return types
+    }()
 
-    private var extractingHint: some View {
-        HStack(spacing: 6) {
-            ProgressView().controlSize(.small)
-            Text("Extracting transactions…")
+    // MARK: Attachment chips
+
+    /// Horizontal row of attachment chips above the text field. Image chips
+    /// show a thumbnail; doc chips show an SF Symbol + truncated filename.
+    /// Each has a remove (×). A trailing spinner appears while extraction runs.
+    @ViewBuilder
+    private func attachmentChipsRow(outerHPad: CGFloat) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(pendingAttachments) { att in
+                    AttachmentChip(attachment: att) {
+                        pendingAttachments.removeAll { $0.id == att.id }
+                    }
+                }
+                if isExtracting {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("读取中…").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+            }
+            .padding(.horizontal, outerHPad)
         }
-        .font(.system(size: 11))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -917,7 +1013,7 @@ private struct ConversationView: View {
                 .lineLimit(3)
             Spacer()
             Button {
-                importError = nil
+                attachmentError = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.secondary)
@@ -979,45 +1075,35 @@ private struct ConversationView: View {
                 return
             }
             Task { @MainActor in
-                startExtraction(from: copy)
+                // Dropped copies live in our temp dir — no security scope hop.
+                startExtraction(from: copy, fromPicker: false)
             }
         }
         return true
     }
 
-    private func startExtraction(from url: URL) {
-        guard !isExtracting else { return }
-        importError = nil
-        guard let provider = WickerLLM.provider(for: settings) else {
-            importError = "Configure an LLM provider in Settings before importing documents."
-            return
-        }
-        let importer = LLMDocumentImporter(
-            llm: provider,
-            model: WickerLLM.model(for: settings))
-        isExtracting = true
-        // Re-resolve security-scoped access for sandboxed file
-        // selections from the picker. Drops from Finder don't need
-        // this — the system grants transient access — but the
-        // explicit unlock is harmless either way.
-        let needsScope = url.startAccessingSecurityScopedResource()
+    /// Run a file through `AttachmentExtractor` off the main actor and park the
+    /// resulting `ChatAttachment` chip. `fromPicker` selections need a
+    /// security-scoped access hop (sandboxed MAS build); dropped copies (which
+    /// already live in our temp dir) don't.
+    private func startExtraction(from url: URL, fromPicker: Bool) {
+        attachmentError = nil
+        extractingCount += 1
+        let filename = url.lastPathComponent
+        let needsScope = fromPicker && url.startAccessingSecurityScopedResource()
         Task {
             defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
             do {
-                let doc = try await importer.extract(url: url)
+                let attachment = try await AttachmentExtractor.extract(url: url)
                 await MainActor.run {
-                    isExtracting = false
-                    if doc.transactions.isEmpty {
-                        importError = "No stock transactions found in \(url.lastPathComponent)."
-                    } else {
-                        extractedDocument = doc
-                    }
+                    extractingCount = max(0, extractingCount - 1)
+                    pendingAttachments.append(attachment)
                 }
             } catch {
                 await MainActor.run {
-                    isExtracting = false
-                    importError = (error as? LocalizedError)?.errorDescription
-                        ?? error.localizedDescription
+                    extractingCount = max(0, extractingCount - 1)
+                    attachmentError = (error as? LocalizedError)?.errorDescription
+                        ?? "无法读取 \(filename)：\(error.localizedDescription)"
                 }
             }
         }
@@ -1025,8 +1111,10 @@ private struct ConversationView: View {
 
     private var canSubmit: Bool {
         !pending
+            && !isExtracting
             && settings.canRun
-            && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !pendingAttachments.isEmpty)
     }
 
     private var providerHint: some View {
@@ -1063,9 +1151,13 @@ private struct ConversationView: View {
     private func submit() {
         guard canSubmit else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachments = pendingAttachments
         draft = ""
+        pendingAttachments = []
+        attachmentError = nil
         lastError = nil
-        store.append(ChatMessage(role: .user, text: text), to: session.id)
+        store.append(ChatMessage(role: .user, text: text, attachments: attachments),
+                     to: session.id)
         pending = true
         pendingLabel = "thinking…"
 
@@ -1074,10 +1166,7 @@ private struct ConversationView: View {
         // `userMessage`). Using `dropLast()` is safe because we just
         // appended one message above and `store.append` is synchronous.
         let prior = Array(live.messages.dropLast())
-        let history: [LLMMessage] = prior.map {
-            LLMMessage(role: $0.role == .assistant ? .assistant : .user,
-                       content: $0.text)
-        }
+        let history: [LLMMessage] = prior.map(Self.llmMessage(from:))
         guard let provider = WickerLLM.provider(for: settings) else {
             pending = false
             pendingLabel = nil
@@ -1091,12 +1180,16 @@ private struct ConversationView: View {
         let config: TradingFloorConfig = settings.workflowConfig()
         let agent = runtime.makeChatAgent(llm: provider, config: config)
         let sessionID = session.id
+        // Fold doc attachments into the prompt; images ride as vision parts.
+        let folded = Self.foldedContent(text: text, attachments: attachments)
+        let images = Self.llmImages(from: attachments)
 
         Task {
             var conversation = history
             do {
                 let reply = try await agent.respond(
-                    to: text,
+                    to: folded,
+                    images: images,
                     conversation: &conversation,
                     onEvent: { event in
                         Task { @MainActor in
@@ -1120,6 +1213,43 @@ private struct ConversationView: View {
                 }
             }
         }
+    }
+
+    // MARK: ChatMessage → LLMMessage seam
+
+    /// Build the `[LLMImage]` parts for a user turn from its image
+    /// attachments. Empty for assistant turns and doc-only turns.
+    static func llmImages(from attachments: [ChatAttachment]) -> [LLMImage] {
+        attachments.compactMap { att in
+            guard att.isImage, let b64 = att.imageBase64, let mime = att.mimeType
+            else { return nil }
+            return LLMImage(mimeType: mime, base64: b64)
+        }
+    }
+
+    /// Fold document attachments' extracted text into the message content,
+    /// each in a clearly-delimited `[附件 …]` block so the model knows what it
+    /// is reading and where each file begins/ends. Images are NOT folded —
+    /// they ride as vision parts via `llmImages`.
+    static func foldedContent(text: String, attachments: [ChatAttachment]) -> String {
+        let docs = attachments.filter { !$0.isImage }
+        guard !docs.isEmpty else { return text }
+        var out = text
+        for doc in docs {
+            let body = doc.extractedText ?? ""
+            out += "\n\n[附件 \(doc.filename)]\n\(body)\n[/附件]"
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Reconstruct an `LLMMessage` for a prior conversation turn — folds its
+    /// doc text and re-attaches its images so history sent on later turns
+    /// stays multimodal-consistent with how it was originally sent.
+    static func llmMessage(from message: ChatMessage) -> LLMMessage {
+        let role: LLMMessage.Role = message.role == .assistant ? .assistant : .user
+        let content = foldedContent(text: message.text, attachments: message.attachments)
+        let images = llmImages(from: message.attachments)
+        return LLMMessage(role: role, content: content, images: images)
     }
 
     private func handleAgentEvent(_ event: ChatEvent) {
@@ -1212,6 +1342,118 @@ private struct ConversationView: View {
 /// `glowing == true` means this is the streaming message — we skip
 /// `StableMarkdownView`'s equatable cache (content changes per token)
 /// and append an animated dot trio underneath.
+/// A compact chip representing one attachment. Image attachments show a small
+/// thumbnail; documents show an SF Symbol + truncated filename. The composer
+/// variant carries a remove (×); the transcript variant (`onRemove == nil`) is
+/// read-only.
+private struct AttachmentChip: View {
+    let attachment: ChatAttachment
+    var onRemove: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if attachment.isImage, let image = thumbnail {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 26, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            } else {
+                Image(systemName: attachment.symbolName)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+            }
+            Text(attachment.filename)
+                .font(.system(size: 11))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 140)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(attachment.filename)")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.secondary.opacity(0.12))
+        )
+    }
+
+    /// Decode the stored base64 into an NSImage for the thumbnail. Cheap — the
+    /// image was already downscaled to ≤1568px on extraction.
+    private var thumbnail: NSImage? {
+        guard attachment.isImage,
+              let b64 = attachment.imageBase64,
+              let data = Data(base64Encoded: b64)
+        else { return nil }
+        return NSImage(data: data)
+    }
+}
+
+/// Read-only wrapping row of attachment chips shown inside a user transcript
+/// bubble. Wraps to multiple lines when the bubble is narrow.
+private struct FlowAttachmentRow: View {
+    let attachments: [ChatAttachment]
+    var body: some View {
+        ChipFlowLayout(spacing: 6) {
+            ForEach(attachments) { att in
+                AttachmentChip(attachment: att)
+            }
+        }
+    }
+}
+
+/// Tiny flow layout: lays children left-to-right, wrapping to the next line
+/// when the proposed width is exceeded. Enough for chip rows — no fancy
+/// alignment, fixed inter-item + line spacing.
+private struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0, maxLineWidth: CGFloat = 0
+        for sv in subviews {
+            let size = sv.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                maxLineWidth = max(maxLineWidth, x - spacing)
+                x = 0
+                y += lineHeight + spacing
+                lineHeight = 0
+            }
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        maxLineWidth = max(maxLineWidth, x - spacing)
+        return CGSize(width: maxLineWidth.isFinite ? maxLineWidth : 0,
+                      height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
+        var x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0
+        for sv in subviews {
+            let size = sv.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += lineHeight + spacing
+                lineHeight = 0
+            }
+            sv.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
+                     proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
 private struct MessageBubble: View {
     let message: ChatMessage
     var glowing: Bool = false
@@ -1237,12 +1479,17 @@ private struct MessageBubble: View {
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(.tertiary)
-                Text(message.text)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !message.attachments.isEmpty {
+                    FlowAttachmentRow(attachments: message.attachments)
+                }
+                if !message.text.isEmpty {
+                    Text(message.text)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -1451,15 +1698,102 @@ private struct WickerBrowserPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            tabStrip
             header
             Divider()
             #if canImport(WebKit)
-            WebView(manager.agentPage)
+            // Host the ACTIVE tab's page; `activeTabID` is observable, so switching
+            // tabs re-renders this and swaps the displayed page.
+            WebView(manager.activePage)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(manager.activeTabID)
             #endif
         }
         .frame(maxHeight: .infinity)
         .background(.regularMaterial)
+    }
+
+    /// Horizontal strip of tab chips above the address bar, one per open tab,
+    /// plus a trailing `+` to open a new blank tab. Stays clean with a single tab
+    /// (one chip + `+`). Active chip is accent-tinted; tapping a chip switches,
+    /// the small `xmark` closes. Mirrors the address-bar's liquid-glass treatment.
+    private var tabStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(manager.listTabs(), id: \.id) { tab in
+                    tabChip(index: tab.index,
+                            id: tab.id,
+                            title: tab.title,
+                            url: tab.url,
+                            isActive: tab.isActive)
+                }
+                Button {
+                    Task { _ = await manager.newTab(url: nil) }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .liquidGlass(cornerRadius: 8)
+                .help("New tab")
+                .accessibilityIdentifier("WickerBrowserNewTab")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+        }
+    }
+
+    /// One tab chip: title-or-host truncated, accent-tinted when active, with a
+    /// small close button. Tap switches; the `xmark` closes.
+    private func tabChip(index: Int,
+                         id: UUID,
+                         title: String,
+                         url: String,
+                         isActive: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(Self.chipLabel(title: title, url: url))
+                .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                .lineLimit(1)
+                .foregroundStyle(isActive
+                                 ? AnyShapeStyle(Color.accentColor)
+                                 : AnyShapeStyle(HierarchicalShapeStyle.secondary))
+            Button {
+                Task { _ = await manager.closeTab(ref: id.uuidString) }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, height: 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Close tab")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .liquidGlass(cornerRadius: 8, tint: isActive ? Color.accentColor : nil)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            Task { _ = await manager.switchTab(ref: id.uuidString) }
+        }
+        .accessibilityIdentifier("WickerBrowserTab\(index)")
+    }
+
+    /// Chip label: the page title if present, else the URL host, truncated to a
+    /// compact ~16-char width so the strip stays tidy.
+    private static func chipLabel(title: String, url: String) -> String {
+        let base: String
+        if !title.isEmpty {
+            base = title
+        } else if let host = URL(string: url)?.host, !host.isEmpty {
+            base = host
+        } else {
+            base = "New tab"
+        }
+        return base.count > 16 ? String(base.prefix(15)) + "…" : base
     }
 
     /// One compact toolbar row: status glyph, back / forward / reload, the address

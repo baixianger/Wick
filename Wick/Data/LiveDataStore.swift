@@ -16,7 +16,16 @@ final class LiveDataStore {
     enum Source: Equatable {
         case live(fetchedAt: Date)
         case demo                        // never fetched (fallback in use)
-        case error(String)               // fetch attempted and failed
+        case error(String)               // permanent failure (won't retry)
+        /// A transient fetch fault (throttle / network blip) is being retried
+        /// with backoff. `attempt` is the 1-based retry number in flight — the
+        /// badge shows "重试中 (n)" while the synthetic fallback renders.
+        case retrying(attempt: Int)
+        /// Backoff retries were exhausted. The source is treated as
+        /// temporarily down; the fallback keeps rendering. EastMoney's
+        /// push2his throttle is transient and self-heals, so a later user
+        /// action (symbol/interval revisit) re-arms a fresh fetch.
+        case unavailable
     }
 
     private struct Key: Hashable {
@@ -35,6 +44,18 @@ final class LiveDataStore {
     private var cache: [Key: CandleSeries] = [:]
     private var sources: [Key: Source] = [:]
     private var inFlight: Set<Key> = []
+
+    /// Backoff bookkeeping for transient fetch faults. `retryAttempts` counts
+    /// failures so far for a key; `retryTasks` holds the pending
+    /// sleep-then-refetch Task so a fresh `scheduleFetchIfNeeded` doesn't stack
+    /// duplicates and a success can cancel an in-flight backoff.
+    @ObservationIgnored private var retryAttempts: [Key: Int] = [:]
+    @ObservationIgnored private var retryTasks: [Key: Task<Void, Never>] = [:]
+
+    /// Cap on transient-fault retries before a key settles into `.unavailable`.
+    /// Five attempts at 2/4/8/16/30 s ≈ 1 min of self-heal headroom — enough to
+    /// ride out an EastMoney push2his throttle without hammering it.
+    private static let maxRetries = 5
 
     init() {}
 
@@ -62,6 +83,10 @@ final class LiveDataStore {
 
     private func scheduleFetchIfNeeded(_ key: Key, fallback: CandleSeries) {
         guard !inFlight.contains(key) else { return }
+        // A backoff retry is already armed for this key — let it run rather
+        // than firing a competing immediate fetch. (The retry Task clears this
+        // slot just before it re-enters here, so the next attempt isn't blocked.)
+        guard retryTasks[key] == nil else { return }
 
         // Chinese A-share / HK tickers (`.SS` / `.SZ` / `.HK`, or any form
         // `CNSymbol.parse` recognizes) go to EastMoney — the same source the
@@ -81,7 +106,7 @@ final class LiveDataStore {
                                                            interval: key.interval)
                     self.handleFetchSuccess(key: key, series: series)
                 } catch {
-                    self.handleFetchFailure(key: key, error: error)
+                    self.handleFetchFailure(key: key, error: error, fallback: fallback)
                 }
             }
             return
@@ -105,7 +130,7 @@ final class LiveDataStore {
                                                      range: range)
                 self.handleFetchSuccess(key: key, series: series)
             } catch {
-                self.handleFetchFailure(key: key, error: error)
+                self.handleFetchFailure(key: key, error: error, fallback: fallback)
             }
         }
     }
@@ -121,13 +146,66 @@ final class LiveDataStore {
                                    session: series.session)
         cache[key] = stamped
         sources[key] = .live(fetchedAt: Date())
+        // Recovered — tear down any backoff bookkeeping for this key.
+        retryTasks[key]?.cancel()
+        retryTasks[key] = nil
+        retryAttempts[key] = nil
     }
 
-    private func handleFetchFailure(key: Key, error: any Error) {
+    /// A fetch failed. Permanent faults settle immediately; transient ones
+    /// (throttle / network blip — the common EastMoney push2his case) get a
+    /// bounded exponential backoff retry, surfacing `.retrying` while waiting
+    /// and `.unavailable` once attempts are spent. The synthetic fallback keeps
+    /// rendering throughout.
+    private func handleFetchFailure(key: Key, error: any Error, fallback: CandleSeries) {
         inFlight.remove(key)
-        // Keep returning the synthetic fallback. Stamp the source so the
-        // badge can read "Demo · rate-limited" or similar.
-        sources[key] = .error(String(describing: error))
+
+        if Self.isPermanent(error) {
+            retryTasks[key]?.cancel()
+            retryTasks[key] = nil
+            retryAttempts[key] = nil
+            sources[key] = .error(String(describing: error))
+            return
+        }
+
+        let attempt = (retryAttempts[key] ?? 0) + 1
+        retryAttempts[key] = attempt
+        guard attempt <= Self.maxRetries else {
+            // Spent the budget — settle into "temporarily unavailable". The
+            // throttle self-heals, so a later revisit (which clears state via a
+            // fresh fetch) re-arms. Drop the attempt counter so that revisit
+            // starts clean.
+            retryTasks[key] = nil
+            retryAttempts[key] = nil
+            sources[key] = .unavailable
+            return
+        }
+
+        sources[key] = .retrying(attempt: attempt)
+        let delay = Self.backoffDelay(attempt: attempt)
+        let task = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            // Clear our own slot BEFORE re-entering so the pending-retry guard
+            // in `scheduleFetchIfNeeded` doesn't reject the next attempt.
+            self.retryTasks[key] = nil
+            self.scheduleFetchIfNeeded(key, fallback: fallback)
+        }
+        retryTasks[key] = task
+    }
+
+    /// Classify a fetch error. Only structurally-permanent faults (an interval
+    /// with no source mapping) are non-retryable; throttle / empty / network
+    /// faults are transient and worth a backoff.
+    private static func isPermanent(_ error: any Error) -> Bool {
+        if case EastMoneyChartError.unsupportedInterval = error { return true }
+        return false
+    }
+
+    /// Exponential backoff in seconds, capped: 2, 4, 8, 16, 30, … — about a
+    /// minute of total headroom across `maxRetries` attempts.
+    private static func backoffDelay(attempt: Int) -> Double {
+        min(pow(2.0, Double(attempt)), 30)
     }
 
     // MARK: - Yahoo quirks

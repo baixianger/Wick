@@ -57,6 +57,9 @@ struct WickApp: App {
                 .onAppear {
                     // Build the BYO data chain from current keys.
                     agentRuntime.reconfigure(with: agentSettings)
+                    // Evaluate the MCP bridge gate on launch: starts the
+                    // GUI-side BridgeServer iff the user opted in.
+                    agentRuntime.reconfigureBridge(with: agentSettings)
                     // Hand the FRED cache the user's key so Macro
                     // tab cards switch from synthetic to live within
                     // ~1 s of first visit.
@@ -85,6 +88,21 @@ struct WickApp: App {
                 // the 7 `web.*` tools so the next chat turn (and the live
                 // panel's gate) reflect the change immediately.
                 .onChange(of: agentSettings.enableWickerBrowser) { _, _ in
+                    agentRuntime.reconfigureWebTools(with: agentSettings)
+                    // The bridge gate also depends on this flag — re-evaluate so
+                    // turning the browser off also stops the MCP bridge.
+                    agentRuntime.reconfigureBridge(with: agentSettings)
+                }
+                // Opting the MCP bridge on/off starts or stops the GUI-side
+                // BridgeServer immediately, so third-party MCP clients can (or
+                // can no longer) drive the logged-in browser/社交 session.
+                .onChange(of: agentSettings.exposeWickerViaMCP) { _, _ in
+                    agentRuntime.reconfigureBridge(with: agentSettings)
+                }
+                // Flipping the write guardrail re-registers click/type/eval as
+                // either live actions or read-only refusals — takes effect on
+                // the next chat turn with no rebuild.
+                .onChange(of: agentSettings.allowWickerBrowserWrites) { _, _ in
                     agentRuntime.reconfigureWebTools(with: agentSettings)
                 }
         }

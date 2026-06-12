@@ -132,7 +132,12 @@ struct WickMCPEndToEndTests {
             "wick.portfolio",
             "wick.snapshot",
             "wick.watchlist",
-            "wick.write_report"
+            "wick.web_navigate",
+            "wick.web_read",
+            "wick.web_snapshot",
+            "wick.write_report",
+            "wick.x_discussion",
+            "wick.xueqiu_discussion"
         ])
     }
 

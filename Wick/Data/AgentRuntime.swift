@@ -35,14 +35,26 @@ final class AgentRuntime {
     /// `nil` below macOS 26 (the `WebPage` API floor) — wiring then no-ops.
     @ObservationIgnored let browserSession: AnyObject?
 
+    /// GUI-side responder for the cross-process MCP bridge (TODO #39). Holds a
+    /// `BridgeServer` that, WHEN the user opts in (`exposeWickerViaMCP`), polls
+    /// the App-Group `Bridge/` dir and services third-party `wick.web_*` /
+    /// `wick.*_discussion` MCP calls against the live `BrowserSessionManager`.
+    /// `nil` below macOS 26 (no `WebPage` / `BrowserSessionManager`). Typed as
+    /// `AnyObject?` so this file stays free of the macOS-26 availability floor
+    /// at property level (same shape as `browserSession`).
+    @ObservationIgnored let bridgeServer: AnyObject?
+
     init() {
         self.tools = ToolRegistry()
         let userSkillsDir = Self.userSkillsDirectory()
         self.skills = SkillRegistry(userDirectory: userSkillsDir)
         if #available(macOS 26.0, *) {
-            self.browserSession = BrowserSessionManager()
+            let manager = BrowserSessionManager()
+            self.browserSession = manager
+            self.bridgeServer = BridgeServer(manager: manager)
         } else {
             self.browserSession = nil
+            self.bridgeServer = nil
         }
 
         // Initial registration with the Yahoo-only baseline. The host
@@ -92,19 +104,111 @@ final class AgentRuntime {
             Task { [tools] in await tools.unregisterAll(names: WebTools.names) }
             return
         }
+        // One-switch write guardrail: when `allowWickerBrowserWrites` is off, the
+        // three page-mutating tools (click / type / eval) are swapped for a
+        // refusal that points the user to the toggle — read-only browsing, no
+        // per-action prompts. Navigation / read / snapshot / fetchJSON / tab
+        // management are never gated.
+        let allowWrites = settings.allowWickerBrowserWrites
+        let readOnlyRefusal = "只读模式：已在「设置 → 工作流 → BYO 浏览器」中关闭浏览器写操作。"
+            + "如需让 Wicker 点击 / 输入 / 执行脚本，请在那里开启「允许写操作」。"
+
         // Build the main-actor bridge over the live manager. The closures hop to
         // `@MainActor` (the manager's isolation) on each call; the AgentTool
         // itself stays `Sendable` and never captures the non-Sendable manager.
         let driver = WebToolDriver(
             navigate:  { @Sendable url in await manager.navigate(to: url) },
             readText:  { @Sendable sel in await manager.readText(selector: sel) },
-            snapshot:  { @Sendable in await manager.snapshotOutline() },
-            click:     { @Sendable sel in await manager.click(selector: sel) },
-            type:      { @Sendable sel, txt, enter in await manager.type(selector: sel, text: txt, enter: enter) },
-            eval:      { @Sendable js in await manager.eval(js: js) },
-            fetchJSON: { @Sendable url in await manager.fetchJSON(url: url) })
+            snapshot:  { @Sendable full, viewportOnly, verbose in
+                await manager.snapshotOutline(full: full, viewportOnly: viewportOnly, verbose: verbose) },
+            click:     { @Sendable ref, sel in
+                guard allowWrites else { return readOnlyRefusal }
+                return await manager.click(ref: ref, selector: sel) },
+            type:      { @Sendable ref, sel, txt, enter in
+                guard allowWrites else { return readOnlyRefusal }
+                return await manager.type(ref: ref, selector: sel, text: txt, enter: enter) },
+            eval:      { @Sendable js in
+                guard allowWrites else { return readOnlyRefusal }
+                return await manager.eval(js: js) },
+            fetchJSON: { @Sendable url in await manager.fetchJSON(url: url) },
+            tabs:      { @Sendable in await manager.listTabsFormatted() },
+            newTab:    { @Sendable url in await manager.newTab(url: url) },
+            switchTab: { @Sendable ref in await manager.switchTab(ref: ref) },
+            closeTab:  { @Sendable ref in await manager.closeTab(ref: ref) })
         let webTools = WebTools.all(driver: driver)
         Task { [tools] in await tools.registerAll(webTools) }
+    }
+
+    /// Start or stop the GUI-side MCP bridge server (TODO #39) per the opt-in
+    /// `exposeWickerViaMCP` gate. When ON (and on macOS 26 with a live
+    /// `BridgeServer`), the server polls the App-Group `Bridge/` dir and answers
+    /// third-party `wick.web_*` / `wick.*_discussion` MCP calls against the live
+    /// browser/社交 sessions. When OFF, the server stops and NO bridge requests
+    /// are serviced. Host calls this on launch + on every `exposeWickerViaMCP` /
+    /// `enableWickerBrowser` change.
+    func reconfigureBridge(with settings: AgentSettings) {
+        guard #available(macOS 26.0, *),
+              let server = bridgeServer as? BridgeServer
+        else { return }
+        server.reconfigure(with: settings)
+    }
+
+    /// Wire the agent's `portfolio.*` tools over the app's live `HoldingsStore`
+    /// so Wicker can read and write the user's 持仓. `HoldingsStore` is created
+    /// in `ContentView` (window-scoped, `@MainActor @Observable`), not here, so
+    /// the host calls this from `ContentView.onAppear` once the store exists.
+    ///
+    /// We capture the store in `@Sendable` closures that hop to `@MainActor`
+    /// (the store's isolation) — same bridge shape as `reconfigureWebTools`, so
+    /// the `AgentTool`s stay `Sendable` and never hold the non-Sendable store
+    /// directly. Idempotent: re-registering by `spec.name` overwrites.
+    func attachPortfolio(_ store: HoldingsStore) {
+        let driver = PortfolioToolDriver(
+            add: { @Sendable req in
+                await MainActor.run {
+                    store.add(Holding(
+                        symbol: req.symbol,
+                        name: req.name,
+                        side: req.side,
+                        date: req.date,
+                        quantity: req.quantity,
+                        price: req.price,
+                        currency: req.currency,
+                        source: .manual))
+                    let verb = req.side == .buy ? "Bought" : "Sold"
+                    return "✅ \(verb) \(Self.trimNumber(req.quantity)) \(req.symbol) @ "
+                        + "\(Self.trimNumber(req.price)) \(req.currency) "
+                        + "(\(Self.dayString(req.date))). Added to portfolio."
+                }
+            },
+            list: { @Sendable in
+                await MainActor.run {
+                    let positions = store.positions()
+                    guard !positions.isEmpty else {
+                        return "Portfolio is empty — no positions yet."
+                    }
+                    let lines = positions.map { p in
+                        "- \(p.symbol) (\(p.name)): net \(Self.trimNumber(p.netQuantity)) "
+                            + "@ avg \(Self.trimNumber(p.averageBuyPrice)) \(p.currency) "
+                            + "[\(p.transactionCount) tx]"
+                    }
+                    return "Current positions (\(positions.count)):\n" + lines.joined(separator: "\n")
+                }
+            })
+        Task { [tools] in await tools.registerAll(PortfolioTools.all(driver: driver)) }
+    }
+
+    /// Format a double without a trailing `.0` for whole numbers, else 2 dp.
+    nonisolated private static func trimNumber(_ v: Double) -> String {
+        if v == v.rounded() { return String(Int(v)) }
+        return String(format: "%.2f", v)
+    }
+    nonisolated private static func dayString(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: d)
     }
 
     /// Instance wrapper around the static chain builder that splices in the

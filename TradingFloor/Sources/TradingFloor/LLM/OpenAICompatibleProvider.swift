@@ -52,8 +52,24 @@ public struct OpenAICompatibleProvider: LLMProvider {
         if let apiKey { urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
 
         // OpenAI puts the system prompt as a leading message with role "system".
-        var messages: [Body.Message] = [.init(role: "system", content: request.system)]
-        messages += request.messages.map { .init(role: $0.role.rawValue, content: $0.content) }
+        // The system turn is always plain text.
+        var messages: [Body.Message] = [.init(role: "system", content: .text(request.system))]
+        messages += request.messages.map { msg in
+            // Only build the multimodal array shape when there are actually
+            // images to send. Text-only turns stay a bare string so the body
+            // is byte-for-byte identical to the pre-multimodal path — many
+            // OpenAI-compatible servers (Ollama et al.) are pickier about the
+            // array form, so we don't pay that compatibility cost unless asked.
+            if msg.images.isEmpty {
+                return .init(role: msg.role.rawValue, content: .text(msg.content))
+            }
+            var parts: [Body.Part] = [.init(type: "text", text: msg.content, image_url: nil)]
+            parts += msg.images.map {
+                .init(type: "image_url", text: nil,
+                      image_url: .init(url: "data:\($0.mimeType);base64,\($0.base64)"))
+            }
+            return .init(role: msg.role.rawValue, content: .parts(parts))
+        }
 
         let body = Body(model: request.model, messages: messages,
                         max_tokens: request.maxTokens, temperature: request.temperature)
@@ -98,11 +114,39 @@ public struct OpenAICompatibleProvider: LLMProvider {
     // MARK: - Wire types
 
     private struct Body: Encodable {
-        struct Message: Encodable { let role: String; let content: String }
+        struct Message: Encodable { let role: String; let content: MessageContent }
+        /// One element of the multimodal content array. `image_url` carries a
+        /// `data:<mime>;base64,<b64>` URL; nil fields are omitted so a text
+        /// part doesn't emit a null `image_url` (and vice versa).
+        struct Part: Encodable {
+            struct ImageURL: Encodable { let url: String }
+            let type: String          // "text" | "image_url"
+            let text: String?
+            let image_url: ImageURL?
+        }
         let model: String
         let messages: [Message]
         let max_tokens: Int
         let temperature: Double
+    }
+
+    /// OpenAI's `content` is polymorphic: a plain `String` for text turns, or
+    /// an array of typed parts for multimodal turns. Swift's synthesized
+    /// `Encodable` can't express "either a string or an array" for one field,
+    /// so we model it as an enum and hand-write `encode(to:)` — `.text`
+    /// encodes a single string into the same JSON slot, `.parts` encodes the
+    /// array. This is what lets text-only turns stay bare strings while image
+    /// turns become the array form, all under one `content` key.
+    private enum MessageContent: Encodable {
+        case text(String)
+        case parts([Body.Part])
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch self {
+            case .text(let s): try c.encode(s)
+            case .parts(let p): try c.encode(p)
+            }
+        }
     }
 
     private struct Reply: Decodable {

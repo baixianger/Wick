@@ -35,6 +35,11 @@ struct ContentView: View {
     /// One process-wide search adapter — Actor, so no `@State` ceremony.
     private let searchAdapter = YahooSearchAdapter()
     @Environment(LiveDataStore.self) private var store
+    /// Shared agent runtime (created in `WickApp`). Read here so the
+    /// window-scoped `HoldingsStore` can be wired into Wicker's
+    /// `portfolio.*` tools on appear — the store lives here, the runtime
+    /// at app level, so this is the seam where they meet.
+    @Environment(AgentRuntime.self) private var agentRuntime
 
     var body: some View {
         @Bindable var agentSettings = agentSettings
@@ -143,6 +148,9 @@ struct ContentView: View {
                                  interval: .d1,
                                  fallback: t.dailySeries)
             }
+            // Wire Wicker's portfolio.* tools over this window's live
+            // HoldingsStore so the agent can read/write 持仓 (idempotent).
+            agentRuntime.attachPortfolio(holdings)
         }
     }
 

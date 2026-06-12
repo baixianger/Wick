@@ -32,7 +32,20 @@ public struct AnthropicProvider: LLMProvider {
             max_tokens: request.maxTokens,
             temperature: request.temperature,
             system: request.system,
-            messages: request.messages.map { .init(role: $0.role.rawValue, content: $0.content) }
+            messages: request.messages.map { msg in
+                // Text-only turns keep Anthropic's plain-string `content` form,
+                // byte-identical to before. Only when images are attached do we
+                // switch to the documented content-block array.
+                if msg.images.isEmpty {
+                    return .init(role: msg.role.rawValue, content: .text(msg.content))
+                }
+                var blocks: [Body.Block] = [.init(type: "text", text: msg.content, source: nil)]
+                blocks += msg.images.map {
+                    .init(type: "image", text: nil,
+                          source: .init(type: "base64", media_type: $0.mimeType, data: $0.base64))
+                }
+                return .init(role: msg.role.rawValue, content: .blocks(blocks))
+            }
         )
         urlRequest.httpBody = try JSONEncoder().encode(body)
 
@@ -66,12 +79,40 @@ public struct AnthropicProvider: LLMProvider {
     // MARK: - Wire types
 
     private struct Body: Encodable {
-        struct Message: Encodable { let role: String; let content: String }
+        struct Message: Encodable { let role: String; let content: MessageContent }
+        /// One Anthropic content block. A `text` block carries `text`; an
+        /// `image` block carries `source` (base64 + media_type). nil fields are
+        /// omitted so a text block doesn't emit a null `source`.
+        struct Block: Encodable {
+            struct Source: Encodable { let type: String; let media_type: String; let data: String }
+            let type: String          // "text" | "image"
+            let text: String?
+            let source: Source?
+        }
         let model: String
         let max_tokens: Int
         let temperature: Double
         let system: String
         let messages: [Message]
+    }
+
+    /// Anthropic's `content` is either a plain `String` (text-only turn) or an
+    /// array of content blocks (multimodal). Swift can't synthesize a field
+    /// that is "string or array", so we model it as an enum with a hand-written
+    /// `encode(to:)`: `.text` writes a single string into the `content` slot,
+    /// `.blocks` writes the array. This keeps non-image turns as bare strings —
+    /// identical wire bytes to the original provider — while image turns use
+    /// the block array Anthropic's vision API expects.
+    private enum MessageContent: Encodable {
+        case text(String)
+        case blocks([Body.Block])
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch self {
+            case .text(let s): try c.encode(s)
+            case .blocks(let b): try c.encode(b)
+            }
+        }
     }
 
     private struct Reply: Decodable {

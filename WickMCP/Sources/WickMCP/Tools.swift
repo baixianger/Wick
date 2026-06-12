@@ -37,7 +37,12 @@ final class ToolHost {
             watchlistSpec,
             portfolioSpec,
             methodologySpec,
-            writeReportSpec
+            writeReportSpec,
+            webNavigateSpec,
+            webReadSpec,
+            webSnapshotSpec,
+            xueqiuDiscussionSpec,
+            xDiscussionSpec
         ]
     }
 
@@ -54,8 +59,223 @@ final class ToolHost {
         case "wick.portfolio":  return try await portfolio(arguments: arguments)
         case "wick.methodology": return try await methodology(arguments: arguments)
         case "wick.write_report": return try writeReport(arguments: arguments)
+        case "wick.web_navigate":      return try await webNavigate(arguments: arguments)
+        case "wick.web_read":          return try await webRead(arguments: arguments)
+        case "wick.web_snapshot":      return try await webSnapshot(arguments: arguments)
+        case "wick.xueqiu_discussion": return try await xueqiuDiscussion(arguments: arguments)
+        case "wick.x_discussion":      return try await xDiscussion(arguments: arguments)
         default:                throw MCPToolError.unknown(name)
         }
+    }
+
+    // MARK: - Live cross-process bridge tools (TODO #39)
+    //
+    // These five tools reach capabilities that live in the GUI app process —
+    // the `@MainActor` WebKit-backed `BrowserSessionManager` (navigate / read /
+    // snapshot) and the 雪球 / X discussion scrapers (logged-in cookie jars). The
+    // helper is a SEPARATE sandboxed subprocess, so it can't call those directly.
+    // Instead each tool enqueues a `BridgeRequest` into the App-Group `Bridge/`
+    // dir (the only sanctioned IPC channel) and polls for the GUI's
+    // `BridgeResponse`. If the GUI isn't running — or the user hasn't opted into
+    // exposing the browser over MCP — no response ever lands and we return a
+    // clear, non-hanging message telling the user how to enable it.
+    //
+    // Surface is READ-only by design: navigate + read + snapshot + 雪球/X reads.
+    // Page-mutating ops (click / type / eval) are deliberately NOT exposed over
+    // MCP in this pass — driving the user's logged-in session from a third-party
+    // agent is already sensitive; mutation stays in-app behind the live panel.
+
+    /// How long we wait for the GUI to answer before giving up. The GUI polls
+    /// the bridge ~every 0.4s; 20s leaves ample room for a slow page load while
+    /// never hanging the MCP client indefinitely.
+    private static let bridgeTimeout: TimeInterval = 20
+
+    /// The standard "not enabled / not running" message — identical for every
+    /// bridge tool so the calling agent learns the one switch to flip.
+    private static let bridgeUnavailableText =
+        "Wick 未运行，或未在「设置 → 工作流」开启『通过 MCP 暴露 Wicker 浏览器/社交』。请先启用后重试。"
+
+    /// Enqueue a bridge request and poll for its response up to `bridgeTimeout`.
+    /// Returns the GUI's rendered text on success, or the clear unavailable
+    /// message on timeout / missing container. Never hangs, never throws.
+    private func runBridge(tool: SharedBridge.Tool,
+                           args: [String: JSONValue]) async -> [[String: Any]]
+    {
+        guard SharedBridge.isAvailable else {
+            return [["type": "text", "text": Self.bridgeUnavailableText]]
+        }
+        let request = BridgeRequest(tool: tool.rawValue, args: args)
+        guard SharedBridge.enqueueRequest(request) else {
+            return [["type": "text", "text": Self.bridgeUnavailableText]]
+        }
+        let deadline = Date().addingTimeInterval(Self.bridgeTimeout)
+        // Poll at ~0.2s — twice the GUI's cadence so we catch a fresh response
+        // promptly without busy-spinning.
+        while Date() < deadline {
+            if let resp = SharedBridge.readResponse(id: request.id) {
+                return [["type": "text", "text": resp.text]]
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+        // Timed out — stop the GUI from later answering a dead request, and tell
+        // the agent how to turn the feature on.
+        SharedBridge.cancelRequest(id: request.id)
+        return [["type": "text", "text": Self.bridgeUnavailableText]]
+    }
+
+    // MARK: wick.web_navigate
+
+    private var webNavigateSpec: [String: Any] {
+        [
+            "name": "wick.web_navigate",
+            "description": """
+            Drive Wick's embedded browser to a URL and return the final URL + \
+            page title once it settles. Operates the SAME logged-in browser tab \
+            the user sees in Wick, so cookies/logins ride along. Read-only — it \
+            navigates and reports; it does not click or type. Requires Wick to be \
+            running with 『通过 MCP 暴露 Wicker 浏览器/社交』enabled (macOS 26+).
+            """,
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "url": ["type": "string",
+                            "description": "URL to load — scheme optional (defaults to https)."]
+                ],
+                "required": ["url"]
+            ]
+        ]
+    }
+
+    private func webNavigate(arguments: [String: Any]) async throws -> [[String: Any]] {
+        guard let url = (arguments["url"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty
+        else { throw MCPToolError.invalidArgument("`url` must be a non-empty string") }
+        return await runBridge(tool: .webNavigate, args: ["url": .string(url)])
+    }
+
+    // MARK: wick.web_read
+
+    private var webReadSpec: [String: Any] {
+        [
+            "name": "wick.web_read",
+            "description": """
+            Read the visible text of Wick's current browser page (or the first \
+            element matching a CSS `selector`). Returns the innerText, \
+            whitespace-collapsed. Pair with `wick.web_navigate` first. Read-only. \
+            Requires Wick running with the MCP browser exposure enabled.
+            """,
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "selector": ["type": "string",
+                                 "description": "Optional CSS selector — omit to read the whole page body."]
+                ]
+            ]
+        ]
+    }
+
+    private func webRead(arguments: [String: Any]) async throws -> [[String: Any]] {
+        var args: [String: JSONValue] = [:]
+        if let sel = (arguments["selector"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !sel.isEmpty {
+            args["selector"] = .string(sel)
+        }
+        return await runBridge(tool: .webRead, args: args)
+    }
+
+    // MARK: wick.web_snapshot
+
+    private var webSnapshotSpec: [String: Any] {
+        [
+            "name": "wick.web_snapshot",
+            "description": """
+            Take a token-efficient accessibility/DOM outline of Wick's current \
+            browser page — a compact tree of interactive + textual nodes with \
+            stable `ref:N` handles. The first call after a navigation returns the \
+            full baseline; pass `full:true` to force a fresh one. `viewportOnly` \
+            limits the walk to the visible region for big pages. Read-only. \
+            Requires Wick running with the MCP browser exposure enabled.
+            """,
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "full": ["type": "boolean",
+                             "description": "Force a fresh full baseline instead of a delta.",
+                             "default": false],
+                    "viewportOnly": ["type": "boolean",
+                                     "description": "Walk only the visible region (+~1 screen).",
+                                     "default": false]
+                ]
+            ]
+        ]
+    }
+
+    private func webSnapshot(arguments: [String: Any]) async throws -> [[String: Any]] {
+        var args: [String: JSONValue] = [:]
+        if let full = arguments["full"] as? Bool { args["full"] = .bool(full) }
+        if let vp = arguments["viewportOnly"] as? Bool { args["viewportOnly"] = .bool(vp) }
+        return await runBridge(tool: .webSnapshot, args: args)
+    }
+
+    // MARK: wick.xueqiu_discussion
+
+    private var xueqiuDiscussionSpec: [String: Any] {
+        [
+            "name": "wick.xueqiu_discussion",
+            "description": """
+            Read recent 雪球 (Xueqiu) discussion posts for a Chinese A-share / \
+            Hong Kong ticker, using the user's logged-in 雪球 session inside Wick. \
+            Returns author / text / 赞·评 counts / time per post. Read-only. CN/HK \
+            symbols only (e.g. '600519.SS', '0700.HK'). Requires Wick running, \
+            the user signed into 雪球, and the MCP browser exposure enabled.
+            """,
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "symbol": ["type": "string",
+                               "description": "CN/HK symbol — '600519.SS', '0700.HK', etc."]
+                ],
+                "required": ["symbol"]
+            ]
+        ]
+    }
+
+    private func xueqiuDiscussion(arguments: [String: Any]) async throws -> [[String: Any]] {
+        guard let symbol = (arguments["symbol"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !symbol.isEmpty
+        else { throw MCPToolError.invalidArgument("`symbol` must be a non-empty string") }
+        return await runBridge(tool: .xueqiuDiscussion, args: ["symbol": .string(symbol)])
+    }
+
+    // MARK: wick.x_discussion
+
+    private var xDiscussionSpec: [String: Any] {
+        [
+            "name": "wick.x_discussion",
+            "description": """
+            Read recent X (Twitter) cashtag discussion ($SYMBOL) for a ticker, \
+            using the user's logged-in X session inside Wick (US / intl markets). \
+            Returns handle + tweet text per post. Read-only. The symbol is \
+            reduced to its bare ticker before the `$` (e.g. 'AAPL'/'TSLA'). \
+            Requires Wick running, the user signed into X, and the MCP browser \
+            exposure enabled.
+            """,
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "symbol": ["type": "string",
+                               "description": "Ticker for the cashtag — e.g. 'TSLA', 'NVDA'."]
+                ],
+                "required": ["symbol"]
+            ]
+        ]
+    }
+
+    private func xDiscussion(arguments: [String: Any]) async throws -> [[String: Any]] {
+        guard let symbol = (arguments["symbol"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !symbol.isEmpty
+        else { throw MCPToolError.invalidArgument("`symbol` must be a non-empty string") }
+        return await runBridge(tool: .xDiscussion, args: ["symbol": .string(symbol)])
     }
 
     // MARK: - wick.snapshot

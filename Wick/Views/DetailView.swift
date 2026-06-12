@@ -270,6 +270,16 @@ struct DetailView: View {
         case .error:
             badgePill(dot: .orange, label: "Demo · network unavailable",
                        accent: .orange)
+        case .retrying(let attempt):
+            // Transient throttle / blip — backing off and retrying. Amber so
+            // it reads as "working on it", not a hard failure.
+            badgePill(dot: .yellow, label: "源暂不可用 · 重试中 (\(attempt))",
+                       accent: .yellow)
+        case .unavailable:
+            // Backoff spent. Honest "temporarily down" — the synthetic series
+            // is what's on screen; revisiting the symbol re-arms a fetch.
+            badgePill(dot: .red, label: "源暂不可用 · 显示演示数据",
+                       accent: .red)
         case .demo:
             badgePill(dot: .secondary, label: "Loading…  (Demo)",
                        accent: .secondary)

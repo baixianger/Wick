@@ -46,3 +46,8 @@ WickServer/fred.md
 # Server report cache (local DiskReportStore output)
 WickServer/report-cache/
 report-cache/
+WickServer/openrouter.md
+
+# Session tooling (Claude Code / csg daemon)
+.claude/
+.csg/

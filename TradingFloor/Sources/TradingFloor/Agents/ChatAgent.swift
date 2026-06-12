@@ -38,13 +38,19 @@ public actor ChatAgent {
     /// Returns the final assistant text; intermediate tool-call rounds are
     /// appended to `conversation` so the next user turn sees them. The
     /// `onEvent` callback fires for every step — useful for a streaming UI.
+    /// `images` ride onto the user turn as vision content blocks (the provider
+    /// encodes them when non-empty, plain string otherwise). Document
+    /// attachments are NOT passed here — the caller folds their extracted text
+    /// into `userMessage` before calling. Defaults to empty so existing
+    /// text-only call sites compile unchanged.
     public func respond(
         to userMessage: String,
+        images: [LLMImage] = [],
         conversation: inout [LLMMessage],
         onEvent: (@Sendable (ChatEvent) -> Void)? = nil
     ) async throws -> String {
         let system = await buildSystemPrompt()
-        conversation.append(LLMMessage(role: .user, content: userMessage))
+        conversation.append(LLMMessage(role: .user, content: userMessage, images: images))
         onEvent?(.userTurn(userMessage))
 
         for _ in 0..<maxToolTurns + 1 {     // +1 so the final no-tool reply still counts
