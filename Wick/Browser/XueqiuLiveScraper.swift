@@ -219,7 +219,17 @@ final class XueqiuLiveScraper: XueqiuLiveScraping {
                 if let body { log.error("[Xueqiu] posts fetch → \(body, privacy: .public)") }
                 return []
             }
-            return XueqiuPostParser.parse(jsonString: body)
+            let posts = XueqiuPostParser.parse(jsonString: body)
+            // DIAGNOSTIC: when the parse yields nothing, log the raw body prefix
+            // so we can tell "genuinely empty list" from an auth-failure
+            // (`error_code`/登录失效) or an anti-bot HTML redirect — the three look
+            // identical (no cards) in the UI otherwise.
+            if posts.isEmpty {
+                log.error("[Xueqiu] EMPTY posts for \(xq, privacy: .public) — body[0..<500]: \(String(body.prefix(500)), privacy: .public)")
+            } else {
+                log.info("[Xueqiu] \(posts.count, privacy: .public) posts for \(xq, privacy: .public)")
+            }
+            return posts
         } catch {
             log.error("[Xueqiu] posts extract failed: \(Self.errorDetail(error), privacy: .public)")
             return []

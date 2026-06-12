@@ -158,7 +158,9 @@ struct MarketView: View {
     /// surfaces in `FredClient.macroSummary()`.
     private func seriesFor(_ spec: IndexSpec) -> CandleSeries {
         if assetClass == .macro {
-            let units = (spec.symbol == "CPIAUCSL") ? "pc1" : "lin"
+            // Units come from the spec now (CPI/Core-PCE/etc. → `pc1` YoY,
+            // Nonfarm Payrolls → `chg` monthly adds); default `lin` for levels.
+            let units = spec.fredUnits ?? "lin"
             return fredStore.series(for: spec.symbol,
                                      units: units,
                                      fallback: spec.fallbackSeries)
@@ -697,13 +699,19 @@ struct IndexSpec: Identifiable, Hashable {
     let startPrice: Double
     let drift: Double
     let vol: Double
+    /// FRED `units` transform for macro series (nil ⇒ `lin`, the raw level).
+    /// `pc1` = % change from a year ago (inflation/growth YoY); `chg` = change
+    /// from the prior period (e.g. monthly Nonfarm-Payroll adds). Ignored for
+    /// non-macro (Yahoo) specs.
+    let fredUnits: String?
     var id: String { symbol }
 
     init(symbol: String, shortName: String,
          weight: Double = 0,
          region: IndexRegion? = nil,
          seed: UInt64, startPrice: Double,
-         drift: Double, vol: Double)
+         drift: Double, vol: Double,
+         fredUnits: String? = nil)
     {
         self.symbol = symbol
         self.shortName = shortName
@@ -713,6 +721,7 @@ struct IndexSpec: Identifiable, Hashable {
         self.startPrice = startPrice
         self.drift = drift
         self.vol = vol
+        self.fredUnits = fredUnits
     }
 }
 
@@ -865,13 +874,17 @@ enum MarketSpec {
                   seed: 7008, startPrice: 0.61,  drift: 0.0001, vol: 0.007),
     ]
 
-    /// Six FRED macro series — the standard rates / inflation / labor
-    /// snapshot every economic-dashboard surfaces. Symbols are FRED
-    /// series IDs (not Yahoo), so `LiveDataStore` will fail to fetch
-    /// them and the cards render with the synthetic GBM fallback
-    /// indefinitely. The Macro tab footer surfaces this caveat;
-    /// real values land when FRED is wired via `AgentSettings.fredKey`.
+    /// FRED macro series — the rates / inflation / labor / growth snapshot an
+    /// economic dashboard surfaces. Symbols are FRED series IDs (not Yahoo), so
+    /// `LiveDataStore` would fail to fetch them; the Macro tab routes these
+    /// through `FredDataStore`, with each spec's `fredUnits` choosing the right
+    /// transform (YoY % for inflation/growth, monthly change for payrolls).
+    /// Real values land once FRED is wired via `AgentSettings.fredKey`;
+    /// otherwise the synthetic GBM fallback renders (footer surfaces the caveat).
+    ///
+    /// Grouped: rates & curve, inflation, labor, growth & activity.
     static let macroIndicators: [IndexSpec] = [
+        // ── Rates & curve ──
         IndexSpec(symbol: "DGS10",    shortName: "10Y Yield (%)",
                   seed: 6001, startPrice: 4.30, drift: 0.0001, vol: 0.005),
         IndexSpec(symbol: "DGS2",     shortName: "2Y Yield (%)",
@@ -880,10 +893,32 @@ enum MarketSpec {
                   seed: 6003, startPrice: 5.25, drift: -0.0001, vol: 0.002),
         IndexSpec(symbol: "T10Y2Y",   shortName: "10Y-2Y Spread (%)",
                   seed: 6004, startPrice: 0.20, drift: 0.0002, vol: 0.010),
+        // ── Inflation (YoY %) ──
+        IndexSpec(symbol: "CPIAUCSL", shortName: "CPI YoY (%)",
+                  seed: 6006, startPrice: 3.20, drift: -0.0001, vol: 0.004,
+                  fredUnits: "pc1"),
+        IndexSpec(symbol: "CPILFESL", shortName: "Core CPI YoY (%)",
+                  seed: 6007, startPrice: 3.40, drift: -0.0001, vol: 0.003,
+                  fredUnits: "pc1"),
+        IndexSpec(symbol: "PCEPILFE", shortName: "Core PCE YoY (%)",
+                  seed: 6008, startPrice: 2.80, drift: -0.0001, vol: 0.003,
+                  fredUnits: "pc1"),
+        // ── Labor ──
         IndexSpec(symbol: "UNRATE",   shortName: "Unemployment (%)",
                   seed: 6005, startPrice: 4.00, drift: 0.0001, vol: 0.003),
-        IndexSpec(symbol: "CPIAUCSL", shortName: "CPI YoY (%)",
-                  seed: 6006, startPrice: 3.20, drift: -0.0001, vol: 0.004),
+        IndexSpec(symbol: "PAYEMS",   shortName: "Nonfarm Payrolls (Δk)",
+                  seed: 6009, startPrice: 200.0, drift: 0.0, vol: 0.30,
+                  fredUnits: "chg"),
+        // ICSA is reported in ACTUAL persons (~220,000), not thousands — keep
+        // the fallback at that scale so it matches the live value.
+        IndexSpec(symbol: "ICSA",     shortName: "Initial Claims",
+                  seed: 6010, startPrice: 220_000, drift: 0.0, vol: 0.05),
+        // ── Growth & activity ──
+        IndexSpec(symbol: "A191RL1Q225SBEA", shortName: "Real GDP (QoQ ann. %)",
+                  seed: 6011, startPrice: 2.50, drift: 0.0, vol: 0.10),
+        IndexSpec(symbol: "RSAFS",    shortName: "Retail Sales YoY (%)",
+                  seed: 6012, startPrice: 3.00, drift: 0.0, vol: 0.05,
+                  fredUnits: "pc1"),
     ]
 
     /// Twelve non-US benchmarks. Sliced into Asia Pacific / Europe /

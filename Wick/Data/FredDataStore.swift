@@ -124,9 +124,14 @@ final class FredDataStore {
             URLQueryItem(name: "series_id",  value: seriesID),
             URLQueryItem(name: "api_key",    value: apiKey),
             URLQueryItem(name: "file_type",  value: "json"),
-            URLQueryItem(name: "sort_order", value: "asc"),
-            // ~1 trading year for the card sparkline + chart pane.
-            // FRED daily series cap at this depth without paging.
+            // `desc` + `limit` returns the MOST RECENT N observations. With
+            // `asc` (the old value) FRED returned the OLDEST N — e.g. PAYEMS
+            // gave 1939–1969 instead of the last few years, so every macro card
+            // silently showed ancient data. We re-sort to chronological order
+            // after decoding (below) so the chart still runs left→right.
+            URLQueryItem(name: "sort_order", value: "desc"),
+            // Most-recent window for the card sparkline + chart pane. 365 points
+            // ≈ 1y of a daily series, ~30y of a monthly one (still recent-anchored).
             URLQueryItem(name: "limit",      value: "365"),
             URLQueryItem(name: "units",      value: units),
         ]
@@ -149,12 +154,15 @@ final class FredDataStore {
 
         // FRED encodes "no value for this date" as the literal "." —
         // skip those rows entirely instead of synthesising a zero.
-        let candles: [Candle] = reply.observations.compactMap { obs in
+        // Fetched newest-first (sort_order=desc); re-sort chronologically so the
+        // chart/sparkline read left→right and the "latest" value is candles.last.
+        let candles: [Candle] = reply.observations.compactMap { obs -> Candle? in
             guard obs.value != ".",
                   let v = Double(obs.value),
                   let d = df.date(from: obs.date) else { return nil }
             return Candle(time: d, open: v, high: v, low: v, close: v, volume: 0)
         }
+        .sorted { $0.time < $1.time }
 
         return CandleSeries(
             symbol: seriesID,

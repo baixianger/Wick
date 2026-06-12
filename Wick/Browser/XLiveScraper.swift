@@ -224,6 +224,16 @@ final class XLiveScraper: XLiveScraping {
             let domObj = try await page.callJavaScript("""
                 try {
                     const arts = document.querySelectorAll('article[data-testid="tweet"]');
+                    // DIAGNOSTIC signals so an empty result is explainable: how many
+                    // tweet nodes the DOM had, the URL we actually landed on (a login
+                    // wall redirects away from /search), and whether a login prompt
+                    // is on screen.
+                    const _diag = {
+                        arts: arts.length,
+                        url: location.href,
+                        loginWall: !!document.querySelector('[data-testid="loginButton"], [href="/login"], input[name="text"]'),
+                        bodyHint: (document.body ? document.body.innerText.slice(0, 120) : '')
+                    };
                     const out = [];
                     for (let i = 0; i < arts.length && out.length < limit; i++) {
                         const a = arts[i];
@@ -240,7 +250,7 @@ final class XLiveScraper: XLiveScraping {
                         }
                         if (text || handle) { out.push({ handle: handle, text: text.slice(0, 280) }); }
                     }
-                    return { posts: out };
+                    return { posts: out, diag: _diag };
                 } catch (e) {
                     return { error: ((e && e.message) ? e.message : String(e)) };
                 }
@@ -257,7 +267,18 @@ final class XLiveScraper: XLiveScraping {
                 guard !text.isEmpty || !handle.isEmpty else { return nil }
                 return XPost(handle: handle, text: text)
             }
-            log.info("[X] searchPosts → \(posts.count) posts")
+            // DIAGNOSTIC: when empty, surface why — tweet-node count, landed URL,
+            // and login-wall flag distinguish "0 results" from "redirected to login
+            // / not rendered yet".
+            if posts.isEmpty, let diag = domObj?["diag"] as? [String: Any] {
+                let arts = diag["arts"] as? Int ?? -1
+                let url = diag["url"] as? String ?? "?"
+                let wall = diag["loginWall"] as? Bool ?? false
+                let hint = diag["bodyHint"] as? String ?? ""
+                log.error("[X] EMPTY posts — arts=\(arts, privacy: .public) loginWall=\(wall, privacy: .public) url=\(url, privacy: .public) hint=\(hint, privacy: .public)")
+            } else {
+                log.info("[X] searchPosts → \(posts.count) posts")
+            }
             return posts
         } catch {
             log.error("[X] searchPosts DOM read failed: \(Self.errorDetail(error), privacy: .public)")
