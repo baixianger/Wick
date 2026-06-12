@@ -62,7 +62,7 @@ struct ContentView: View {
                         searchResults: remote,
                         onPickResult: pickRemoteResult,
                         watchlist: watchlist,
-                        holdingsCount: holdings.holdings.count)
+                        holdingsCount: Set(holdings.holdings.map(\.symbol)).count)
                 .navigationTitle("Stocks")
                 // Default the sidebar above the 240pt sparkline
                 // threshold (SidebarView.sparklineMinWidth) so the

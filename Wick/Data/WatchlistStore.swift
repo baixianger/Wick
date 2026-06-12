@@ -82,8 +82,26 @@ final class WatchlistStore {
         case .all:
             return all
         case .holdings:
-            let symbols = Set(holdings.map(\.symbol))
-            return all.filter { symbols.contains($0.symbol) }
+            // One row per HELD SYMBOL so the Holdings list matches the
+            // Portfolio's positions exactly — INCLUDING symbols held but never
+            // added to the ticker universe (e.g. a position Wicker recorded, or
+            // a CN ticker never searched). The old code did
+            // `all.filter { held.contains }`, which silently dropped any held
+            // symbol absent from `all` — that was the Holdings↔Portfolio
+            // mismatch. Reuse the rich `Ticker` when known; synthesise a minimal
+            // surrogate (empty series → LiveDataStore fills it on appear) from
+            // the holding's symbol + name otherwise. Sorted by symbol to match
+            // `HoldingsStore.positions()` ordering.
+            let known = Dictionary(all.map { ($0.symbol, $0) },
+                                   uniquingKeysWith: { first, _ in first })
+            var seen = Set<String>()
+            return holdings
+                .sorted { $0.symbol < $1.symbol }
+                .compactMap { h -> Ticker? in
+                    guard seen.insert(h.symbol).inserted else { return nil }
+                    return known[h.symbol]
+                        ?? Ticker(id: h.symbol, symbol: h.symbol, name: h.name, series: [:])
+                }
         case .user(let id):
             guard let group = groups.first(where: { $0.id == id }) else { return all }
             let allowed = Set(group.symbols)
