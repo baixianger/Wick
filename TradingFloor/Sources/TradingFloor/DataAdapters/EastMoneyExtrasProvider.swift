@@ -262,6 +262,38 @@ public struct EastMoneyExtrasProvider: Sendable {
         return LimitUpPool(date: resolved, total: payload.data?.tc ?? stocks.count, stocks: stocks)
     }
 
+    // MARK: - 5) 简称 (short name)
+
+    /// EastMoney's Chinese (or HK-native) short name for a CN / HK ticker —
+    /// field `f58` from the realtime quote endpoint. Returns the name verbatim
+    /// (CJK for A-shares; HK may be English like "MINIMAX-W" or Chinese like
+    /// "剂泰科技-P"). `nil` for non-CN symbols, on failure, or when EastMoney
+    /// serves `"-"` / empty.
+    ///
+    /// Hits `push2delay` (a *different* host from the `push2his` K-line path),
+    /// so it keeps working during the `push2his` throttle.
+    public func shortName(symbol: String) async -> String? {
+        guard let secid = CNSymbol.eastMoneySecid(symbol) else { return nil }
+        var c = URLComponents(string: "https://push2delay.eastmoney.com/api/qt/stock/get")!
+        c.queryItems = [
+            .init(name: "secid", value: secid),
+            .init(name: "fields", value: "f57,f58"),
+            .init(name: "invt", value: "2"),
+            .init(name: "fltt", value: "2"),
+        ]
+        guard let url = c.url,
+              let payload: QuoteNamePayload = await get(url, referer: "https://quote.eastmoney.com/"),
+              let raw = payload.data?.f58
+        else { return nil }
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (name.isEmpty || name == "-") ? nil : name
+    }
+
+    private struct QuoteNamePayload: Decodable {
+        struct Inner: Decodable { let f58: String? }
+        let data: Inner?
+    }
+
     // MARK: - HTTP
 
     private func get<T: Decodable>(_ url: URL, referer: String) async -> T? {

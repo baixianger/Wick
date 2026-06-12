@@ -334,6 +334,7 @@ private struct TickerRow: View {
     var isClosed: Bool = false
     @Environment(LiveDataStore.self) private var store
     @Environment(AgentSettings.self) private var settings
+    @Environment(CNNameStore.self) private var cnNames
 
     var body: some View {
         let liveSeries = store.series(for: ticker.symbol,
@@ -398,7 +399,9 @@ private struct TickerRow: View {
                         .background(Capsule().fill(.quaternary))
                 }
             }
-            Text(ticker.name)
+            Text(cnNames.displayName(symbol: ticker.symbol,
+                                     fallback: ticker.name,
+                                     chinese: settings.resolvedChinese))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

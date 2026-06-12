@@ -15,6 +15,11 @@ struct WickApp: App {
     /// user pastes a fresh one in Settings — same flow as the other
     /// data-source keys.
     @State private var fredStore = FredDataStore()
+    /// EastMoney short-name cache for CN/HK tickers. In Chinese UI mode the
+    /// ticker-NAME sites read through this to show 简称 (e.g. "贵州茅台")
+    /// instead of the broker / English name. Shared via the environment like
+    /// the other data stores. See `CNNameStore`.
+    @State private var cnNames = CNNameStore()
     /// BYO agent settings (LLM key in Keychain, model choices, agent knobs,
     /// appearance, chart layout — see AgentSettings). Shared via the
     /// environment so any view can read or bind.
@@ -52,6 +57,7 @@ struct WickApp: App {
                 .frame(minWidth: 1180, minHeight: 760)
                 .environment(dataStore)
                 .environment(fredStore)
+                .environment(cnNames)
                 .environment(agentSettings)
                 .environment(reportHistory)
                 .environment(agentRuntime)
@@ -191,6 +197,7 @@ struct WickApp: App {
                 .id(agentSettings.appLanguage)
                 .environment(dataStore)
                 .environment(fredStore)
+                .environment(cnNames)
                 .environment(agentSettings)
                 .environment(reportHistory)
                 .environment(agentRuntime)

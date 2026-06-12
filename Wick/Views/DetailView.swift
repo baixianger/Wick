@@ -113,6 +113,8 @@ struct DetailView: View {
     @State private var chartScale2: ChartScale = .h1
 
     @Environment(LiveDataStore.self) private var store
+    @Environment(AgentSettings.self) private var settings
+    @Environment(CNNameStore.self) private var cnNames
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -228,7 +230,9 @@ struct DetailView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(ticker.symbol)
                         .font(.system(size: 32, weight: .bold))
-                    Text(ticker.name)
+                    Text(cnNames.displayName(symbol: ticker.symbol,
+                                             fallback: ticker.name,
+                                             chinese: settings.resolvedChinese))
                         .font(.system(size: 18))
                         .foregroundStyle(.secondary)
                 }

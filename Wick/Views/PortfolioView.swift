@@ -19,6 +19,8 @@ struct PortfolioView: View {
 
     @Bindable var store: HoldingsStore
     @Environment(LiveDataStore.self) private var data
+    @Environment(AgentSettings.self) private var settings
+    @Environment(CNNameStore.self) private var cnNames
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var editorMode: HoldingEditorSheet.Mode?
@@ -236,7 +238,9 @@ struct PortfolioView: View {
                         sideBadge(String(localized: "SHORT", locale: LocaleHolder.current), .red)
                     }
                 }
-                Text(p.name)
+                Text(cnNames.displayName(symbol: p.symbol,
+                                         fallback: p.name,
+                                         chinese: settings.resolvedChinese))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
