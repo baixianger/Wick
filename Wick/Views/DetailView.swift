@@ -242,7 +242,7 @@ struct DetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Indicators")
+                    .help(L("Indicators", "指标"))
                     .accessibilityLabel("Indicators")
                     .accessibilityIdentifier("ChartIndicatorsButton")
                 }
@@ -319,23 +319,23 @@ struct DetailView: View {
         switch store.source(for: ticker.symbol, interval: active) {
         case .live(let t):
             let secs = max(0, Int(Date().timeIntervalSince(t)))
-            let label = secs < 60 ? "Live · just now" : "Live · \(secs / 60)m ago"
+            let label = secs < 60 ? L("Live · just now", "实时 · 刚刚") : L("Live · \(secs / 60)m ago", "实时 · \(secs / 60) 分钟前")
             badgePill(dot: .green, label: label, accent: .green)
         case .error:
-            badgePill(dot: .orange, label: "Demo · network unavailable",
+            badgePill(dot: .orange, label: L("Demo · network unavailable", "演示 · 网络不可用"),
                        accent: .orange)
         case .retrying(let attempt):
             // Transient throttle / blip — backing off and retrying. Amber so
             // it reads as "working on it", not a hard failure.
-            badgePill(dot: .yellow, label: "源暂不可用 · 重试中 (\(attempt))",
+            badgePill(dot: .yellow, label: L("Source unavailable · retrying (\(attempt))", "源暂不可用 · 重试中 (\(attempt))"),
                        accent: .yellow)
         case .unavailable:
             // Backoff spent. Honest "temporarily down" — the synthetic series
             // is what's on screen; revisiting the symbol re-arms a fetch.
-            badgePill(dot: .red, label: "源暂不可用 · 显示演示数据",
+            badgePill(dot: .red, label: L("Source unavailable · showing demo data", "源暂不可用 · 显示演示数据"),
                        accent: .red)
         case .demo:
-            badgePill(dot: .secondary, label: "Loading…  (Demo)",
+            badgePill(dot: .secondary, label: L("Loading…  (Demo)", "加载中…（演示）"),
                        accent: .secondary)
         }
     }

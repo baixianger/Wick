@@ -91,7 +91,7 @@ struct MarketView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Market")
+            Text(L("Market", "市场"))
                 .font(.system(size: 32, weight: .bold))
             Text(headerSubtitle)
                 .font(.system(size: 13))
@@ -107,6 +107,7 @@ struct MarketView: View {
     private var tabBar: some View {
         FlatPicker(items: MarketAssetClass.allCases,
                    selection: $assetClass,
+                   label: { $0.label },
                    layout: .compact)
     }
 
@@ -261,10 +262,11 @@ struct MarketView: View {
     private var sectorSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Sectors")
+                Text(L("Sectors", "板块"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text("SPDR sector ETFs · color ∝ today's change")
+                Text(L("SPDR sector ETFs · color ∝ today's change",
+                       "SPDR 行业 ETF · 颜色 ∝ 当日涨跌"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -282,7 +284,7 @@ struct MarketView: View {
                                        fallback: spec.fallbackSeries)
             let snap = IndexSnapshot(series: series)
             return HeatTile(id: spec.symbol,
-                            label: spec.shortName,
+                            label: spec.localizedShortName,
                             secondary: spec.symbol,
                             changePct: snap.changePct,
                             weight: spec.weight)
@@ -294,25 +296,34 @@ struct MarketView: View {
         case losers      = "Losers"
         case mostActive  = "Most Active"
         var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .gainers:    return L("Gainers", "领涨")
+            case .losers:     return L("Losers", "领跌")
+            case .mostActive: return L("Most Active", "最活跃")
+            }
+        }
     }
 
     private var moversSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Movers")
+                Text(L("Movers", "异动"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text("\(universe.count) tickers in watchlist")
+                Text(L("\(universe.count) tickers in watchlist", "自选列表 \(universe.count) 只"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
             FlatPicker(items: MoverTab.allCases,
                        selection: $moverTab,
+                       label: { $0.label },
                        layout: .compact)
             VStack(spacing: 0) {
                 let rows = moverRows()
                 if rows.isEmpty {
-                    Text("Add tickers to the watchlist to populate movers.")
+                    Text(L("Add tickers to the watchlist to populate movers.",
+                           "向自选列表添加标的即可显示异动。"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -405,10 +416,10 @@ struct MarketView: View {
     private var earningsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Upcoming Earnings")
+                Text(L("Upcoming Earnings", "即将公布财报"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text("Next 10 days · preview")
+                Text(L("Next 10 days · preview", "未来 10 天 · 预览"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -423,7 +434,8 @@ struct MarketView: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
-                Text("Preview data. Live earnings calendar needs a Finnhub key in Settings → Agents.")
+                Text(L("Preview data. Live earnings calendar needs a Finnhub key in Settings → Agents.",
+                       "预览数据。实时财报日历需在「设置 → 智能体」中配置 Finnhub 密钥。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
@@ -454,7 +466,7 @@ struct MarketView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text("EPS est.")
+                Text(L("EPS est.", "预期EPS"))
                     .font(.system(size: 9))
                     .foregroundStyle(.tertiary)
                 Text("$\(String(format: "%.2f", r.epsEstimate))")
@@ -476,10 +488,10 @@ struct MarketView: View {
     private var newsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Headlines")
+                Text(L("Headlines", "头条"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text("Across asset classes")
+                Text(L("Across asset classes", "跨资产类别"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -506,7 +518,8 @@ struct MarketView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
-            Text("Live FRED data when a key is set in Settings (synthetic preview otherwise). Tap a chart's Overlay to compare against another series or the US market.")
+            Text(L("Live FRED data when a key is set in Settings (synthetic preview otherwise). Tap a chart's Overlay to compare against another series or the US market.",
+                   "在「设置」中配置密钥后显示实时 FRED 数据（否则为模拟预览）。点击图表的「叠加」可与另一序列或美股市场对比。"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -580,18 +593,31 @@ enum MarketAssetClass: String, CaseIterable, Identifiable, Hashable {
     case macro        = "Macro"
     var id: String { rawValue }
 
+    /// Localized tab label — `rawValue` stays English for persistence / ids.
+    var label: String {
+        switch self {
+        case .us:          return L("US", "美股")
+        case .asiaPacific: return L("Asia Pacific", "亚太")
+        case .europe:      return L("Europe", "欧洲")
+        case .crypto:      return L("Crypto", "加密货币")
+        case .commodities: return L("Commodities", "大宗商品")
+        case .forex:       return L("Forex", "外汇")
+        case .macro:       return L("Macro", "宏观")
+        }
+    }
+
     /// Header subtitle suffix for each tab — what the user is looking
     /// at this morning. Mirrors what mainstream apps show under their
     /// market-tab page title.
     var subtitle: String {
         switch self {
-        case .us:          return "NYSE · NASDAQ"
-        case .asiaPacific: return "Tokyo · Hong Kong · Shanghai · Seoul"
-        case .europe:      return "London · Frankfurt · Paris"
-        case .crypto:      return "Spot · USD pairs"
-        case .commodities: return "Front-month futures · Metals · Energy"
-        case .forex:       return "Major pairs · Spot"
-        case .macro:       return "Rates · Inflation · Labor"
+        case .us:          return L("NYSE · NASDAQ", "纽交所 · 纳斯达克")
+        case .asiaPacific: return L("Tokyo · Hong Kong · Shanghai · Seoul", "东京 · 香港 · 上海 · 首尔")
+        case .europe:      return L("London · Frankfurt · Paris", "伦敦 · 法兰克福 · 巴黎")
+        case .crypto:      return L("Spot · USD pairs", "现货 · 美元交易对")
+        case .commodities: return L("Front-month futures · Metals · Energy", "近月期货 · 金属 · 能源")
+        case .forex:       return L("Major pairs · Spot", "主要货币对 · 现货")
+        case .macro:       return L("Rates · Inflation · Labor", "利率 · 通胀 · 就业")
         }
     }
 
@@ -631,7 +657,7 @@ fileprivate struct IndexCardView: View {
 
         let content = VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(spec.shortName)
+                Text(spec.localizedShortName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -724,7 +750,7 @@ fileprivate struct MacroDetailRow: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(spec.shortName)
+                    Text(spec.localizedShortName)
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
                     Text(spec.symbol)
@@ -756,22 +782,22 @@ fileprivate struct MacroDetailRow: View {
             HStack(spacing: 8) {
                 if overlay != .none {
                     Circle().fill(overlay.color).frame(width: 7, height: 7)
-                    Text(overlay.rawValue)
+                    Text(overlay.label)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Menu {
-                    Picker("Overlay", selection: $overlay) {
+                    Picker(L("Overlay", "叠加"), selection: $overlay) {
                         ForEach(MacroOverlay.allCases) { o in
-                            Text(o.rawValue).tag(o)
+                            Text(o.label).tag(o)
                         }
                     }
                     .pickerStyle(.inline)
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
-                        Text(overlay == .none ? "Overlay" : "Change")
+                        Text(overlay == .none ? L("Overlay", "叠加") : L("Change", "更改"))
                     }
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -814,6 +840,22 @@ fileprivate enum MacroOverlay: String, CaseIterable, Identifiable {
     case unemployment = "Unemployment"
 
     var id: String { rawValue }
+
+    /// Localized display label — `rawValue` stays English (used as id). Proper
+    /// nouns (S&P 500, Nasdaq, Dow, CPI, PCE) stay as-is.
+    var label: String {
+        switch self {
+        case .none:         return L("None", "无")
+        case .sp500:        return "S&P 500"
+        case .nasdaq:       return "Nasdaq Comp"
+        case .dow:          return "Dow"
+        case .cpi:          return L("CPI YoY", "CPI同比")
+        case .corePCE:      return L("Core PCE", "核心PCE")
+        case .fedFunds:     return L("Fed Funds", "联邦基金利率")
+        case .tenYear:      return L("10Y Yield", "10年期收益率")
+        case .unemployment: return L("Unemployment", "失业率")
+        }
+    }
 
     /// FRED series id + units, or nil for `.none`.
     var fred: (id: String, units: String)? {
@@ -1247,7 +1289,7 @@ private struct MarketChartPane: View {
             // scale picker (1H / 1D / 1W / 1M / All) on right.
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(spec.shortName)
+                    Text(spec.localizedShortName)
                         .font(.system(size: 16, weight: .semibold))
                     Text(spec.symbol)
                         .font(.system(size: 11, design: .monospaced))
@@ -1366,6 +1408,42 @@ extension IndexSpec {
                      startPrice: startPrice,
                      symbol: symbol,
                      interval: .d1)
+    }
+
+    /// Display label localized at the call site. `shortName` stays the English
+    /// catalogue value (also used as the Ticker surrogate name); this maps the
+    /// macro-indicator labels — the only descriptive ones the user reads in the
+    /// UI — to their Chinese finance equivalents, re-evaluating on language flip
+    /// (the static catalogue can't, so the lookup lives here). Proper nouns and
+    /// tickers fall through unchanged.
+    var localizedShortName: String {
+        switch symbol {
+        case "DGS10":            return L("10Y Yield (%)", "10年期收益率(%)")
+        case "DGS2":             return L("2Y Yield (%)", "2年期收益率(%)")
+        case "FEDFUNDS":         return L("Fed Funds (%)", "联邦基金利率(%)")
+        case "T10Y2Y":           return L("10Y-2Y Spread (%)", "10年-2年利差(%)")
+        case "CPIAUCSL":         return L("CPI YoY (%)", "CPI同比(%)")
+        case "CPILFESL":         return L("Core CPI YoY (%)", "核心CPI同比(%)")
+        case "PCEPILFE":         return L("Core PCE YoY (%)", "核心PCE同比(%)")
+        case "UNRATE":           return L("Unemployment (%)", "失业率(%)")
+        case "PAYEMS":           return L("Nonfarm Payrolls (Δk)", "非农就业(千人变动)")
+        case "ICSA":             return L("Initial Claims", "初请失业金人数")
+        case "A191RL1Q225SBEA":  return L("Real GDP (QoQ ann. %)", "实际GDP(环比年化%)")
+        case "RSAFS":            return L("Retail Sales YoY (%)", "零售销售同比(%)")
+        // SPDR sector ETF labels (US-tab sector heatmap).
+        case "XLK":              return L("Tech", "科技")
+        case "XLF":              return L("Financials", "金融")
+        case "XLV":              return L("Health Care", "医疗保健")
+        case "XLY":              return L("Discretionary", "可选消费")
+        case "XLC":              return L("Comm Svcs", "通信服务")
+        case "XLI":              return L("Industrials", "工业")
+        case "XLP":              return L("Staples", "必需消费")
+        case "XLE":              return L("Energy", "能源")
+        case "XLU":              return L("Utilities", "公用事业")
+        case "XLB":              return L("Materials", "材料")
+        case "XLRE":             return L("Real Estate", "房地产")
+        default:                 return shortName
+        }
     }
 
     /// Minimal `Ticker` wrapping this spec — the chart pipeline keys

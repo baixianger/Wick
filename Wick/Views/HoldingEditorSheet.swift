@@ -44,9 +44,9 @@ struct HoldingEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Symbol") {
+                Section(L("Symbol", "代码")) {
                     HStack {
-                        TextField("e.g. AAPL", text: $symbol)
+                        TextField(L("e.g. AAPL", "例如 AAPL"), text: $symbol)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.body, design: .monospaced))
                             .onChange(of: symbol) { _, new in
@@ -84,39 +84,40 @@ struct HoldingEditorSheet: View {
                         }
                     }
                 }
-                Section("Transaction") {
-                    Picker("Side", selection: $side) {
-                        Text("Buy").tag(HoldingSide.buy)
-                        Text("Sell").tag(HoldingSide.sell)
+                Section(L("Transaction", "交易")) {
+                    Picker(L("Side", "方向"), selection: $side) {
+                        Text(L("Buy", "买入")).tag(HoldingSide.buy)
+                        Text(L("Sell", "卖出")).tag(HoldingSide.sell)
                     }
                     .pickerStyle(.segmented)
-                    LabeledContent("Quantity") {
-                        TextField("e.g. 10", text: $quantityText)
+                    LabeledContent(L("Quantity", "数量")) {
+                        TextField(L("e.g. 10", "例如 10"), text: $quantityText)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent(side == .buy ? "Buy price" : "Sell price") {
-                        TextField("e.g. 175.50", text: $priceText)
+                    LabeledContent(side == .buy ? L("Buy price", "买入价") : L("Sell price", "卖出价")) {
+                        TextField(L("e.g. 175.50", "例如 175.50"), text: $priceText)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("Currency") {
+                    LabeledContent(L("Currency", "货币")) {
                         TextField("USD", text: $currency)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 70)
                     }
-                    Picker("Date", selection: $dateMode) {
-                        Text("Auto from price").tag(DateMode.auto)
-                        Text("Manual").tag(DateMode.manual)
+                    Picker(L("Date", "日期"), selection: $dateMode) {
+                        Text(L("Auto from price", "按价格自动")).tag(DateMode.auto)
+                        Text(L("Manual", "手动")).tag(DateMode.manual)
                     }
                     .pickerStyle(.segmented)
                     if dateMode == .manual {
-                        DatePicker("Date",
+                        DatePicker(L("Date", "日期"),
                                    selection: $manualDate,
                                    in: ...Date(),
                                    displayedComponents: [.date, .hourAndMinute])
                             .labelsHidden()
                     } else {
-                        Text("We'll snap to the most recent 1-hour bar whose " +
-                             "open–close body covers this price.")
+                        Text(L("We'll snap to the most recent 1-hour bar whose " +
+                             "open–close body covers this price.",
+                             "将匹配到最近一根开盘—收盘价区间覆盖该价格的 1 小时 K 线。"))
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
                     }
@@ -126,10 +127,10 @@ struct HoldingEditorSheet: View {
             .navigationTitle(titleText)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L("Cancel", "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "保存")) { save() }
                         .disabled(!canSave)
                 }
             }
@@ -152,8 +153,8 @@ struct HoldingEditorSheet: View {
 
     private var titleText: String {
         switch mode {
-        case .add:   return "Add holding"
-        case .edit:  return "Edit holding"
+        case .add:   return L("Add holding", "添加持仓")
+        case .edit:  return L("Edit holding", "编辑持仓")
         }
     }
 

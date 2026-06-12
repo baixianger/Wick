@@ -172,15 +172,15 @@ struct WickerView: View {
         }
         .onAppear { ensureSession() }
         .onChange(of: store.sessions.count) { _, _ in ensureSession() }
-        .alert("Rename session",
+        .alert(L("Rename session", "重命名会话"),
                isPresented: Binding(
                 get: { renamingSessionID != nil },
                 set: { if !$0 { renamingSessionID = nil } }
                ))
         {
-            TextField("Title", text: $renameDraft)
-            Button("Cancel", role: .cancel) { renamingSessionID = nil }
-            Button("Rename") { commitRename() }
+            TextField(L("Title", "标题"), text: $renameDraft)
+            Button(L("Cancel", "取消"), role: .cancel) { renamingSessionID = nil }
+            Button(L("Rename", "重命名")) { commitRename() }
         }
         }
     }
@@ -236,7 +236,7 @@ struct WickerView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut("n", modifiers: .command)
-            .help("New chat (⌘N)")
+            .help(L("New chat (⌘N)", "新建对话 (⌘N)"))
             .accessibilityLabel("New chat")
             .accessibilityIdentifier("WickerNewChatButton")
 
@@ -255,7 +255,7 @@ struct WickerView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut("h", modifiers: [.command, .shift])
-            .help(showHistoryDrawer ? "Hide history (⌘⇧H)" : "Show history (⌘⇧H)")
+            .help(showHistoryDrawer ? L("Hide history (⌘⇧H)", "隐藏历史 (⌘⇧H)") : L("Show history (⌘⇧H)", "显示历史 (⌘⇧H)"))
             .accessibilityLabel(showHistoryDrawer ? "Hide history" : "Show history")
             .accessibilityIdentifier("WickerHistoryToggle")
         }
@@ -268,7 +268,7 @@ struct WickerView: View {
     private var sessionDrawer: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Text("History")
+                Text(L("History", "历史"))
                     .font(.system(size: 11, weight: .semibold))
                     .tracking(0.6)
                     .foregroundStyle(.tertiary)
@@ -346,12 +346,12 @@ struct WickerView: View {
                                     renameDraft = session.title
                                     renamingSessionID = session.id
                                 } label: {
-                                    Label("Rename…", systemImage: "pencil")
+                                    Label(L("Rename…", "重命名…"), systemImage: "pencil")
                                 }
                                 Button(role: .destructive) {
                                     store.delete(id: session.id)
                                 } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label(L("Delete", "删除"), systemImage: "trash")
                                 }
                             }
                         }
@@ -429,10 +429,10 @@ struct SessionGroup {
             }
         }
         var groups: [SessionGroup] = []
-        if !today.isEmpty     { groups.append(.init(label: "TODAY", sessions: today)) }
-        if !yesterday.isEmpty { groups.append(.init(label: "YESTERDAY", sessions: yesterday)) }
-        if !thisWeek.isEmpty  { groups.append(.init(label: "THIS WEEK", sessions: thisWeek)) }
-        if !earlier.isEmpty   { groups.append(.init(label: "EARLIER", sessions: earlier)) }
+        if !today.isEmpty     { groups.append(.init(label: L("TODAY", "今天"), sessions: today)) }
+        if !yesterday.isEmpty { groups.append(.init(label: L("YESTERDAY", "昨天"), sessions: yesterday)) }
+        if !thisWeek.isEmpty  { groups.append(.init(label: L("THIS WEEK", "本周"), sessions: thisWeek)) }
+        if !earlier.isEmpty   { groups.append(.init(label: L("EARLIER", "更早"), sessions: earlier)) }
         return groups
     }
 }
@@ -508,9 +508,9 @@ private struct SessionRow: View {
             return lastAssistant.text.replacingOccurrences(of: "\n", with: " ")
         }
         if let lastUser = session.messages.last(where: { $0.role == .user }) {
-            return "You: " + lastUser.text.replacingOccurrences(of: "\n", with: " ")
+            return L("You: ", "你：") + lastUser.text.replacingOccurrences(of: "\n", with: " ")
         }
-        return "No messages yet"
+        return L("No messages yet", "暂无消息")
     }
 
     private var timeStamp: String {
@@ -521,7 +521,7 @@ private struct SessionRow: View {
         }
         let yesterday = cal.date(byAdding: .day, value: -1, to: now) ?? now
         if cal.isDate(session.updatedAt, inSameDayAs: yesterday) {
-            return "Yesterday"
+            return L("Yesterday", "昨天")
         }
         if cal.isDate(session.updatedAt, equalTo: now, toGranularity: .weekOfYear) {
             return session.updatedAt.formatted(.dateTime.weekday(.abbreviated))
@@ -638,14 +638,14 @@ private struct ConversationView: View {
     private func dispatchExistingUserTurn(message: ChatMessage) {
         lastError = nil
         pending = true
-        pendingLabel = "thinking…"
+        pendingLabel = L("thinking…", "思考中…")
         let text = message.text
         let prior = Array(live.messages.dropLast())
         let history: [LLMMessage] = prior.map(Self.llmMessage(from:))
         guard let provider = WickerLLM.provider(for: settings) else {
             pending = false
             pendingLabel = nil
-            lastError = "No provider configured."
+            lastError = L("No provider configured.", "未配置服务商。")
             return
         }
         let config: TradingFloorConfig = settings.workflowConfig()
@@ -757,10 +757,10 @@ private struct ConversationView: View {
     /// into containers.
     private var heroSuggestions: some View {
         let prompts = [
-            "How is NVDA doing today?",
-            "Compare AAPL and MSFT margins",
-            "Screen S&P 500 for P/E < 15",
-            "What's the macro setup for tech?",
+            L("How is NVDA doing today?", "NVDA 今天表现如何？"),
+            L("Compare AAPL and MSFT margins", "对比 AAPL 与 MSFT 的利润率"),
+            L("Screen S&P 500 for P/E < 15", "筛选标普 500 中市盈率 < 15 的股票"),
+            L("What's the macro setup for tech?", "科技板块的宏观环境如何？"),
         ]
         return HStack(spacing: 14) {
             ForEach(Array(prompts.enumerated()), id: \.offset) { idx, p in
@@ -787,10 +787,10 @@ private struct ConversationView: View {
     private var timeOfDayGreeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
         switch hour {
-        case 5..<12:  return "Good morning"
-        case 12..<17: return "Good afternoon"
-        case 17..<22: return "Good evening"
-        default:      return "Hi there"
+        case 5..<12:  return L("Good morning", "早上好")
+        case 12..<17: return L("Good afternoon", "下午好")
+        case 17..<22: return L("Good evening", "晚上好")
+        default:      return L("Hi there", "你好")
         }
     }
 
@@ -879,10 +879,11 @@ private struct ConversationView: View {
 
     private var emptyTranscript: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Ready when you are.")
+            Text(L("Ready when you are.", "随时为你效劳。"))
                 .font(.system(size: 14, weight: .semibold))
-            Text("Try: \"how is the semiconductor sector doing?\" · \"compare AAPL "
-                 + "and MSFT margins\" · \"screen S&P 500 for P/E < 15 and ROE > 20%\".")
+            Text(L("Try: \"how is the semiconductor sector doing?\" · \"compare AAPL "
+                 + "and MSFT margins\" · \"screen S&P 500 for P/E < 15 and ROE > 20%\".",
+                 "试试：「半导体板块表现如何？」·「对比 AAPL 与 MSFT 的利润率」·「筛选标普 500 中市盈率 < 15 且 ROE > 20% 的股票」。"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
@@ -929,11 +930,11 @@ private struct ConversationView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!settings.canRun)
-                .help("Attach images or documents (PDF / CSV / Excel / text)")
+                .help(L("Attach images or documents (PDF / CSV / Excel / text)", "添加图片或文档（PDF / CSV / Excel / 文本）"))
                 .accessibilityLabel("Attach file")
                 .accessibilityIdentifier("WickerAttachButton")
 
-                TextField("Ask anything…", text: $draft, axis: .vertical)
+                TextField(L("Ask anything…", "随便问点什么…"), text: $draft, axis: .vertical)
                     .lineLimit(lines)
                     .textFieldStyle(.plain)
                     .font(fieldFont)
@@ -972,7 +973,7 @@ private struct ConversationView: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!canSubmit)
-                .help("Send (⌘⏎)")
+                .help(L("Send (⌘⏎)", "发送 (⌘⏎)"))
                 .accessibilityLabel(pending ? "Stop generating" : "Send message")
                 .accessibilityIdentifier("WickerSendButton")
             }
@@ -1029,7 +1030,7 @@ private struct ConversationView: View {
                 if isExtracting {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
-                        Text("读取中…").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text(L("Reading…", "读取中…")).font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -1138,7 +1139,8 @@ private struct ConversationView: View {
                 await MainActor.run {
                     extractingCount = max(0, extractingCount - 1)
                     attachmentError = (error as? LocalizedError)?.errorDescription
-                        ?? "无法读取 \(filename)：\(error.localizedDescription)"
+                        ?? L("Couldn't read \(filename): \(error.localizedDescription)",
+                             "无法读取 \(filename)：\(error.localizedDescription)")
                 }
             }
         }
@@ -1155,8 +1157,9 @@ private struct ConversationView: View {
     private var providerHint: some View {
         HStack(spacing: 6) {
             Image(systemName: "key")
-            Text("Add an Anthropic key or point at a local model in any ticker's "
-                 + "AI tab to enable replies.")
+            Text(L("Add an Anthropic key or point at a local model in any ticker's "
+                 + "AI tab to enable replies.",
+                 "在任意标的的 AI 标签页中添加 Anthropic 密钥或指向本地模型即可启用回复。"))
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
@@ -1194,7 +1197,7 @@ private struct ConversationView: View {
         store.append(ChatMessage(role: .user, text: text, attachments: attachments),
                      to: session.id)
         pending = true
-        pendingLabel = "thinking…"
+        pendingLabel = L("thinking…", "思考中…")
 
         // Build conversation from EVERY prior message (excluding the
         // one we just appended — ChatAgent will append it again from
@@ -1205,7 +1208,7 @@ private struct ConversationView: View {
         guard let provider = WickerLLM.provider(for: settings) else {
             pending = false
             pendingLabel = nil
-            lastError = "No provider configured."
+            lastError = L("No provider configured.", "未配置服务商。")
             return
         }
         // ChatAgent uses `deepModel` from the config; the quick model
@@ -1296,12 +1299,13 @@ private struct ConversationView: View {
             // name, matching the right-side browser panel's affordance.
             if name.hasPrefix("web.") {
                 let action = name.dropFirst("web.".count)
-                pendingLabel = "🌐 Browsing: \(action.isEmpty ? name : String(action))…"
+                pendingLabel = L("🌐 Browsing: \(action.isEmpty ? name : String(action))…",
+                                 "🌐 浏览中：\(action.isEmpty ? name : String(action))…")
             } else {
-                pendingLabel = "calling \(name)…"
+                pendingLabel = L("calling \(name)…", "调用 \(name)…")
             }
         case .toolResult:
-            pendingLabel = "thinking…"
+            pendingLabel = L("thinking…", "思考中…")
         case .userTurn, .assistantRaw, .finalReply:
             break
         }
@@ -1510,7 +1514,7 @@ private struct MessageBubble: View {
         HStack(alignment: .top, spacing: 0) {
             Spacer(minLength: 48)
             VStack(alignment: .leading, spacing: 6) {
-                Text("YOU")
+                Text(L("YOU", "你"))
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(.tertiary)
@@ -1809,7 +1813,7 @@ private struct WickerBrowserPanel: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Close tab")
+            .help(L("Close tab", "关闭标签页"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -1858,16 +1862,16 @@ private struct WickerBrowserPanel: View {
                                  ? AnyShapeStyle(Color.accentColor)
                                  : AnyShapeStyle(HierarchicalShapeStyle.secondary))
                 .symbolEffect(.pulse, isActive: manager.isAgentBrowsing)
-                .help(manager.isAgentBrowsing ? "Wicker is browsing…" : "Agent browser")
+                .help(manager.isAgentBrowsing ? L("Wicker is browsing…", "Wicker 正在浏览…") : L("Agent browser", "智能体浏览器"))
 
             // History / reload, all driving the shared agentPage.
-            navButton("chevron.left", help: "Back") { await manager.goBack() }
-            navButton("chevron.right", help: "Forward") { await manager.goForward() }
-            navButton("arrow.clockwise", help: "Reload") { await manager.reload() }
+            navButton("chevron.left", help: L("Back", "后退")) { await manager.goBack() }
+            navButton("chevron.right", help: L("Forward", "前进")) { await manager.goForward() }
+            navButton("arrow.clockwise", help: L("Reload", "刷新")) { await manager.reload() }
 
             // Address bar — type a URL, press Enter (or the Go arrow) to load the
             // SHARED agentPage. Normalisation (scheme defaulting) is done on submit.
-            TextField("Address", text: $urlText)
+            TextField(L("Address", "地址"), text: $urlText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 11))
                 .lineLimit(1)
@@ -1878,7 +1882,7 @@ private struct WickerBrowserPanel: View {
                 .onSubmit(submitAddress)
                 .accessibilityIdentifier("WickerBrowserAddressField")
 
-            navButton("arrow.right.circle.fill", help: "Go", action: { submitAddress() })
+            navButton("arrow.right.circle.fill", help: L("Go", "前往"), action: { submitAddress() })
 
             // Pin keeps the panel open after the agent goes idle. Toggling
             // it off while idle slides the panel back out (the caller drops
@@ -1895,7 +1899,7 @@ private struct WickerBrowserPanel: View {
                                      : AnyShapeStyle(HierarchicalShapeStyle.secondary))
             }
             .buttonStyle(.plain)
-            .help(pinnedOpen ? "Unpin browser panel" : "Keep browser panel open")
+            .help(pinnedOpen ? L("Unpin browser panel", "取消固定浏览器面板") : L("Keep browser panel open", "保持浏览器面板打开"))
             .accessibilityIdentifier("WickerBrowserPanelToggle")
         }
         .padding(.horizontal, 12)

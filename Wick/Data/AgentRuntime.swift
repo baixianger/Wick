@@ -127,8 +127,12 @@ final class AgentRuntime {
         // per-action prompts. Navigation / read / snapshot / fetchJSON / tab
         // management are never gated.
         let allowWrites = settings.allowWickerBrowserWrites
-        let readOnlyRefusal = "只读模式：已在「设置 → 工作流 → BYO 浏览器」中关闭浏览器写操作。"
-            + "如需让 Wicker 点击 / 输入 / 执行脚本，请在那里开启「允许写操作」。"
+        let readOnlyRefusal = L(
+            "Read-only mode: browser write actions are turned off under "
+            + "Settings → Workflow → BYO browser. To let Wicker click / type / "
+            + "run scripts, enable \"Allow write actions\" there.",
+            "只读模式：已在「设置 → 工作流 → BYO 浏览器」中关闭浏览器写操作。"
+            + "如需让 Wicker 点击 / 输入 / 执行脚本，请在那里开启「允许写操作」。")
 
         // Build the main-actor bridge over the live manager. The closures hop to
         // `@MainActor` (the manager's isolation) on each call; the AgentTool

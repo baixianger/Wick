@@ -215,11 +215,11 @@ struct WorkflowStepper: View {
     /// VoiceOver-friendly status word.
     private func spokenStatus(_ status: Status) -> String {
         switch status {
-        case .pending:               return "pending"
-        case .running:               return "in progress"
-        case .complete:              return "complete"
-        case .warning(let label):    return "complete with caveat, \(label)"
-        case .failed:                return "failed"
+        case .pending:               return L("pending", "待执行")
+        case .running:               return L("in progress", "进行中")
+        case .complete:              return L("complete", "已完成")
+        case .warning(let label):    return L("complete with caveat, \(label)", "完成但有提示，\(label)")
+        case .failed:                return L("failed", "失败")
         }
     }
 }

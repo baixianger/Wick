@@ -6,6 +6,13 @@ enum PortfolioTab: String, CaseIterable, Identifiable, Hashable {
     case positions    = "Positions"
     case transactions = "Transactions"
     var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .heatmap:      return L("Heatmap", "热力图")
+        case .positions:    return L("Positions", "持仓")
+        case .transactions: return L("Transactions", "交易")
+        }
+    }
 }
 
 struct PortfolioView: View {
@@ -29,6 +36,7 @@ struct PortfolioView: View {
                 summary
                 FlatPicker(items: PortfolioTab.allCases,
                            selection: $tab,
+                           label: { $0.label },
                            layout: .compact)
             }
             .padding(.horizontal, 22)
@@ -79,7 +87,7 @@ struct PortfolioView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Portfolio")
+                Text(L("Portfolio", "投资组合"))
                     .font(.system(size: 32, weight: .bold))
                 Text(subtitle)
                     .font(.system(size: 13))
@@ -90,11 +98,11 @@ struct PortfolioView: View {
                 editorMode = .add
                 sheetShown = true
             } label: {
-                Label("Transaction", systemImage: "plus")
+                Label(L("Transaction", "交易"), systemImage: "plus")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(LiquidGlassButtonStyle(prominent: true))
-            .help("New transaction")
+            .help(L("New transaction", "新增交易"))
         }
     }
 
@@ -103,9 +111,11 @@ struct PortfolioView: View {
         let openCount = positions.filter { $0.netQuantity != 0 }.count
         let txCount = store.holdings.count
         if txCount == 0 {
-            return "Track buys and sells manually · live prices via Yahoo"
+            return L("Track buys and sells manually · live prices via Yahoo",
+                     "手动记录买卖 · 实时价格来自 Yahoo")
         }
-        return "\(openCount) open · \(txCount) transaction\(txCount == 1 ? "" : "s") · live via Yahoo"
+        return L("\(openCount) open · \(txCount) transaction\(txCount == 1 ? "" : "s") · live via Yahoo",
+                 "\(openCount) 个持仓 · \(txCount) 笔交易 · 实时来自 Yahoo")
     }
 
     // MARK: - Summary
@@ -117,12 +127,12 @@ struct PortfolioView: View {
                                             GridItem(.flexible(), alignment: .leading), count: 4),
                          alignment: .leading,
                          spacing: 16) {
-            kv("Market value", money(totals.marketValue, ccy))
-            kv("Cost basis",   money(totals.costBasis, ccy))
-            kv("Unrealized P&L",
+            kv(L("Market value", "市值"), money(totals.marketValue, ccy))
+            kv(L("Cost basis", "成本"),   money(totals.costBasis, ccy))
+            kv(L("Unrealized P&L", "浮动盈亏"),
                (totals.unrealizedPnL >= 0 ? "+" : "") + money(totals.unrealizedPnL, ccy),
                tint: pnlTint(totals.unrealizedPnL))
-            kv("Realized P&L",
+            kv(L("Realized P&L", "已实现盈亏"),
                (totals.realizedPnL >= 0 ? "+" : "") + money(totals.realizedPnL, ccy),
                tint: pnlTint(totals.realizedPnL))
         }
@@ -144,10 +154,11 @@ struct PortfolioView: View {
     private var heatmapSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("P&L heatmap")
+                Text(L("P&L heatmap", "盈亏热力图"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text("Cell area ∝ market value · color ∝ unrealized P&L %")
+                Text(L("Cell area ∝ market value · color ∝ unrealized P&L %",
+                       "格子面积 ∝ 市值 · 颜色 ∝ 浮动盈亏%"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -155,8 +166,9 @@ struct PortfolioView: View {
             if positions.isEmpty {
                 emptyState(
                     icon: "rectangle.3.group",
-                    title: "No open positions",
-                    body: "Add a Buy transaction to see it on the heatmap, or load a sample portfolio to explore the page.",
+                    title: L("No open positions", "暂无持仓"),
+                    body: L("Add a Buy transaction to see it on the heatmap, or load a sample portfolio to explore the page.",
+                            "添加一笔买入交易即可在热力图中查看，或加载示例组合来体验本页。"),
                     primaryAction: sampleAction
                 )
             } else {
@@ -187,10 +199,10 @@ struct PortfolioView: View {
     private var positionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Positions")
+                Text(L("Positions", "持仓"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Text("\(openPositions().count) open")
+                Text(L("\(openPositions().count) open", "\(openPositions().count) 个持仓"))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -200,8 +212,9 @@ struct PortfolioView: View {
             if positions.isEmpty {
                 emptyState(
                     icon: "tray",
-                    title: "No open positions",
-                    body: "Add a transaction with the button above, or load a sample portfolio.",
+                    title: L("No open positions", "暂无持仓"),
+                    body: L("Add a transaction with the button above, or load a sample portfolio.",
+                            "点击上方按钮添加交易，或加载示例组合。"),
                     primaryAction: sampleAction
                 )
             } else {
@@ -225,7 +238,7 @@ struct PortfolioView: View {
                     Text(p.symbol)
                         .font(.system(size: 14, weight: .semibold))
                     if p.isShort {
-                        sideBadge("SHORT", .red)
+                        sideBadge(L("SHORT", "做空"), .red)
                     }
                 }
                 Text(p.name)
@@ -235,10 +248,10 @@ struct PortfolioView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text("Qty " + qty(p.netQuantity))
+                Text(L("Qty ", "数量 ") + qty(p.netQuantity))
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
-                Text("Avg buy " + format2(p.averageBuyPrice))
+                Text(L("Avg buy ", "均价 ") + format2(p.averageBuyPrice))
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
@@ -263,7 +276,7 @@ struct PortfolioView: View {
     private var transactionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Transactions")
+                Text(L("Transactions", "交易"))
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
                 Text("\(store.holdings.count)")
@@ -345,7 +358,7 @@ struct PortfolioView: View {
     }
 
     private var sampleAction: EmptyAction {
-        EmptyAction(title: "Load sample portfolio",
+        EmptyAction(title: L("Load sample portfolio", "加载示例组合"),
                     icon: "sparkles") { store.loadSampleTransactions() }
     }
 
