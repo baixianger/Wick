@@ -952,6 +952,20 @@ fileprivate struct MacroOverlayChart: View {
         }
         ctx.stroke(path, with: .color(color),
                    style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+
+        // Mark the actual observations when the series is SPARSE (monthly /
+        // quarterly — few points), so each discrete print is visible. Skipped
+        // when dense (daily ≈ 252/yr) where dots would smear into the line.
+        if present.count <= 30 {
+            let r: CGFloat = max(1.6, width + 0.6)
+            for (i, v) in values.enumerated() {
+                guard let v else { continue }
+                let p = pt(i, v)
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r,
+                                                width: r * 2, height: r * 2)),
+                         with: .color(color))
+            }
+        }
     }
 
     private func drawBars(_ values: [Double], in ctx: inout GraphicsContext,
