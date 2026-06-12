@@ -11,6 +11,10 @@ struct FlatPicker<Item: Hashable & Identifiable & RawRepresentable>: View
     let items: [Item]
     @Binding var selection: Item
     var font: Font = .system(size: 12, weight: .semibold, design: .rounded)
+    /// Visible label for each item. Defaults to the raw value (the original
+    /// behavior); pass a closure to localize (e.g. `{ $0.label }`) without
+    /// touching the persisted raw value.
+    var label: (Item) -> String = { $0.rawValue }
     /// `.fill` stretches each pill to share the available width equally
     /// (the screenshot-style row across a wide pane). `.compact` packs
     /// items to natural intrinsic width and left-aligns them with a
@@ -29,7 +33,7 @@ struct FlatPicker<Item: Hashable & Identifiable & RawRepresentable>: View
                     // the outer frame — so the selection capsule hugs the
                     // label width even when items spread evenly across
                     // the picker (Apple Stocks style).
-                    Text(item.rawValue)
+                    Text(label(item))
                         .font(font)
                         .foregroundStyle(selection == item ? .primary : .secondary)
                         .padding(.horizontal, 12)

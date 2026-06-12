@@ -178,13 +178,13 @@ private enum SettingsCategory: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .provider:  return "Provider"
-        case .data:      return "Data"
-        case .workflow:  return "Workflow"
-        case .freeAgent: return "Free Agent"
-        case .skills:    return "Skills"
-        case .display:   return "Display"
-        case .mcp:       return "MCP"
+        case .provider:  return L("Provider", "模型服务")
+        case .data:      return L("Data", "数据")
+        case .workflow:  return L("Workflow", "工作流")
+        case .freeAgent: return L("Free Agent", "自由智能体")
+        case .skills:    return L("Skills", "技能")
+        case .display:   return L("Display", "显示")
+        case .mcp:       return L("MCP", "MCP")
         }
     }
 
@@ -489,9 +489,9 @@ private struct DataSourcesTab: View {
         case free, freeKey, byo
         var label: String {
             switch self {
-            case .free:    "免费"
-            case .freeKey: "免费·需Key"
-            case .byo:     "自带账号"
+            case .free:    L("Free", "免费")
+            case .freeKey: L("Free · Key", "免费·需Key")
+            case .byo:     L("BYO account", "自带账号")
             }
         }
         var tint: Color {
@@ -505,13 +505,20 @@ private struct DataSourcesTab: View {
 
     private enum DSStatus {
         case active, planned
-        var label: String { self == .active ? "已接入" : "计划中" }
+        var label: String { self == .active ? L("Active", "已接入") : L("Planned", "计划中") }
         var tint: Color { self == .active ? .green : .secondary }
     }
 
     private enum DSMarket: String, CaseIterable, Identifiable {
         case cn = "A股 / 港股", us = "美股"
         var id: String { rawValue }
+        /// Localized segment label — `rawValue` kept for `id`.
+        var label: String {
+            switch self {
+            case .cn: return L("CN / HK", "A股 / 港股")
+            case .us: return L("US", "美股")
+            }
+        }
     }
 
     /// Which market's source list the segmented picker shows.
@@ -584,9 +591,9 @@ private struct DataSourcesTab: View {
     var body: some View {
         Form {
             Section {
-                Picker("市场", selection: $market) {
+                Picker(L("Market", "市场"), selection: $market) {
                     ForEach(DSMarket.allCases) { m in
-                        Text(m.rawValue).tag(m)
+                        Text(m.label).tag(m)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -596,9 +603,10 @@ private struct DataSourcesTab: View {
                     catalogRow(entry)
                 }
             } header: {
-                Text("数据源总览")
+                Text(L("Data Sources", "数据源总览"))
             } footer: {
-                Text("免费 = 无需 Key;免费·需Key = 在下方填写;自带账号 = 在工作流里登录。计划中 = 即将接入。")
+                Text(L("Free = no key needed; Free · Key = fill in below; BYO account = sign in within the workflow. Planned = coming soon.",
+                       "免费 = 无需 Key;免费·需Key = 在下方填写;自带账号 = 在工作流里登录。计划中 = 即将接入。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -1196,26 +1204,37 @@ private struct AppearanceTab: View {
 
     var body: some View {
         Form {
-            Section("Theme") {
-                Picker("Appearance:", selection: $settings.appearanceOverride) {
-                    Text("System").tag(ColorScheme?.none)
-                    Text("Light").tag(ColorScheme?.some(.light))
-                    Text("Dark").tag(ColorScheme?.some(.dark))
+            Section(L("Language", "语言")) {
+                Picker(L("App language:", "应用语言："), selection: $settings.appLanguage) {
+                    Text(L("System", "跟随系统")).tag(AppLanguage.system)
+                    Text("中文").tag(AppLanguage.zh)
+                    Text("English").tag(AppLanguage.en)
+                }
+                .pickerStyle(.segmented)
+                Text(L("Switches the interface language immediately. Some less-visited screens are still being translated.",
+                       "立即切换界面语言。部分次要页面仍在翻译中。"))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Section(L("Theme", "主题")) {
+                Picker(L("Appearance:", "外观："), selection: $settings.appearanceOverride) {
+                    Text(L("System", "跟随系统")).tag(ColorScheme?.none)
+                    Text(L("Light", "浅色")).tag(ColorScheme?.some(.light))
+                    Text(L("Dark", "深色")).tag(ColorScheme?.some(.dark))
                 }
                 .pickerStyle(.segmented)
             }
-            Section("Chart") {
-                Toggle("Side-by-side pane in Chart tab",
+            Section(L("Chart", "图表")) {
+                Toggle(L("Side-by-side pane in Chart tab", "图表页并排显示面板"),
                        isOn: $settings.chartSplitView)
             }
-            Section("Macro 宏观") {
-                Picker("Layout 布局:", selection: $settings.macroTwoColumn) {
-                    Text("一览 (single)").tag(false)
-                    Text("两栏 (two-column)").tag(true)
+            Section(L("Macro", "宏观")) {
+                Picker(L("Layout:", "布局："), selection: $settings.macroTwoColumn) {
+                    Text(L("Single", "一览")).tag(false)
+                    Text(L("Two-column", "两栏")).tag(true)
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Time interval 时间区间:", selection: $settings.macroWindowMonths) {
+                Picker(L("Time interval:", "时间区间："), selection: $settings.macroWindowMonths) {
                     Text("3M").tag(3)
                     Text("6M").tag(6)
                     Text("1Y").tag(12)
@@ -1224,30 +1243,32 @@ private struct AppearanceTab: View {
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Column 1 default 第一栏:", selection: $settings.macroColumn1) {
+                Picker(L("Column 1 default:", "第一栏默认："), selection: $settings.macroColumn1) {
                     ForEach(MacroCategory.allCases) { cat in
-                        Text(cat.rawValue).tag(cat.rawValue)
+                        Text(cat.label).tag(cat.rawValue)
                     }
                 }
 
-                Picker("Column 2 default 第二栏:", selection: $settings.macroColumn2) {
+                Picker(L("Column 2 default:", "第二栏默认："), selection: $settings.macroColumn2) {
                     ForEach(MacroCategory.allCases) { cat in
-                        Text(cat.rawValue).tag(cat.rawValue)
+                        Text(cat.label).tag(cat.rawValue)
                     }
                 }
                 .disabled(!settings.macroTwoColumn)
 
-                Text("两栏布局并排显示两个分类面板，各自独立切换。时间区间控制每个图表的可视窗口长度。")
+                Text(L("Two-column layout shows two category panels side by side, each switchable independently. The time interval controls each chart's visible window.",
+                       "两栏布局并排显示两个分类面板，各自独立切换。时间区间控制每个图表的可视窗口长度。"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Section("Watchlist") {
-                Picker("Change display:", selection: $settings.watchlistChangeStyle) {
+            Section(L("Watchlist", "自选")) {
+                Picker(L("Change display:", "涨跌显示："), selection: $settings.watchlistChangeStyle) {
                     ForEach(WatchlistChangeStyle.allCases, id: \.self) { style in
                         Text(style.displayName).tag(style)
                     }
                 }
                 .pickerStyle(.segmented)
-                Text("Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.")
+                Text(L("Show the day-over-day move as an absolute price delta or a percent change. Affects sidebar rows only.",
+                       "以绝对价差或百分比显示当日涨跌。仅影响侧边栏行。"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }

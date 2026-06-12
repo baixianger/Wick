@@ -95,9 +95,9 @@ struct FloatingWickerComposer: View {
 
     private var placeholder: String {
         if let sym = contextSymbol {
-            return "Ask Wicker about \(sym)…"
+            return L("Ask Wicker about \(sym)…", "向 Wicker 询问 \(sym)…")
         }
-        return "Ask Wicker…"
+        return L("Ask Wicker…", "向 Wicker 提问…")
     }
 
     private var canSubmit: Bool {

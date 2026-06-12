@@ -326,6 +326,24 @@ final class AgentSettings {
         }
     }
 
+    /// Phase-1 i18n: the user's UI-language choice. `.system` follows the OS
+    /// preferred language; `.zh` / `.en` force a language. The host
+    /// (`WickApp`) maps this through `resolvedChinese` into the global
+    /// `appUILanguageIsChinese` flag + rebuilds the tree on change.
+    var appLanguage: AppLanguage {
+        didSet { UserDefaults.standard.set(appLanguage.rawValue, forKey: "ui.appLanguage") }
+    }
+
+    /// Resolve `appLanguage` to a concrete "is Chinese?" boolean — `.system`
+    /// consults the OS preferred language, `.zh`/`.en` are explicit.
+    var resolvedChinese: Bool {
+        switch appLanguage {
+        case .system: return (Locale.preferredLanguages.first ?? "en").hasPrefix("zh")
+        case .zh:     return true
+        case .en:     return false
+        }
+    }
+
     // MARK: - Derived config
 
     /// Compose a `TradingFloorConfig` from the persisted knobs.
@@ -440,6 +458,9 @@ final class AgentSettings {
             default:      return nil
             }
         }
+        // Phase-1 i18n language preference — default `.system`.
+        self.appLanguage = (ud.string(forKey: "ui.appLanguage"))
+            .flatMap(AppLanguage.init(rawValue:)) ?? .system
 
         // DEBUG-only: opportunistic auto-fill of BYO keys from process
         // environment when Keychain is empty for that slot. Pattern is

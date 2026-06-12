@@ -1773,7 +1773,7 @@ private struct WickerBrowserPanel: View {
                 }
                 .buttonStyle(.plain)
                 .liquidGlass(cornerRadius: 8)
-                .help("New tab")
+                .help(L("New tab", "新标签页"))
                 .accessibilityIdentifier("WickerBrowserNewTab")
             }
             .padding(.horizontal, 10)
@@ -1841,7 +1841,7 @@ private struct WickerBrowserPanel: View {
         } else if let host = URL(string: url)?.host, !host.isEmpty {
             base = host
         } else {
-            base = "New tab"
+            base = L("New tab", "新标签页")
         }
         return base.count > 16 ? String(base.prefix(15)) + "…" : base
     }

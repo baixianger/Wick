@@ -41,6 +41,13 @@ struct WickApp: App {
         // freed strip. This is the macOS 26 modern-app norm.
         WindowGroup {
             ContentView()
+                // Phase-1 i18n runtime switch: changing the language flips
+                // `agentSettings.appLanguage`, and this `.id(...)` forces a
+                // full view-tree rebuild so every `L(...)` call re-evaluates
+                // against the new `appUILanguageIsChinese` flag. (This also
+                // resets transient view state — acceptable for a deliberate
+                // language switch.)
+                .id(agentSettings.appLanguage)
                 .frame(minWidth: 1180, minHeight: 760)
                 .environment(dataStore)
                 .environment(fredStore)
@@ -48,6 +55,9 @@ struct WickApp: App {
                 .environment(reportHistory)
                 .environment(agentRuntime)
                 .environment(indicatorConfig)
+                // Number / date formatting follows the chosen language too.
+                .environment(\.locale,
+                             Locale(identifier: agentSettings.resolvedChinese ? "zh-Hans" : "en"))
                 // Apply on the root view of the WindowGroup — that's the
                 // only placement macOS extends into the window's title
                 // bar / toolbar / sidebar chrome. Applied below this point
@@ -55,6 +65,9 @@ struct WickApp: App {
                 // tree and the toolbar would stay bright.
                 .preferredColorScheme(agentSettings.appearanceOverride)
                 .onAppear {
+                    // Phase-1 i18n: resolve the persisted language choice into
+                    // the global flag the free `L(_:_:)` helper reads.
+                    appUILanguageIsChinese = agentSettings.resolvedChinese
                     // Build the BYO data chain from current keys.
                     agentRuntime.reconfigure(with: agentSettings)
                     // Evaluate the MCP bridge gate on launch: starts the
@@ -104,6 +117,12 @@ struct WickApp: App {
                 // the next chat turn with no rebuild.
                 .onChange(of: agentSettings.allowWickerBrowserWrites) { _, _ in
                     agentRuntime.reconfigureWebTools(with: agentSettings)
+                }
+                // Phase-1 i18n: when the user picks a language, update the
+                // global flag BEFORE the `.id(...)` rebuild swaps the tree so
+                // the freshly-built `L(...)` calls read the new value.
+                .onChange(of: agentSettings.appLanguage) { _, _ in
+                    appUILanguageIsChinese = agentSettings.resolvedChinese
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -164,12 +183,18 @@ struct WickApp: App {
         // explicit frame is needed here.
         Settings {
             SettingsView(settings: agentSettings)
+                // Same Phase-1 i18n rebuild trick as ContentView so the
+                // Settings tree re-evaluates its `L(...)` labels when the
+                // language changes.
+                .id(agentSettings.appLanguage)
                 .environment(dataStore)
                 .environment(fredStore)
                 .environment(agentSettings)
                 .environment(reportHistory)
                 .environment(agentRuntime)
                 .environment(indicatorConfig)
+                .environment(\.locale,
+                             Locale(identifier: agentSettings.resolvedChinese ? "zh-Hans" : "en"))
         }
         // macOS Settings/Preferences windows are FIXED by default — without
         // this the `.frame(maxWidth/Height: .infinity)` on the split-view

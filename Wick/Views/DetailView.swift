@@ -15,6 +15,19 @@ enum DetailTab: String, CaseIterable, Identifiable, Hashable {
     case ai       = "AI"
     var id: String { rawValue }
 
+    /// Localized tab label — `rawValue` stays fixed for `id`/persistence/gating.
+    var label: String {
+        switch self {
+        case .overview:      return L("Overview", "概览")
+        case .chart:         return L("Chart", "图表")
+        case .news:          return L("News", "新闻")
+        case .social:        return L("Social", "社交")
+        case .capital:       return L("Capital", "资金")
+        case .shortInterest: return L("Short", "空头")
+        case .ai:            return L("AI", "AI")
+        }
+    }
+
     /// Tabs available for a given ticker. Two market-gated tabs are mutually
     /// exclusive:
     ///
@@ -235,7 +248,7 @@ struct DetailView: View {
                 }
                 Picker("Tab", selection: $tab) {
                     ForEach(DetailTab.tabs(for: ticker)) { item in
-                        Text(item.rawValue).tag(item)
+                        Text(item.label).tag(item)
                     }
                 }
                 .pickerStyle(.segmented)

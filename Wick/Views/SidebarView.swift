@@ -87,7 +87,7 @@ struct SidebarView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Stocks", text: $searchQuery)
+            TextField(L("Search stocks", "搜索股票"), text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
             if !searchQuery.isEmpty {
@@ -135,9 +135,9 @@ struct SidebarView: View {
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Portfolio")
+                Text(L("Portfolio", "组合"))
                     .font(.system(size: 14, weight: .semibold))
-                Text("Holdings · P&L heatmap")
+                Text(L("Holdings · P&L heatmap", "持仓 · 盈亏热图"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -167,10 +167,10 @@ struct SidebarView: View {
             Spacer()
             groupMenu
         }
-        .alert("New group", isPresented: $newGroupPromptShown) {
-            TextField("Name", text: $newGroupName)
-            Button("Cancel", role: .cancel) { }
-            Button("Create") {
+        .alert(L("New group", "新建分组"), isPresented: $newGroupPromptShown) {
+            TextField(L("Name", "名称"), text: $newGroupName)
+            Button(L("Cancel", "取消"), role: .cancel) { }
+            Button(L("Create", "创建")) {
                 let n = newGroupName.trimmingCharacters(in: .whitespaces)
                 guard !n.isEmpty else { return }
                 let g = watchlist.addGroup(name: n)
@@ -202,7 +202,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Wicker")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Chat · screening · macro")
+                Text(L("Chat · screening · macro", "对话 · 选股 · 宏观"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -228,9 +228,9 @@ struct SidebarView: View {
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Market")
+                Text(L("Market", "市场"))
                     .font(.system(size: 14, weight: .semibold))
-                Text("Sectors · indices · macro")
+                Text(L("Sectors · indices · macro", "板块 · 指数 · 宏观"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -251,9 +251,9 @@ struct SidebarView: View {
                 // most-returned-to list, so it leads regardless of how many user
                 // groups exist. Then "All" (every tracked stock across all groups
                 // in one list), then the user's groups.
-                Label("Holdings (\(holdingsCount))", systemImage: "rectangle.3.group")
+                Label(L("Holdings (\(holdingsCount))", "持仓 (\(holdingsCount))"), systemImage: "rectangle.3.group")
                     .tag(WatchlistGroupSelection.holdings)
-                Label("All", systemImage: "tray.full")
+                Label(L("All", "全部"), systemImage: "tray.full")
                     .tag(WatchlistGroupSelection.all)
                 ForEach(watchlist.groups) { group in
                     Label("\(group.name) (\(group.symbols.count))",
@@ -267,13 +267,13 @@ struct SidebarView: View {
                 newGroupName = ""
                 newGroupPromptShown = true
             } label: {
-                Label("New group…", systemImage: "plus")
+                Label(L("New group…", "新建分组…"), systemImage: "plus")
             }
             if case .user(let id) = watchlist.selection {
                 Button(role: .destructive) {
                     watchlist.remove(id: id)
                 } label: {
-                    Label("Delete current group", systemImage: "trash")
+                    Label(L("Delete current group", "删除当前分组"), systemImage: "trash")
                 }
             }
         } label: {
@@ -299,24 +299,25 @@ struct SidebarView: View {
 
     private var currentGroupTitle: String {
         switch watchlist.selection {
-        case .all:      return "All"
-        case .holdings: return "Holdings"
+        case .all:      return L("All", "全部")
+        case .holdings: return L("Holdings", "持仓")
         case .user(let id):
-            return watchlist.groups.first(where: { $0.id == id })?.name ?? "Group"
+            return watchlist.groups.first(where: { $0.id == id })?.name ?? L("Group", "分组")
         }
     }
 
     @ViewBuilder
     private func tickerContextMenu(for ticker: Ticker) -> some View {
         if watchlist.groups.isEmpty {
-            Text("No user groups yet")
+            Text(L("No user groups yet", "暂无自定义分组"))
         } else {
             ForEach(watchlist.groups) { group in
                 let isMember = group.symbols.contains(ticker.symbol)
                 Button {
                     watchlist.toggle(symbol: ticker.symbol, in: group.id)
                 } label: {
-                    Label(isMember ? "Remove from \(group.name)" : "Add to \(group.name)",
+                    Label(isMember ? L("Remove from \(group.name)", "从 \(group.name) 移除")
+                                   : L("Add to \(group.name)", "加入 \(group.name)"),
                           systemImage: isMember ? "minus.circle" : "plus.circle")
                 }
             }
@@ -389,7 +390,7 @@ private struct TickerRow: View {
                 if isClosed {
                     // Dimmed "已平仓" chip so a fully-closed (net-0) holding reads
                     // as history at a glance while still living in the list.
-                    Text("已平仓")
+                    Text(L("Closed", "已平仓"))
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 5)

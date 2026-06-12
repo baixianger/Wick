@@ -203,6 +203,7 @@ struct MarketView: View {
         return VStack(alignment: .leading, spacing: 16) {
             FlatPicker(items: MacroCategory.allCases,
                        selection: category,
+                       label: { $0.label },
                        layout: .compact)
             VStack(spacing: 0) {
                 let symbols = category.wrappedValue.symbols
@@ -548,6 +549,16 @@ enum MacroCategory: String, CaseIterable, Identifiable, Hashable {
     case growth    = "Growth"
 
     var id: String { rawValue }
+
+    /// Localized display label — `rawValue` stays English for persistence.
+    var label: String {
+        switch self {
+        case .rates:     return L("Rates", "利率")
+        case .inflation: return L("Inflation", "通胀")
+        case .labor:     return L("Labor", "就业")
+        case .growth:    return L("Growth", "增长")
+        }
+    }
 
     var symbols: [String] {
         switch self {
