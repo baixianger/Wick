@@ -903,6 +903,32 @@ private struct WorkflowTab: View {
                         .labelsHidden()
                         .disabled(!settings.enableWickerBrowser)
                 }
+                // Fixed width of the live-browser panel. Only WIDTH is tunable —
+                // the panel always fills the window height; in the chat view the
+                // browser is locked (drag the divider to resize the chat column
+                // instead). The render clamps this against the window so a wide
+                // setting on a narrow window auto-shrinks, never squeezing the
+                // chat away.
+                SettingsRow(systemImage: "rectangle.split.2x1",
+                            tint: .blue,
+                            title: "浏览器宽度",
+                            subtitle: "Wicker 浏览器面板的固定宽度(高度填满窗口)。窗口窄时会自动缩,保证聊天可用。") {
+                    HStack(spacing: 10) {
+                        Slider(
+                            value: Binding(
+                                get: { Double(settings.wickerBrowserWidth) },
+                                set: { settings.wickerBrowserWidth = Int($0) }
+                            ),
+                            in: 600...1280,
+                            step: 20
+                        )
+                        .frame(width: 160)
+                        Text("\(settings.wickerBrowserWidth)pt")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 52, alignment: .trailing)
+                    }
+                }
             }
         }
         .formStyle(.grouped)

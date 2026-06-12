@@ -249,6 +249,16 @@ final class AgentSettings {
         didSet { UserDefaults.standard.set(exposeWickerViaMCP, forKey: "tf.exposeWickerViaMCP") }
     }
 
+    /// Fixed width (pt) of the Wicker live-browser panel in the chat split. The
+    /// browser is the fixed side (stable viewport); only its WIDTH is tunable —
+    /// it always fills the window height. In the chat view the divider drags the
+    /// CHAT column, not the browser. The render clamps this against the window so
+    /// a wide setting on a narrow window auto-shrinks and never squeezes the chat
+    /// away. Default 900; non-zero default ⇒ presence check in `init`.
+    var wickerBrowserWidth: Int {
+        didSet { UserDefaults.standard.set(wickerBrowserWidth, forKey: "ui.wickerBrowserWidth") }
+    }
+
     // MARK: - Skills (user-supplied playbooks)
 
     var userSkillsDirectoryPath: String? {
@@ -406,6 +416,9 @@ final class AgentSettings {
         // Off by default — exposing the logged-in browser/社交 session to
         // third-party MCP clients is strictly opt-in.
         self.exposeWickerViaMCP = ud.bool(forKey: "tf.exposeWickerViaMCP")
+        // Fixed browser-panel width. Non-zero default (900) ⇒ presence check.
+        self.wickerBrowserWidth = ud.object(forKey: "ui.wickerBrowserWidth") == nil
+            ? 900 : ud.integer(forKey: "ui.wickerBrowserWidth")
         self.userSkillsDirectoryPath = ud.string(forKey: "tf.userSkillsDir")
 
         self.chartSplitView = ud.bool(forKey: "ui.chartSplitView")

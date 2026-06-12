@@ -47,21 +47,21 @@ struct WickerView: View {
     /// per-view state the moment `isAgentBrowsing` flips false.
     @State private var browserPinnedOpen: Bool = false
 
-    /// User-draggable, FIXED width of the browser panel. The browser is the
-    /// fixed side so its viewport stays a stable size as the window resizes; the
-    /// chat takes the remaining width but caps + centres its content (so no dead
-    /// gap forms between the narrow bubbles and the browser). The drag handle
-    /// writes this (clamped to `browserWidthRange`); hoisted so it survives the
-    /// panel mounting / unmounting.
-    @State private var browserPanelWidth: CGFloat = 600
+    /// User-draggable cap of the CHAT content column. The browser panel is now a
+    /// FIXED width set in Settings (`settings.wickerBrowserWidth`) and is NOT
+    /// resized by dragging; instead the divider drags THIS — the chat content
+    /// column's max width. When the browser opens the chat pane narrows and the
+    /// centred capped content shrinks to fit. Hoisted so it survives the panel
+    /// mounting / unmounting.
+    @State private var chatColumnWidth: CGFloat = 760
     /// In-drag baseline so the gesture is relative to where the divider was
     /// when the drag began, not absolute pointer position (avoids a jump on
     /// grab). nil when no drag is in flight.
-    @State private var browserDragStartWidth: CGFloat?
+    @State private var chatDragStartWidth: CGFloat?
 
-    /// Clamp for the browser panel width. Lower bound keeps the page usable;
-    /// upper bound keeps the chat readable on the 1180pt minimum window.
-    private let browserWidthRange: ClosedRange<CGFloat> = 380...900
+    /// Clamp for the chat content column. Lower bound keeps bubbles readable;
+    /// upper bound keeps a comfortable reading measure on a wide pane.
+    private let chatColumnRange: ClosedRange<CGFloat> = 460...1000
 
     /// True while a `web.*` tool is mid-flight (macOS 26 + flag on +
     /// a live `BrowserSessionManager`). Drives the right-region hand-off:
@@ -94,7 +94,15 @@ struct WickerView: View {
             }
             return false
         }()
-        return HStack(spacing: 0) {
+        return GeometryReader { geo in
+        // Clamp the Settings-driven fixed browser width against the window so the
+        // chat always keeps a usable minimum: a wide setting on a narrow window
+        // auto-shrinks the browser rather than squeezing the chat away. `minChat`
+        // is the floor for the chat region; `11` is the resize-handle width.
+        let minChat: CGFloat = 360
+        let browserW = min(CGFloat(settings.wickerBrowserWidth),
+                           max(minChat, geo.size.width - minChat - 11))
+        HStack(spacing: 0) {
             conversationPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .topTrailing) {
@@ -121,16 +129,16 @@ struct WickerView: View {
                let manager = runtime.browserSession as? BrowserSessionManager,
                browserPanelRevealed(manager)
             {
-                // Draggable split handle between chat and browser. Grab and
-                // drag left/right to rebalance — width is clamped to
-                // `browserWidthRange` so neither pane collapses. Replaces the
-                // former fixed 560pt divider.
+                // Split handle between chat and browser. The browser is FIXED
+                // (its width comes from Settings, clamped above); dragging the
+                // handle adjusts the CHAT content column cap (`chatColumnWidth`),
+                // not the browser.
                 browserResizeHandle
-                // Browser is the FIXED-width side (stable viewport across window
-                // resizes); the chat absorbs the rest but centres its capped
-                // content so no dead gap forms.
+                // Browser is the FIXED-width side (width from Settings, clamped
+                // against the window); the chat absorbs the rest but centres its
+                // capped content so no dead gap forms.
                 WickerBrowserPanel(manager: manager, pinnedOpen: $browserPinnedOpen)
-                    .frame(width: browserPanelWidth)
+                    .frame(width: browserW)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if showHistoryDrawer {
                 Divider()
@@ -139,6 +147,9 @@ struct WickerView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        // Fill the GeometryReader so layout is unchanged aside from the
+        // clamped-width logic above.
+        .frame(width: geo.size.width, height: geo.size.height)
         // Animate the right-side reveal when the agent starts/stops
         // browsing (that flip comes from the manager, outside any
         // `withAnimation` block, so the transition needs this value-keyed
@@ -171,13 +182,15 @@ struct WickerView: View {
             Button("Cancel", role: .cancel) { renamingSessionID = nil }
             Button("Rename") { commitRename() }
         }
+        }
     }
 
-    /// Draggable split handle between the conversation pane and the browser.
+    /// Split handle between the conversation pane and the (fixed) browser.
     /// A crisp 1pt vertical hairline sits centred in an 11pt transparent hit
     /// strip (easy to grab); the pointer becomes the `resizeLeftRight` cursor on
-    /// hover. The BROWSER is the fixed trailing side, so dragging LEFT widens it
-    /// and RIGHT narrows it — `browserPanelWidth -= translation.x`.
+    /// hover. The browser is FIXED (its width comes from Settings), so dragging
+    /// adjusts the CHAT content column cap instead: drag RIGHT → wider chat
+    /// column, LEFT → narrower — `chatColumnWidth += translation.x`.
     @available(macOS 26.0, *)
     private var browserResizeHandle: some View {
         Rectangle()
@@ -196,14 +209,15 @@ struct WickerView: View {
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
-                        let base = browserDragStartWidth ?? browserPanelWidth
-                        if browserDragStartWidth == nil { browserDragStartWidth = base }
-                        // Browser is the trailing fixed side: drag left → wider.
-                        let proposed = base - value.translation.width
-                        browserPanelWidth = min(max(proposed, browserWidthRange.lowerBound),
-                                                browserWidthRange.upperBound)
+                        let base = chatDragStartWidth ?? chatColumnWidth
+                        if chatDragStartWidth == nil { chatDragStartWidth = base }
+                        // The handle sits to the LEFT of the fixed browser, so
+                        // dragging it RIGHT widens the chat content column.
+                        let proposed = base + value.translation.width
+                        chatColumnWidth = min(max(proposed, chatColumnRange.lowerBound),
+                                              chatColumnRange.upperBound)
                     }
-                    .onEnded { _ in browserDragStartWidth = nil }
+                    .onEnded { _ in chatDragStartWidth = nil }
             )
     }
 
@@ -374,7 +388,8 @@ struct WickerView: View {
     @ViewBuilder
     private var conversationPane: some View {
         if let session = store.session(for: store.selectedSessionID) {
-            ConversationView(store: store, session: session)
+            ConversationView(store: store, session: session,
+                             contentMaxWidth: chatColumnWidth)
         } else {
             // Brief blank during the layout pass before ensureSession
             // fires. Once a session exists ConversationView takes
@@ -522,6 +537,10 @@ private struct ConversationView: View {
     /// Snapshot at construction; we re-read the live copy off `store`
     /// inside the body so appends rerender. Kept here for the id.
     let session: ChatSession
+    /// Max width of the chat content column. Driven by `WickerView`'s
+    /// draggable divider; the centred capped content shrinks to fit when the
+    /// chat pane narrows (browser open). Defaults to the prior hardcoded cap.
+    var contentMaxWidth: CGFloat = 820
 
     @Environment(AgentSettings.self) private var settings
     @Environment(AgentRuntime.self) private var runtime
@@ -581,8 +600,9 @@ private struct ConversationView: View {
         // Cap the chat to a comfortable reading column and CENTRE it. On a wide
         // pane (and especially with the fixed browser open beside it) this stops
         // the narrow bubbles from leaving a lopsided dead gap on the right —
-        // symmetric margins instead, the Claude / ChatGPT layout.
-        .frame(maxWidth: 820)
+        // symmetric margins instead, the Claude / ChatGPT layout. The cap is
+        // dynamic — dragging the chat↔browser divider drives it.
+        .frame(maxWidth: contentMaxWidth)
         .frame(maxWidth: .infinity)
         .frame(maxHeight: .infinity)
         // Auto-continue: if the session opens with an unanswered user
