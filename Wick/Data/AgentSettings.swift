@@ -270,6 +270,27 @@ final class AgentSettings {
         didSet { UserDefaults.standard.set(chartSplitView, forKey: "ui.chartSplitView") }
     }
 
+    /// Macro page layout — single column (default) vs two side-by-side columns.
+    var macroTwoColumn: Bool {
+        didSet { UserDefaults.standard.set(macroTwoColumn, forKey: "ui.macroTwoColumn") }
+    }
+
+    /// Macro chart window length in months. Default 12 (1 year); non-zero
+    /// default ⇒ presence check in `init`.
+    var macroWindowMonths: Int {
+        didSet { UserDefaults.standard.set(macroWindowMonths, forKey: "ui.macroWindowMonths") }
+    }
+
+    /// Default `MacroCategory` rawValue for column 1 (and the single column).
+    var macroColumn1: String {
+        didSet { UserDefaults.standard.set(macroColumn1, forKey: "ui.macroColumn1") }
+    }
+
+    /// Default `MacroCategory` rawValue for column 2 (two-column layout only).
+    var macroColumn2: String {
+        didSet { UserDefaults.standard.set(macroColumn2, forKey: "ui.macroColumn2") }
+    }
+
     /// Path to the `claude` CLI for the `.claudeCode` provider. Empty =
     /// resolve from `$PATH`; non-empty = absolute path the user overrode in
     /// Settings (covers Homebrew variants and pre-release builds).
@@ -388,6 +409,14 @@ final class AgentSettings {
         self.userSkillsDirectoryPath = ud.string(forKey: "tf.userSkillsDir")
 
         self.chartSplitView = ud.bool(forKey: "ui.chartSplitView")
+        // Macro page layout prefs. Two-column off by default; window default
+        // 12 months and the column defaults are non-empty, so both need the
+        // presence check (an unset key would otherwise read as 0 / "").
+        self.macroTwoColumn = ud.bool(forKey: "ui.macroTwoColumn")
+        self.macroWindowMonths = ud.object(forKey: "ui.macroWindowMonths") == nil
+            ? 12 : ud.integer(forKey: "ui.macroWindowMonths")
+        self.macroColumn1 = ud.string(forKey: "ui.macroColumn1") ?? "Rates"
+        self.macroColumn2 = ud.string(forKey: "ui.macroColumn2") ?? "Inflation"
         self.claudeCodeCLIPath = ud.string(forKey: "tf.claudeCodeCLIPath") ?? ""
         self.watchlistChangeStyle = (ud.string(forKey: "ui.watchlistChangeStyle"))
             .flatMap(WatchlistChangeStyle.init(rawValue:)) ?? .absolute

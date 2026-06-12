@@ -31,10 +31,15 @@ struct MarketView: View {
 
     @Environment(LiveDataStore.self) private var store
     @Environment(FredDataStore.self) private var fredStore
+    @Environment(AgentSettings.self) private var agentSettings
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var assetClass: MarketAssetClass = .us
-    @State private var macroCategory: MacroCategory = .rates
+    // Two independent category selections — column 1 (also the single-column
+    // selection) and column 2. Seeded from settings in `.onAppear` since
+    // @State can't read the environment at init time.
+    @State private var macroCat1: MacroCategory = .rates
+    @State private var macroCat2: MacroCategory = .inflation
     @State private var moverTab: MoverTab = .gainers
     /// Per-asset-class card selection so each tab remembers its own
     /// active card across tab switches.
@@ -69,7 +74,13 @@ struct MarketView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(appleBackground(for: colorScheme))
-        .onAppear { warmTab(assetClass) }
+        .onAppear {
+            warmTab(assetClass)
+            // Seed each column's category from the persisted defaults (env
+            // isn't available at @State init).
+            macroCat1 = MacroCategory(rawValue: agentSettings.macroColumn1) ?? .rates
+            macroCat2 = MacroCategory(rawValue: agentSettings.macroColumn2) ?? .inflation
+        }
         .onChange(of: assetClass) { _, new in warmTab(new) }
     }
 
@@ -162,20 +173,42 @@ struct MarketView: View {
     /// top, a larger chart below (line for levels/rates, +/- bars for the
     /// discrete monthly/quarterly flows). With only a few items per tab there's
     /// room for a real chart per indicator instead of a tiny sparkline.
+    @ViewBuilder
     private func macroSection(_ specs: [IndexSpec]) -> some View {
+        if agentSettings.macroTwoColumn {
+            // Two independent panels side by side, each with its own category
+            // sub-tab + indicator list. Even split via `maxWidth: .infinity`.
+            HStack(alignment: .top, spacing: 16) {
+                macroColumn(specs, category: $macroCat1)
+                    .frame(maxWidth: .infinity)
+                macroColumn(specs, category: $macroCat2)
+                    .frame(maxWidth: .infinity)
+            }
+        } else {
+            macroColumn(specs, category: $macroCat1)
+        }
+    }
+
+    /// One macro column — a category sub-tab over that category's per-indicator
+    /// detail rows. Reused for the single column and both two-column panels.
+    private func macroColumn(_ specs: [IndexSpec],
+                             category: Binding<MacroCategory>) -> some View {
         let bySymbol = Dictionary(specs.map { ($0.symbol, $0) },
                                   uniquingKeysWith: { a, _ in a })
+        // Months → days for the chart window (avg month ≈ 30.44 days).
+        let macroWindowDays = Double(agentSettings.macroWindowMonths) * 30.44
         return VStack(alignment: .leading, spacing: 16) {
             FlatPicker(items: MacroCategory.allCases,
-                       selection: $macroCategory,
+                       selection: category,
                        layout: .compact)
             VStack(spacing: 0) {
-                let symbols = macroCategory.symbols
+                let symbols = category.wrappedValue.symbols
                 ForEach(symbols, id: \.self) { sym in
                     if let spec = bySymbol[sym] {
                         MacroDetailRow(spec: spec,
                                        series: seriesFor(spec),
-                                       isBar: Self.barMacroSymbols.contains(sym))
+                                       isBar: Self.barMacroSymbols.contains(sym),
+                                       windowDays: macroWindowDays)
                         if sym != symbols.last { Divider().opacity(0.4) }
                     }
                 }
@@ -654,6 +687,8 @@ fileprivate struct MacroDetailRow: View {
     let spec: IndexSpec
     let series: CandleSeries
     let isBar: Bool
+    /// Visible chart window length in days (from the user's interval pref).
+    let windowDays: Double
 
     @Environment(FredDataStore.self) private var fredStore
     @State private var overlay: MacroOverlay = .none
@@ -695,7 +730,8 @@ fileprivate struct MacroDetailRow: View {
                               primaryIsBar: isBar,
                               primaryTint: tint,
                               overlay: overlaySeries,
-                              overlayColor: overlay.color)
+                              overlayColor: overlay.color,
+                              windowDays: windowDays)
                 .frame(maxWidth: .infinity)
                 .frame(height: 88)
             // Overlay picker + legend.
@@ -803,9 +839,9 @@ fileprivate struct MacroOverlayChart: View {
     let overlay: CandleSeries?
     let overlayColor: Color
 
-    /// FIXED window length: exactly one year. The window is fixed-width and
-    /// only pans left/right (no zoom).
-    private static let windowDays: Double = 366
+    /// Visible window length in days (user-configurable via the Macro interval
+    /// pref). The window is fixed-width and only pans left/right (no zoom).
+    let windowDays: Double
 
     /// How far the 1-year window is shifted BACK from the latest data, in days.
     /// 0 = most recent year; dragging right increases it to reveal older data.
@@ -819,7 +855,7 @@ fileprivate struct MacroOverlayChart: View {
         let c = primary.candles
         guard let last = c.last else { return [] }
         let right = last.time.addingTimeInterval(-panDays * 86_400)
-        let left = right.addingTimeInterval(-Self.windowDays * 86_400)
+        let left = right.addingTimeInterval(-windowDays * 86_400)
         return c.filter { $0.time >= left && $0.time <= right }
     }
 
@@ -827,7 +863,7 @@ fileprivate struct MacroOverlayChart: View {
     private var maxBackDays: Double {
         let c = primary.candles
         guard let first = c.first, let last = c.last else { return 0 }
-        return max(0, last.time.timeIntervalSince(first.time) / 86_400 - Self.windowDays)
+        return max(0, last.time.timeIntervalSince(first.time) / 86_400 - windowDays)
     }
 
     var body: some View {
@@ -868,7 +904,7 @@ fileprivate struct MacroOverlayChart: View {
                               maxBackDays > 0 else { return }
                         let start = panStart ?? panDays
                         if panStart == nil { panStart = start }
-                        let daysPerPt = Self.windowDays / Double(max(geo.size.width, 1))
+                        let daysPerPt = windowDays / Double(max(geo.size.width, 1))
                         // Drag RIGHT → reveal OLDER data → look-back grows.
                         let proposed = start + Double(v.translation.width) * daysPerPt
                         panDays = min(max(proposed, 0), maxBackDays)

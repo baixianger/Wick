@@ -1056,6 +1056,38 @@ private struct AppearanceTab: View {
                 Toggle("Side-by-side pane in Chart tab",
                        isOn: $settings.chartSplitView)
             }
+            Section("Macro 宏观") {
+                Picker("Layout 布局:", selection: $settings.macroTwoColumn) {
+                    Text("一览 (single)").tag(false)
+                    Text("两栏 (two-column)").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Time interval 时间区间:", selection: $settings.macroWindowMonths) {
+                    Text("3M").tag(3)
+                    Text("6M").tag(6)
+                    Text("1Y").tag(12)
+                    Text("2Y").tag(24)
+                    Text("5Y").tag(60)
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Column 1 default 第一栏:", selection: $settings.macroColumn1) {
+                    ForEach(MacroCategory.allCases) { cat in
+                        Text(cat.rawValue).tag(cat.rawValue)
+                    }
+                }
+
+                Picker("Column 2 default 第二栏:", selection: $settings.macroColumn2) {
+                    ForEach(MacroCategory.allCases) { cat in
+                        Text(cat.rawValue).tag(cat.rawValue)
+                    }
+                }
+                .disabled(!settings.macroTwoColumn)
+
+                Text("两栏布局并排显示两个分类面板，各自独立切换。时间区间控制每个图表的可视窗口长度。")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
             Section("Watchlist") {
                 Picker("Change display:", selection: $settings.watchlistChangeStyle) {
                     ForEach(WatchlistChangeStyle.allCases, id: \.self) { style in
