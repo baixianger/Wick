@@ -139,11 +139,13 @@ struct WickApp: App {
                     LocaleHolder.current = agentSettings.resolvedLocale
                 }
         }
-        // Standard titled window (NOT hiddenTitleBar): the toolbar keeps its
-        // safe-area height at the top, the macOS window tab bar sits below it
-        // (Apple Stocks layout), and content stacks underneath — no overlap,
-        // no fullscreen clipping. Window tabbing is left at its macOS default
-        // (enabled), so multiple stock tabs work.
+        // Hidden title bar: the (empty) title strip collapses, so the macOS
+        // window tab bar rises into the TOP row beside the traffic lights —
+        // a single-row chrome instead of an empty title strip ABOVE the tab
+        // bar. Content still respects the top safe area (no `.ignoresSafeArea`),
+        // so it stacks cleanly under the tab row with no overlap / fullscreen
+        // clipping. Window tabbing stays at its macOS default (enabled).
+        .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
         // Dev-only: expose the 雪球 WebPage BYO-cookie probe behind a
         // "Developer" menu command that opens its own window. The whole
