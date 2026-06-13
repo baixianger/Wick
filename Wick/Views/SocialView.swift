@@ -662,13 +662,26 @@ final class SocialModel {
         guard let session else { return }
         let key = Self.key(symbol: symbol)
         if cacheKey == key, !posts.isEmpty { return }   // same-day cache hit
-        // Re-probe cheaply; only fetch if the probe says the session is usable.
-        await session.refreshStatus()
+        // Only probe when we don't already know the session is usable. Re-probing
+        // a warm/valid session can transiently downgrade it (the cold
+        // `/hots.json` probe), which bails the auto-load and forces a manual
+        // refresh every time — the bug we're fixing.
+        if !session.status.canScrape {
+            await session.refreshStatus()
+        }
         guard session.status.canScrape else {
             resetFor(symbol: symbol)
             return
         }
-        await fetch(symbol: symbol, session: session, key: key)
+        // Cold-start resilience: on first open the 雪球 WebPage may still be
+        // warming, so the same-origin fetch can return empty even with a valid
+        // session. Retry a couple times before settling into the empty state so
+        // the user doesn't have to hit refresh manually.
+        for attempt in 1...3 {
+            await fetch(symbol: symbol, session: session, key: key)
+            if !posts.isEmpty { break }
+            if attempt < 3 { try? await Task.sleep(for: .milliseconds(700)) }
+        }
     }
 
     /// User-triggered refresh — always re-fetches (bypasses the same-day cache),
@@ -743,8 +756,13 @@ final class XSocialModel {
         guard let session else { return }
         let key = Self.key(symbol: symbol)
         if cacheKey == key, !posts.isEmpty { return }   // same-day cache hit
-        // Re-probe cheaply; only fetch if the probe says the X session is usable.
-        await session.xRefreshStatus()
+        // Only probe when we don't already know the X session is usable —
+        // re-probing a warm/valid session can transiently downgrade it and bail
+        // the auto-load. (The X scraper itself polls for the async-rendered
+        // tweets, so no empty-retry is needed here.)
+        if !session.xStatus.canScrape {
+            await session.xRefreshStatus()
+        }
         guard session.xStatus.canScrape else {
             resetFor(symbol: symbol)
             return
