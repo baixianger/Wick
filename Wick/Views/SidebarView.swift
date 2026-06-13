@@ -343,15 +343,23 @@ private struct TickerRow: View {
         let closes = liveSeries.candles.suffix(22).map(\.close)
         let baseline = closes.first
         let lastPrice = liveSeries.candles.last?.close ?? ticker.lastPrice
-        let isUp = (lastPrice >= (baseline ?? lastPrice))
-        let tint = isUp ? Color.green : Color.red
-        let change = closes.last.flatMap { last in baseline.map { last - $0 } } ?? 0
-        // Yesterday's close — used by the "Percent" pill style so the
-        // percent reflects today's move instead of the trailing 22-day
-        // window. The absolute-delta + sparkline still ride the 22d
-        // window since that matches the tint signal a glance away.
+        // Yesterday's close — the day-over-day reference. It drives BOTH the tint
+        // and the change figures, so the colour and the number always agree
+        // (Apple Stocks convention: red/green = TODAY's move vs the previous
+        // close). Previously the tint followed the trailing 22-day trend, which
+        // could show green while the stock was down on the day — confusing next
+        // to a red percentage.
         let previousClose: Double? = closes.count >= 2 ? closes[closes.count - 2] : nil
-        let dayChange: Double = previousClose.map { lastPrice - $0 } ?? change
+        // Day move; fall back to the 22-day window only when there's a single bar
+        // (a brand-new listing with no previous close yet).
+        let dayRef = previousClose ?? baseline
+        let isUp = (lastPrice >= (dayRef ?? lastPrice))
+        let tint = isUp ? Color.green : Color.red
+        let dayChange: Double = (dayRef.map { lastPrice - $0 }) ?? 0
+        // `.delta` pill shows this absolute move — day-over-day too, so it agrees
+        // with the tint and the percent. The sparkline SHAPE stays the 22-day
+        // path (it's a trend mini-chart); only its fill colour follows the tint.
+        let change = dayChange
 
         HStack(spacing: 12) {
             symbolBlock
