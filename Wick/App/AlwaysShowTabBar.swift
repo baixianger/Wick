@@ -15,15 +15,25 @@ import AppKit
 ///
 /// Drop this as a zero-size `.background(...)` on the window's root view; it
 /// reaches the hosting `NSWindow` through the view hierarchy.
+///
+/// `title` is mirrored onto `window.title` so the native tab label tracks the
+/// current route (stock name / 市场 / 投资组合 / 旺财) instead of every tab
+/// reading a static "Wick". The title-bar text itself stays hidden
+/// (`titleVisibility = .hidden`) so this doesn't reintroduce a title strip — the
+/// tab bar reads `window.title` regardless of title-bar visibility.
 struct AlwaysShowTabBar: NSViewRepresentable {
+    var title: String
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
+        let title = title
         // `view.window` is nil until the view is mounted in a window, so defer.
         DispatchQueue.main.async { [weak view] in
             guard let window = view?.window else { return }
             context.coordinator.attach(to: window)
+            context.coordinator.apply(title: title, to: window)
         }
         return view
     }
@@ -31,9 +41,11 @@ struct AlwaysShowTabBar: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         // The `.id(appLanguage)` rebuild (and first mount) can re-run this; the
         // coordinator no-ops if it's already bound to the same window.
+        let title = title
         DispatchQueue.main.async { [weak nsView] in
             guard let window = nsView?.window else { return }
             context.coordinator.attach(to: window)
+            context.coordinator.apply(title: title, to: window)
         }
     }
 
@@ -41,6 +53,13 @@ struct AlwaysShowTabBar: NSViewRepresentable {
     final class Coordinator {
         private weak var boundWindow: NSWindow?
         private var observation: NSKeyValueObservation?
+
+        /// Set the per-route window/tab title. Hides the title-bar text so only
+        /// the tab shows it; idempotent so SwiftUI's frequent re-applies are cheap.
+        func apply(title: String, to window: NSWindow) {
+            window.titleVisibility = .hidden
+            if window.title != title { window.title = title }
+        }
 
         func attach(to window: NSWindow) {
             guard boundWindow !== window else { return }

@@ -39,6 +39,11 @@ struct ContentView: View {
     /// holding (covers broker formats the mechanical MIC table can't map).
     @State private var holdingResolver = HoldingSymbolResolver()
     @Environment(LiveDataStore.self) private var store
+    /// EastMoney 简称 cache — read so the window-tab title can show a CN/HK
+    /// holding's Chinese name (e.g. "贵州茅台") in Chinese mode, matching the
+    /// sidebar / detail header. `@Observable`, so the title re-resolves when a
+    /// name lands.
+    @Environment(CNNameStore.self) private var cnNames
     /// Shared agent runtime (created in `WickApp`). Read here so the
     /// window-scoped `HoldingsStore` can be wired into Wicker's
     /// `portfolio.*` tools on appear — the store lives here, the runtime
@@ -68,6 +73,21 @@ struct ContentView: View {
         let selectedTicker = selectedTickerId
             .flatMap { id in lookupUniverse.first { $0.id == id } }
             ?? allTickers[0]
+        // Window-tab title = the current route's name, so each macOS window tab
+        // reads "贵州茅台" / "市场" / "投资组合" / "旺财" instead of all saying
+        // "Wick". Localized imperatively (it's set on NSWindow, not a SwiftUI
+        // Text); the ticker case reuses the same CN-name display as the sidebar.
+        let windowTitle: String = {
+            switch route {
+            case .portfolio: return String(localized: "Portfolio", locale: LocaleHolder.current)
+            case .wicker:    return String(localized: "Wicker", locale: LocaleHolder.current)
+            case .market:    return String(localized: "Market", locale: LocaleHolder.current)
+            case .ticker, .none:
+                return cnNames.displayName(symbol: selectedTicker.symbol,
+                                           fallback: selectedTicker.name.isEmpty ? selectedTicker.symbol : selectedTicker.name,
+                                           chinese: agentSettings.resolvedChinese)
+            }
+        }()
 
         NavigationSplitView {
             SidebarView(tickers: filtered,
@@ -193,8 +213,10 @@ struct ContentView: View {
         }
         // Pin the native window tab bar visible even at one stock tab, so the
         // toolbar → tab-bar → content band is consistent (no "有时出现有时不
-        // 出现"). Zero-size background reaches the hosting NSWindow.
-        .background(AlwaysShowTabBar())
+        // 出现"). Also feeds the per-route title so the tab label tracks content
+        // (stock name / 市场 / 投资组合 / 旺财) instead of a static "Wick". Zero-
+        // size background reaches the hosting NSWindow.
+        .background(AlwaysShowTabBar(title: windowTitle))
     }
 
     /// Symbols whose net signed quantity is ~0 — fully closed (平仓) but still
