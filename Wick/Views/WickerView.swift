@@ -838,12 +838,21 @@ private struct ConversationView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            // (Removed the top fade-out `.mask`.) It existed to dissolve bubbles
-            // behind the floating headerActions capsule + soften the scroll top
-            // edge — but the window now reserves a top safe-area band above the
-            // pane, and the headerActions capsule is Liquid Glass (its material
-            // blur already separates passing bubbles). The mask was redundant and
-            // had a side effect: on short transcripts it dimmed real top content.
+            // Hard-clip the transcript at the TOP safe-area boundary so scrolled
+            // bubbles don't bleed up under the (transparent, hidden-title-bar)
+            // window tab-bar strip. This is a CRISP cut sized to the live safe-area
+            // inset — NOT the old soft fade (which dimmed real content): content
+            // simply ends cleanly at the chrome edge. The mask `.ignoresSafeArea()`
+            // so its GeometryReader sees the true inset to size the clear strip.
+            .mask(
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: proxy.safeAreaInsets.top)
+                        Rectangle().fill(.black)
+                    }
+                    .ignoresSafeArea()
+                }
+            )
             .onChange(of: live.messages.count) { _, _ in
                 scrollToBottom(proxy)
             }
