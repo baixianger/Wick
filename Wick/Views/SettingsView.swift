@@ -33,6 +33,20 @@ struct SettingsView: View {
     /// macOS behaviour.
     @State private var selection: SettingsCategory = .provider
 
+    // Visited-pane history powering the System Settings-style back/forward
+    // arrows in the detail title bar. `history` is the breadcrumb of panes
+    // the user has landed on; `historyIndex` is where we currently sit in it.
+    // Selecting a pane from the sidebar truncates any forward entries and
+    // pushes the new pane; the arrows just move `historyIndex` and replay the
+    // stored selection. `suppressHistory` stops the arrow-driven selection
+    // change from being recorded as a fresh navigation.
+    @State private var history: [SettingsCategory] = [.provider]
+    @State private var historyIndex = 0
+    @State private var suppressHistory = false
+
+    private var canGoBack: Bool { historyIndex > 0 }
+    private var canGoForward: Bool { historyIndex < history.count - 1 }
+
     var body: some View {
         NavigationSplitView {
             List(SettingsCategory.allCases, selection: $selection) { category in
@@ -67,6 +81,37 @@ struct SettingsView: View {
                 // very top). Applied here on the shared detail content so it's
                 // identical across all 7 category tabs in one place.
                 .contentMargins(.top, 18, for: .scrollContent)
+                // System Settings' back/forward arrows: a `.navigation`
+                // toolbar group sits at the leading edge of the title bar,
+                // just before the big title — disabled greys them out exactly
+                // like the reference when there's nowhere to go.
+                .toolbar {
+                    ToolbarItemGroup(placement: .navigation) {
+                        Button(action: goBack) {
+                            Image(systemName: "chevron.backward")
+                        }
+                        .disabled(!canGoBack)
+                        .help(String(localized: "Back", locale: LocaleHolder.current))
+
+                        Button(action: goForward) {
+                            Image(systemName: "chevron.forward")
+                        }
+                        .disabled(!canGoForward)
+                        .help(String(localized: "Forward", locale: LocaleHolder.current))
+                    }
+                }
+        }
+        // Record sidebar-driven selection changes into the history breadcrumb
+        // (arrow-driven changes set `suppressHistory` so they don't re-record).
+        .onChange(of: selection) { _, newValue in
+            guard !suppressHistory else { suppressHistory = false; return }
+            if history[historyIndex] != newValue {
+                if historyIndex < history.count - 1 {
+                    history.removeSubrange((historyIndex + 1)...)
+                }
+                history.append(newValue)
+                historyIndex = history.count - 1
+            }
         }
         // RESIZABLE: a min keeps the first card un-clipped + an ideal sets
         // the opening size, but `maxWidth/Height: .infinity` lets the user
@@ -75,6 +120,23 @@ struct SettingsView: View {
         // handles did nothing.
         .frame(minWidth: 720, idealWidth: 860, maxWidth: .infinity,
                minHeight: 540, idealHeight: 680, maxHeight: .infinity)
+    }
+
+    /// Step back one entry in the visited-pane history, replaying the stored
+    /// selection without recording it as a new navigation.
+    private func goBack() {
+        guard canGoBack else { return }
+        suppressHistory = true
+        historyIndex -= 1
+        selection = history[historyIndex]
+    }
+
+    /// Step forward one entry (only reachable after going back).
+    private func goForward() {
+        guard canGoForward else { return }
+        suppressHistory = true
+        historyIndex += 1
+        selection = history[historyIndex]
     }
 
     /// Hosts the existing per-tab view for `category` as detail content.
@@ -483,6 +545,22 @@ private struct DataSourcesTab: View {
         let provides: String    // subtitle, e.g. "实时报价 · 日/周/月/分钟 K线"
         let access: DSAccess
         let status: DSStatus
+
+        /// Per-source tile colour, derived from the SF Symbol family so the
+        /// catalog reads like macOS System Settings (colour-coded icon tiles)
+        /// without threading a colour through every `.init`.
+        var tint: Color {
+            switch symbol {
+            case "chart.xyaxis.line", "chart.bar.doc.horizontal": return .blue
+            case "dollarsign.circle":                             return .green
+            case "doc.text":                                      return .indigo
+            case "newspaper":                                     return .indigo
+            case "flame":                                         return .orange
+            case "bubble.left.and.bubble.right":                  return .purple
+            case "building.columns":                              return .teal
+            default:                                              return .gray
+            }
+        }
     }
 
     private enum DSAccess {
@@ -545,10 +623,12 @@ private struct DataSourcesTab: View {
     private var usSources: [DataSourceEntry] {
         [
         .init(symbol: "chart.xyaxis.line",                name: "Yahoo Finance",        provides: String(localized: "quotes · K-line · search", locale: LocaleHolder.current),              access: .free,    status: .active),
-        .init(symbol: "doc.text",                         name: "FMP",                  provides: String(localized: "fundamentals · valuation", locale: LocaleHolder.current),                  access: .freeKey, status: .active),
+        .init(symbol: "newspaper",                        name: "Yahoo news",           provides: String(localized: "headlines fallback when no Finnhub key (also non-US markets)", locale: LocaleHolder.current), access: .free, status: .active),
+        .init(symbol: "doc.text",                         name: "FMP",                  provides: String(localized: "fundamentals · valuation · news (paid add-on)", locale: LocaleHolder.current),                  access: .freeKey, status: .active),
         .init(symbol: "bubble.left.and.bubble.right",     name: "Finnhub",              provides: String(localized: "news · sentiment", locale: LocaleHolder.current),                    access: .freeKey, status: .active),
         .init(symbol: "building.columns",                 name: "FRED",                 provides: String(localized: "macro: rates/CPI/payrolls/GDP", locale: LocaleHolder.current),          access: .freeKey, status: .active),
         .init(symbol: "building.columns",                 name: "FINRA",                provides: String(localized: "Short Interest", locale: LocaleHolder.current),          access: .free,    status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "StockTwits",           provides: String(localized: "retail discussion · Bullish/Bearish sentiment", locale: LocaleHolder.current), access: .free, status: .active),
         .init(symbol: "bubble.left.and.bubble.right",     name: "X (Twitter)",          provides: String(localized: "discussion · sentiment", locale: LocaleHolder.current),                    access: .byo,     status: .active),
         .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: String(localized: "insider trades (Form 4) · XBRL financials · filings", locale: LocaleHolder.current), access: .free, status: .active),
         .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: String(localized: "analyst ratings · earnings dates · institutional holdings", locale: LocaleHolder.current),   access: .free,    status: .active),
@@ -572,8 +652,9 @@ private struct DataSourcesTab: View {
     private func catalogRow(_ entry: DataSourceEntry) -> some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.secondary.gradient)
+                .fill(entry.tint.gradient)
                 .frame(width: 29, height: 29)
+                .opacity(entry.status == .planned ? 0.45 : 1)
                 .overlay {
                     Image(systemName: entry.symbol)
                         .font(.system(size: 14, weight: .semibold))
@@ -637,7 +718,7 @@ private struct DataSourcesTab: View {
                         EmptyView()
                     }
                     SecureField("FMP API key:", text: $settings.fmpKey)
-                    Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Empty = Wick falls back to Yahoo for chart-only data.")
+                    Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Per-symbol news needs FMP's paid News add-on; without it Wick uses Finnhub/Yahoo for headlines. Empty key = falls back to Yahoo for chart-only data.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Section("News & sentiment (Finnhub)") {
