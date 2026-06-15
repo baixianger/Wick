@@ -6,9 +6,10 @@ import Foundation
 /// Best-effort: a failed sub-fetch degrades that section rather than
 /// failing the whole snapshot.
 ///
-/// News/sentiment is left empty for now — FMP has a news endpoint but
-/// it's not yet wired; those analysts will honestly report "no data"
-/// until it is.
+/// News headlines come from FMP's per-symbol stock-news endpoint and
+/// feed the news + sentiment analysts (capped at the most recent few).
+/// Best-effort like every other section: if the news fetch fails it
+/// degrades to an empty list rather than failing the snapshot.
 ///
 /// Public so both WickServer (server tier, uses our key) and the Wick
 /// app (BYO tier, user's key) can construct it from a single source of
@@ -27,7 +28,9 @@ public struct FMPMarketDataProvider: MarketDataProvider {
         async let barsTask: [Bar] = get("historical-price-eod/full", symbol: symbol)
         async let profileTask: [Profile] = get("profile", symbol: symbol)
         async let incomeTask: [Income] = get("income-statement", symbol: symbol, extra: ["limit": "2"])
+        async let newsTask: [String] = headlines(symbol: symbol)
         let bars = await barsTask, profiles = await profileTask, income = await incomeTask
+        let news = await newsTask
 
         // FMP returns history newest-first; Technicals wants chronological.
         let chron = Array(bars.reversed())
@@ -63,11 +66,39 @@ public struct FMPMarketDataProvider: MarketDataProvider {
                                                   last: last),
             technicals: Technicals.technicalsSummary(closes: closes, last: last),
             fundamentals: fundamentals,
-            news: []   // TODO: wire FMP news endpoint
+            news: news
         )
     }
 
     // MARK: - Fetch (best-effort: [] on any failure)
+
+    /// Recent per-symbol headlines via FMP stable `search-stock-news`,
+    /// which takes `symbols` (plural) rather than the `symbol` the other
+    /// endpoints use, so it gets its own fetch instead of the generic
+    /// `get` helper. Formatted "Headline (Site)" for the news-analyst.
+    ///
+    /// NOTE: FMP's News dataset is a paid add-on. Verified 2026-06-15
+    /// against the live API: `search-stock-news` returns `[]` on the
+    /// current plan (the `news/*-latest` endpoints hard-error
+    /// "Restricted Endpoint"). This stays best-effort — news degrades to
+    /// empty until the FMP plan includes News, then it lights up with no
+    /// code change. Response fields per docs: title, site, publishedDate,
+    /// publisher, text, url, image, symbol.
+    private func headlines(symbol: String, limit: Int = 6) async -> [String] {
+        var components = URLComponents(string: "\(base)/search-stock-news")!
+        components.queryItems = [
+            .init(name: "symbols", value: symbol),
+            .init(name: "limit", value: String(limit)),
+            .init(name: "apikey", value: apiKey),
+        ]
+        guard let url = components.url,
+              let (data, response) = try? await session.data(from: url),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
+              let items = try? JSONDecoder().decode([NewsItem].self, from: data) else { return [] }
+        return items.prefix(limit).map { item in
+            item.site.map { "\(item.title) (\($0))" } ?? item.title
+        }
+    }
 
     private func get<T: Decodable>(_ path: String, symbol: String, extra: [String: String] = [:]) async -> [T] {
         var components = URLComponents(string: "\(base)/\(path)")!
@@ -90,6 +121,7 @@ public struct FMPMarketDataProvider: MarketDataProvider {
         let fiscalYear: String?; let revenue: Double?; let grossProfit: Double?
         let netIncome: Double?; let eps: Double?
     }
+    private struct NewsItem: Decodable { let title: String; let site: String? }
 
     // MARK: - Formatting
 

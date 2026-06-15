@@ -66,7 +66,15 @@ final class AgentRuntime {
             await tools.registerAll([
                 MarketDataTool(data: baseline),
                 SocialSentimentTool(
-                    providers: [StubSocialSentimentProvider()],
+                    // StockTwits is free + no-auth + US-only, so it ships ON by
+                    // default for everyone (requiresUserCredentials == false,
+                    // interactiveOnly == false) — unlike the BYO X / 雪球
+                    // sources. The 雪球 BYO decorator is layered in elsewhere on
+                    // macOS 26; the Stub stays as a deterministic fallback.
+                    providers: [
+                        StockTwitsSentimentProvider(),
+                        StubSocialSentimentProvider(),
+                    ],
                     interactive: true),
             ]
             // Always-on free EastMoney CN extras (资金流 / F10财务 / 龙虎榜 /
@@ -350,6 +358,10 @@ final class AgentRuntime {
                 base: data,
                 finnhub: FinnhubClient(apiKey: settings.finnhubKey))
         }
+        // Yahoo news decorator — no key. Fills `news` for non-CN/HK symbols
+        // only when still empty, so it backs up Finnhub for US tickers and is
+        // the sole source for international ones.
+        data = YahooNewsProvider(base: data)
         // CN macro decorator — no key, fills macro for CN/HK symbols only.
         data = EastMoneyMacroProvider(base: data)
         // FRED macro decorator — fills macro for non-CN symbols only

@@ -46,6 +46,11 @@ struct SocialView: View {
     /// X login sheet visibility — presents the manager's visible `xLoginPage`.
     @State private var xLoginSheetShown = false
 
+    /// StockTwits cached fetch result + state, keyed by symbol+day. Like the
+    /// 雪球 / X models but credential-free: StockTwits is a free public endpoint
+    /// (`api.stocktwits.com`), so there is no login gate and no macOS-26 floor.
+    @State private var stocktwitsModel = StockTwitsModel()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             // 雪球 is shown ONLY for A-share / HK tickers; US / other markets get
@@ -54,7 +59,13 @@ struct SocialView: View {
                 xueqiuSection
                 Divider().opacity(0.4)
             }
-            xSection
+            if isStockTwitsEligible {
+                xSection
+                Divider().opacity(0.4)
+                stocktwitsSection
+            } else {
+                xSection
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: ticker.id) {
@@ -71,6 +82,12 @@ struct SocialView: View {
             if isXEligible {
                 await xModel.loadIfSessionReady(symbol: ticker.symbol,
                                                 session: sessionManager)
+            }
+            // StockTwits is credential-free (free public endpoint) and US-only.
+            // Unlike 雪球 / X there's no session gate — just load it directly for
+            // US tickers. The model's same-day cache makes re-entry a no-op.
+            if isStockTwitsEligible {
+                await stocktwitsModel.load(symbol: ticker.symbol)
             }
         }
     }
@@ -95,6 +112,16 @@ struct SocialView: View {
     /// i.e. anything 雪球 does NOT (cashtags like `$TSLA` are X's US-equity idiom).
     /// So a ticker shows EITHER 雪球 (CN/HK) OR X (everything else), never both.
     private var isXEligible: Bool { !isXueqiuEligible }
+
+    /// Whether this ticker carries a StockTwits section. StockTwits' cashtag
+    /// namespace is US-centric, so we gate on `StockTwitsClient.isUSSymbol`
+    /// (bare ticker, no CN/HK form, no exchange-suffix dot). This is a strict
+    /// subset of `isXEligible` — a CN/HK ticker shows 雪球 only, a US ticker
+    /// shows X + StockTwits, and a non-US/non-CN ticker (e.g. `7203.T`) shows
+    /// X alone with no StockTwits section.
+    private var isStockTwitsEligible: Bool {
+        StockTwitsClient.isUSSymbol(ticker.symbol)
+    }
 
     // MARK: - 雪球 section
 
@@ -551,6 +578,193 @@ struct SocialView: View {
         return URL(string: "https://x.com/\(trimmed)")
     }
 
+    // MARK: - StockTwits section
+
+    /// The StockTwits discussion section, shown for US tickers alongside X.
+    ///
+    /// **No credentials, no platform floor.** Unlike 雪球 / X, StockTwits reads a
+    /// free public endpoint (`api.stocktwits.com`) over plain `URLSession`, so
+    /// there is NO login gate and NO macOS-26 requirement — it "just works". The
+    /// only state machine is loading → empty → cards.
+    @ViewBuilder
+    private var stocktwitsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            stocktwitsSectionHeader
+            stocktwitsContent
+        }
+    }
+
+    /// Header row: StockTwits source label + the "as of" timestamp + refresh.
+    private var stocktwitsSectionHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            sourceBadge(text: "ST", tint: greenTint)
+            Text("StockTwits")
+                .font(.system(size: 18, weight: .semibold))
+            if let asOf = stocktwitsModel.asOf {
+                Text("· as of \(asOf.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            stocktwitsRefreshButton
+        }
+    }
+
+    /// State machine inside the StockTwits section: loading → empty → cards.
+    /// No not-connected state — the endpoint is public.
+    @ViewBuilder
+    private var stocktwitsContent: some View {
+        if stocktwitsModel.isLoading {
+            stocktwitsLoadingState
+        } else if stocktwitsModel.messages.isEmpty {
+            stocktwitsEmptyState
+        } else {
+            stocktwitsPostList
+        }
+    }
+
+    /// Posts → card list. The outer DetailView already provides a ScrollView, so
+    /// we lay the cards out in a plain VStack and let that scroll.
+    private var stocktwitsPostList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(stocktwitsModel.messages) { message in
+                stocktwitsPostCard(message)
+            }
+        }
+    }
+
+    private var stocktwitsLoadingState: some View {
+        HStack(spacing: 10) {
+            ProgressView().controlSize(.small)
+            Text("Loading StockTwits discussion…")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 40)
+    }
+
+    /// Nothing to show (no posts, or the public endpoint had nothing / failed).
+    private var stocktwitsEmptyState: some View {
+        emptyCard(icon: "bubble.left.and.bubble.right",
+                  title: "No discussion",
+                  message: stocktwitsModel.didLoadOnce
+                      ? String(localized: "StockTwits returned no recent discussion for this ticker. Try refreshing later.", locale: LocaleHolder.current)
+                      : String(localized: "Tap refresh to load StockTwits discussion for this ticker.", locale: LocaleHolder.current)) {
+            Button {
+                Task { await stocktwitsModel.refresh(symbol: ticker.symbol) }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .buttonStyle(LiquidGlassButtonStyle(prominent: true))
+        }
+    }
+
+    /// One StockTwits message card — author (name + @username), body, a
+    /// Bullish/Bearish sentiment badge when present, relative time, and a subtle
+    /// followers/likes footer. Tapping opens the author's StockTwits profile.
+    /// Glass surface, mirroring the 雪球 / X cards.
+    @ViewBuilder
+    private func stocktwitsPostCard(_ message: StockTwitsMessage) -> some View {
+        let profileURL = Self.stocktwitsProfileURL(username: message.username)
+        let tappable = profileURL != nil
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                Text(message.name.isEmpty
+                     ? String(localized: "StockTwits user", locale: LocaleHolder.current)
+                     : message.name)
+                    .font(.system(size: 13, weight: .semibold))
+                if !message.username.isEmpty {
+                    Text("@\(message.username)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                sourceBadge(text: "ST", tint: greenTint)
+                if let sentiment = message.sentiment {
+                    sentimentBadge(sentiment)
+                }
+                Spacer(minLength: 0)
+                Text(Self.relativeFormatter.localizedString(for: message.createdAt, relativeTo: Date()))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            Text(message.body)
+                .font(.system(size: 13))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 16) {
+                Label("\(message.followers)", systemImage: "person.2")
+                Label("\(message.likeCount)", systemImage: "hand.thumbsup")
+                Spacer(minLength: 0)
+                if tappable {
+                    Image(systemName: "arrow.up.forward.square")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .liquidGlass(cornerRadius: 12)
+        .contentShape(.rect(cornerRadius: 12))
+        .onTapGesture {
+            if let url = profileURL { openURL(url) }
+        }
+        .help(tappable ? String(localized: "Open author profile in browser", locale: LocaleHolder.current) : "")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(message.name.isEmpty ? "StockTwits 用户" : message.name): \(message.body)")
+        .accessibilityAddTraits(tappable ? .isLink : [])
+    }
+
+    /// Small Bullish / Bearish pill — green for bullish, red for bearish. Only
+    /// rendered when the author attached a tag (`sentiment != nil`). Semantic
+    /// colours only, matching the `sourceBadge` glass-safety posture.
+    private func sentimentBadge(_ sentiment: StockTwitsSentiment) -> some View {
+        let isBull = sentiment == .bullish
+        let tint: Color = isBull ? .green : .red
+        let text = isBull
+            ? String(localized: "Bullish", locale: LocaleHolder.current)
+            : String(localized: "Bearish", locale: LocaleHolder.current)
+        let icon = isBull ? "arrow.up.right" : "arrow.down.right"
+        return Label(text, systemImage: icon)
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(tint.opacity(0.14)))
+    }
+
+    private var stocktwitsRefreshButton: some View {
+        Button {
+            Task { await stocktwitsModel.refresh(symbol: ticker.symbol) }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 13, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .disabled(stocktwitsModel.isLoading)
+        .help("Refresh StockTwits discussion")
+        .accessibilityLabel("Refresh")
+    }
+
+    /// Build the `https://stocktwits.com/<username>` profile URL for a message
+    /// author. `nil` for an empty / malformed username, so the card renders
+    /// non-tappable. Mirrors `xProfileURL`.
+    private static func stocktwitsProfileURL(username: String) -> URL? {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              trimmed.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" })
+        else { return nil }
+        return URL(string: "https://stocktwits.com/\(trimmed)")
+    }
+
     // MARK: - Shared pieces
 
     /// Reusable empty / state card. `action` slots the primary affordance (or an
@@ -623,6 +837,10 @@ struct SocialView: View {
     /// Semantic blue that reads on both light + dark (雪球 brand-adjacent
     /// without hardcoding a fixed RGB that the glass-lag issue could strand).
     private var blueTint: Color { .blue }
+
+    /// Semantic green for the StockTwits source pill (brand-adjacent without a
+    /// hardcoded RGB the glass-lag issue could strand on a scheme flip).
+    private var greenTint: Color { .green }
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -800,6 +1018,65 @@ final class XSocialModel {
             didLoadOnce = false
             cacheKey = nil
         }
+    }
+
+    /// `symbol|<year>-<day-of-year>` — stable within a calendar day.
+    private static func key(symbol: String) -> String {
+        let c = Calendar.current.dateComponents([.year, .dayOfYear], from: Date())
+        return "\(symbol)|\(c.year ?? 0)-\(c.dayOfYear ?? 0)"
+    }
+}
+
+// MARK: - StockTwits view model
+
+/// View-local cache + fetch state for the Social tab's StockTwits messages. A
+/// sibling of `SocialModel` / `XSocialModel`, but credential-free: StockTwits is
+/// a free public endpoint, so there's no session to probe and no login gate —
+/// `load` just calls the Foundation-only `StockTwitsClient`. Keyed by `symbol +
+/// calendar-day` so re-selecting the tab within the same day reuses the last
+/// result instead of re-hitting StockTwits. `@Observable` so the view tracks
+/// `isLoading` / `messages` / `asOf` transitions.
+@Observable
+@MainActor
+final class StockTwitsModel {
+    /// The messages currently shown (newest first, as StockTwits returns them).
+    private(set) var messages: [StockTwitsMessage] = []
+    /// In-flight fetch flag, drives the spinner + disables refresh.
+    private(set) var isLoading = false
+    /// When the shown messages were fetched — surfaces the "as of <time>" label.
+    private(set) var asOf: Date?
+    /// True once any fetch (even an empty one) has completed, so the empty state
+    /// can distinguish "not loaded yet" from "loaded, StockTwits had nothing".
+    private(set) var didLoadOnce = false
+
+    /// Cache key of the currently-held messages (`symbol|yyyy-ddd`).
+    private var cacheKey: String?
+
+    /// The shared public client — no credentials, no per-call config.
+    private let client = StockTwitsClient()
+
+    /// Fetch on first appear. No-op (cache hit) when we already hold today's
+    /// messages for this symbol; otherwise loads directly (no session probe).
+    func load(symbol: String) async {
+        let key = Self.key(symbol: symbol)
+        if cacheKey == key, !messages.isEmpty { return }   // same-day cache hit
+        await fetch(symbol: symbol, key: key)
+    }
+
+    /// User-triggered refresh — always re-fetches (bypasses the same-day cache),
+    /// since the user explicitly asked for fresh data.
+    func refresh(symbol: String) async {
+        await fetch(symbol: symbol, key: Self.key(symbol: symbol))
+    }
+
+    private func fetch(symbol: String, key: String) async {
+        isLoading = true
+        let fetched = await client.messages(symbol: symbol)
+        isLoading = false
+        didLoadOnce = true
+        cacheKey = key
+        asOf = Date()
+        messages = fetched
     }
 
     /// `symbol|<year>-<day-of-year>` — stable within a calendar day.

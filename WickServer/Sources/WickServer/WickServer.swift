@@ -45,6 +45,10 @@ struct WickServer {
         if let finnhub = config.finnhubKey {
             data = FinnhubNewsProvider(base: data, finnhub: FinnhubClient(apiKey: finnhub))
         }
+        // Yahoo news decorator — no key. Fills `news` for non-CN/HK symbols
+        // only when still empty (backs up Finnhub for US, sole source for
+        // international).
+        data = YahooNewsProvider(base: data)
         // CN macro decorator — no key, always on when CN markets are
         // enabled. Fills `macro` for CN/HK symbols; non-CN symbols pass
         // through so the FRED decorator below catches them.
