@@ -387,9 +387,11 @@ struct WickerView: View {
 
     @ViewBuilder
     private var conversationPane: some View {
-        if let session = store.session(for: store.selectedSessionID) {
-            ConversationView(store: store, session: session,
+        if let session = store.session(for: store.selectedSessionID),
+           let state = store.state(for: session.id) {
+            ConversationView(store: store, state: state, session: session,
                              contentMaxWidth: chatColumnWidth)
+                .id(session.id)
         } else {
             // Brief blank during the layout pass before ensureSession
             // fires. Once a session exists ConversationView takes
@@ -534,6 +536,7 @@ private struct SessionRow: View {
 
 private struct ConversationView: View {
     @Bindable var store: ChatStore
+    @Bindable var state: ChatSessionState
     /// Snapshot at construction; we re-read the live copy off `store`
     /// inside the body so appends rerender. Kept here for the id.
     let session: ChatSession
@@ -544,31 +547,11 @@ private struct ConversationView: View {
 
     @Environment(AgentSettings.self) private var settings
     @Environment(AgentRuntime.self) private var runtime
-    @State private var draft: String = ""
-    @State private var pending: Bool = false
-    /// Live label shown in the pending indicator — switches between
-    /// "thinking…" and "calling <tool>…" as the tool loop progresses.
-    /// `nil` falls back to the animated dots.
-    @State private var pendingLabel: String?
-    @State private var lastError: String?
     @FocusState private var inputFocused: Bool
+    @State private var showFilePicker = false
+    @State private var isDropTargeted = false
 
-    // General attachment state (Phase B). The composer accepts images +
-    // PDF / CSV / Excel / text via a 📎 multi-select picker and drag-drop;
-    // each file is run through `AttachmentExtractor` (images → downscaled
-    // base64 for vision; docs → extracted text) and parked as a chip in
-    // `pendingAttachments` until the user sends. On send they ride on the
-    // user `ChatMessage` — images become `LLMImage` parts, docs are folded
-    // into the prompt text. Decoupled from the portfolio: Wicker reads the
-    // content and composes behaviour with its existing tools.
-    @State private var showFilePicker: Bool = false
-    @State private var pendingAttachments: [ChatAttachment] = []
-    /// Count of in-flight extractions — drives the spinner; >0 ⇒ busy.
-    @State private var extractingCount: Int = 0
-    @State private var attachmentError: String?
-    @State private var isDropTargeted: Bool = false
-
-    private var isExtracting: Bool { extractingCount > 0 }
+    private var isExtracting: Bool { state.extractingCount > 0 }
 
     private var live: ChatSession {
         store.session(for: session.id) ?? session
@@ -620,64 +603,44 @@ private struct ConversationView: View {
     /// processing, kick off `submit()` on that text. This is the
     /// hand-off path from the floating composer.
     private func autoContinueIfNeeded() {
-        guard !pending, lastError == nil else { return }
+        guard !state.pending, state.lastError == nil else { return }
         let msgs = live.messages
         guard let last = msgs.last, last.role == .user else { return }
-        // Lift the user's text into `draft` so `submit()` (which
-        // reads from `draft`) picks it up, but DON'T re-append the
-        // user turn — `submit()` would otherwise duplicate it.
-        // Easiest way: temporarily set draft, clear it, then run
-        // the dispatch path directly so the user message stays the
-        // one ChatStore already has.
         dispatchExistingUserTurn(message: last)
     }
 
-    /// Same body as `submit()` minus the user-message append + draft
-    /// reset. Used by `autoContinueIfNeeded` to drive the LLM call
-    /// against a user message that's already in the store.
+    /// Both submitted and restored turns use the same session-owned flight.
     private func dispatchExistingUserTurn(message: ChatMessage) {
-        lastError = nil
-        pending = true
-        pendingLabel = String(localized: "thinking…", locale: LocaleHolder.current)
+        guard let responseID = state.beginResponse() else { return }
+        state.pendingLabel = String(localized: "thinking…", locale: LocaleHolder.current)
         let text = message.text
-        let prior = Array(live.messages.dropLast())
-        let history: [LLMMessage] = prior.map(Self.llmMessage(from:))
+        let history = Array(live.messages.dropLast()).map(Self.llmMessage(from:))
         guard let provider = WickerLLM.provider(for: settings) else {
-            pending = false
-            pendingLabel = nil
-            lastError = String(localized: "No provider configured.", locale: LocaleHolder.current)
+            state.finishResponse(responseID, error: String(localized: "No provider configured.", locale: LocaleHolder.current))
             return
         }
-        let config: TradingFloorConfig = settings.workflowConfig()
-        let agent = runtime.makeChatAgent(llm: provider, config: config)
+        let agent = runtime.makeChatAgent(llm: provider, config: settings.workflowConfig())
         let sessionID = session.id
         let folded = Self.foldedContent(text: text, attachments: message.attachments)
         let images = Self.llmImages(from: message.attachments)
-        Task {
+        state.responseTask = Task { @MainActor in
             var conversation = history
             do {
                 let reply = try await agent.respond(
-                    to: folded,
-                    images: images,
-                    conversation: &conversation,
+                    to: folded, images: images, conversation: &conversation,
                     onEvent: { event in
-                        Task { @MainActor in handleAgentEvent(event) }
+                        Task { @MainActor in
+                            guard state.isCurrent(responseID) else { return }
+                            handleAgentEvent(event)
+                        }
                     })
-                await MainActor.run {
-                    store.append(ChatMessage(role: .assistant, text: reply),
-                                 to: sessionID)
-                    pending = false
-                    pendingLabel = nil
-                    titleSessionIfNeeded(userText: text,
-                                          assistantText: reply,
-                                          sessionID: sessionID)
-                }
+                try Task.checkCancellation()
+                guard state.isCurrent(responseID) else { return }
+                store.append(ChatMessage(role: .assistant, text: reply), to: sessionID)
+                state.finishResponse(responseID)
+                titleSessionIfNeeded(userText: text, assistantText: reply, sessionID: sessionID)
             } catch {
-                await MainActor.run {
-                    pending = false
-                    pendingLabel = nil
-                    lastError = describe(error)
-                }
+                state.finishResponse(responseID, error: error is CancellationError ? nil : describe(error))
             }
         }
     }
@@ -719,7 +682,7 @@ private struct ConversationView: View {
     /// window and disappears the instant the first user message is
     /// appended (which `submit()` does synchronously).
     private var showHero: Bool {
-        live.messages.isEmpty && !pending && lastError == nil
+        live.messages.isEmpty && !state.pending && state.lastError == nil
     }
 
     // MARK: Hero (empty state)
@@ -770,7 +733,7 @@ private struct ConversationView: View {
                         .foregroundStyle(.tertiary)
                 }
                 Button {
-                    draft = p
+                    state.draft = p
                     submit()
                 } label: {
                     Text(p)
@@ -779,7 +742,7 @@ private struct ConversationView: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
-                .disabled(!settings.canRun || pending)
+                .disabled(!settings.canRun || state.pending)
             }
         }
     }
@@ -812,17 +775,17 @@ private struct ConversationView: View {
                             ForEach(live.messages) { msg in
                                 MessageBubble(
                                     message: msg,
-                                    glowing: pending
+                                    glowing: state.pending
                                         && msg.id == live.messages.last?.id
                                         && msg.role == .assistant,
                                     mentionedTickers: mentionedTickers(in: msg)
                                 ).id(msg.id)
                             }
                         }
-                        if pending {
-                            TypingIndicator(label: pendingLabel).id("__typing")
+                        if state.pending {
+                            TypingIndicator(label: state.pendingLabel).id("__typing")
                         }
-                        if let err = lastError {
+                        if let err = state.lastError {
                             Label(err, systemImage: "exclamationmark.triangle")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.orange)
@@ -856,7 +819,7 @@ private struct ConversationView: View {
             .onChange(of: live.messages.count) { _, _ in
                 scrollToBottom(proxy)
             }
-            .onChange(of: pending) { _, _ in
+            .onChange(of: state.pending) { _, _ in
                 scrollToBottom(proxy)
             }
             .onAppear { scrollToBottom(proxy) }
@@ -866,7 +829,7 @@ private struct ConversationView: View {
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.18)) {
-                if pending {
+                if state.pending {
                     proxy.scrollTo("__typing", anchor: .bottom)
                 } else if let last = live.messages.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
@@ -909,10 +872,10 @@ private struct ConversationView: View {
             if !settings.canRun {
                 providerHint
             }
-            if !pendingAttachments.isEmpty || isExtracting {
+            if !state.pendingAttachments.isEmpty || isExtracting {
                 attachmentChipsRow(outerHPad: outerHPad)
             }
-            if let err = attachmentError {
+            if let err = state.attachmentError {
                 importErrorBanner(err)
             }
             HStack(alignment: .bottom, spacing: 10) {
@@ -930,7 +893,7 @@ private struct ConversationView: View {
                 .accessibilityLabel("Attach file")
                 .accessibilityIdentifier("WickerAttachButton")
 
-                TextField("Ask anything…", text: $draft, axis: .vertical)
+                TextField("Ask anything…", text: $state.draft, axis: .vertical)
                     .lineLimit(lines)
                     .textFieldStyle(.plain)
                     .font(fieldFont)
@@ -945,7 +908,7 @@ private struct ConversationView: View {
                         // turning off completely.
                         active: true,
                         cornerRadius: corner,
-                        intensity: pending ? 1.0
+                        intensity: state.pending ? 1.0
                             : (inputFocused ? 0.85 : 0.55)
                     )
                     .overlay(dropTargetOverlay(cornerRadius: corner))
@@ -960,7 +923,7 @@ private struct ConversationView: View {
                     // ellipse stack squeezes into a muddle on a
                     // 30 pt circle). The arrow glyph alone is already
                     // a strong "send" signal.
-                    Image(systemName: pending
+                    Image(systemName: state.pending
                           ? "stop.circle.fill"
                           : "arrow.up.circle.fill")
                         .font(.system(size: sendSize))
@@ -970,7 +933,7 @@ private struct ConversationView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!canSubmit)
                 .help("Send (⌘⏎)")
-                .accessibilityLabel(pending ? "Stop generating" : "Send message")
+                .accessibilityLabel(state.pending ? "Stop generating" : "Send message")
                 .accessibilityIdentifier("WickerSendButton")
             }
             .padding(.horizontal, outerHPad)
@@ -987,7 +950,7 @@ private struct ConversationView: View {
             case .success(let urls):
                 for url in urls { startExtraction(from: url, fromPicker: true) }
             case .failure(let err):
-                attachmentError = err.localizedDescription
+                state.attachmentError = err.localizedDescription
             }
         }
     }
@@ -1018,9 +981,9 @@ private struct ConversationView: View {
     private func attachmentChipsRow(outerHPad: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(pendingAttachments) { att in
+                ForEach(state.pendingAttachments) { att in
                     AttachmentChip(attachment: att) {
-                        pendingAttachments.removeAll { $0.id == att.id }
+                        state.pendingAttachments.removeAll { $0.id == att.id }
                     }
                 }
                 if isExtracting {
@@ -1045,7 +1008,7 @@ private struct ConversationView: View {
                 .lineLimit(3)
             Spacer()
             Button {
-                attachmentError = nil
+                state.attachmentError = nil
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.secondary)
@@ -1119,8 +1082,9 @@ private struct ConversationView: View {
     /// security-scoped access hop (sandboxed MAS build); dropped copies (which
     /// already live in our temp dir) don't.
     private func startExtraction(from url: URL, fromPicker: Bool) {
-        attachmentError = nil
-        extractingCount += 1
+        guard state.isActive else { return }
+        state.attachmentError = nil
+        state.extractingCount += 1
         let filename = url.lastPathComponent
         let needsScope = fromPicker && url.startAccessingSecurityScopedResource()
         Task {
@@ -1128,13 +1092,15 @@ private struct ConversationView: View {
             do {
                 let attachment = try await AttachmentExtractor.extract(url: url)
                 await MainActor.run {
-                    extractingCount = max(0, extractingCount - 1)
-                    pendingAttachments.append(attachment)
+                    guard state.isActive else { return }
+                    state.extractingCount = max(0, state.extractingCount - 1)
+                    state.pendingAttachments.append(attachment)
                 }
             } catch {
                 await MainActor.run {
-                    extractingCount = max(0, extractingCount - 1)
-                    attachmentError = (error as? LocalizedError)?.errorDescription
+                    guard state.isActive else { return }
+                    state.extractingCount = max(0, state.extractingCount - 1)
+                    state.attachmentError = (error as? LocalizedError)?.errorDescription
                         ?? String(localized: "Couldn't read \(filename): \(error.localizedDescription)", locale: LocaleHolder.current)
                 }
             }
@@ -1142,11 +1108,11 @@ private struct ConversationView: View {
     }
 
     private var canSubmit: Bool {
-        !pending
+        state.isActive && !state.pending
             && !isExtracting
             && settings.canRun
-            && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !pendingAttachments.isEmpty)
+            && (!state.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !state.pendingAttachments.isEmpty)
     }
 
     private var providerHint: some View {
@@ -1163,87 +1129,17 @@ private struct ConversationView: View {
 
     // MARK: Submit
 
-    /// Dispatches one user turn through `ChatAgent` — which means the
-    /// model can call `MarketDataTool`, `SocialSentimentTool`, etc.
-    /// mid-turn before producing a final reply. We:
-    ///
-    ///   1. Append the user message to `ChatStore` so the UI updates
-    ///      immediately.
-    ///   2. Build `[LLMMessage]` from prior messages only (ChatAgent
-    ///      re-appends the user turn via its `userMessage` parameter).
-    ///   3. Hand the `ChatAgent` the conversation slice and wait for
-    ///      its final tool-free reply. Intermediate `tool_use` /
-    ///      `tool_result` rounds stay inside the agent's working
-    ///      buffer — we don't persist them to `ChatStore`, since the
-    ///      UI doesn't render them as discrete messages today.
-    ///   4. Wire `onEvent` into `pendingLabel` so the typing indicator
-    ///      switches between dots ↔ "calling get_market_data…" as the
-    ///      loop runs.
+    /// Persist the user turn once, then use the same dispatch path as resume.
     private func submit() {
         guard canSubmit else { return }
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachments = pendingAttachments
-        draft = ""
-        pendingAttachments = []
-        attachmentError = nil
-        lastError = nil
-        store.append(ChatMessage(role: .user, text: text, attachments: attachments),
-                     to: session.id)
-        pending = true
-        pendingLabel = String(localized: "thinking…", locale: LocaleHolder.current)
-
-        // Build conversation from EVERY prior message (excluding the
-        // one we just appended — ChatAgent will append it again from
-        // `userMessage`). Using `dropLast()` is safe because we just
-        // appended one message above and `store.append` is synchronous.
-        let prior = Array(live.messages.dropLast())
-        let history: [LLMMessage] = prior.map(Self.llmMessage(from:))
-        guard let provider = WickerLLM.provider(for: settings) else {
-            pending = false
-            pendingLabel = nil
-            lastError = String(localized: "No provider configured.", locale: LocaleHolder.current)
-            return
-        }
-        // ChatAgent uses `deepModel` from the config; the quick model
-        // doesn't matter here (no analyst pipeline in chat). Settings'
-        // workflowConfig() picks up the right per-provider models
-        // automatically.
-        let config: TradingFloorConfig = settings.workflowConfig()
-        let agent = runtime.makeChatAgent(llm: provider, config: config)
-        let sessionID = session.id
-        // Fold doc attachments into the prompt; images ride as vision parts.
-        let folded = Self.foldedContent(text: text, attachments: attachments)
-        let images = Self.llmImages(from: attachments)
-
-        Task {
-            var conversation = history
-            do {
-                let reply = try await agent.respond(
-                    to: folded,
-                    images: images,
-                    conversation: &conversation,
-                    onEvent: { event in
-                        Task { @MainActor in
-                            handleAgentEvent(event)
-                        }
-                    })
-                await MainActor.run {
-                    store.append(ChatMessage(role: .assistant, text: reply),
-                                 to: sessionID)
-                    pending = false
-                    pendingLabel = nil
-                    titleSessionIfNeeded(userText: text,
-                                          assistantText: reply,
-                                          sessionID: sessionID)
-                }
-            } catch {
-                await MainActor.run {
-                    pending = false
-                    pendingLabel = nil
-                    lastError = describe(error)
-                }
-            }
-        }
+        let message = ChatMessage(role: .user,
+                                  text: state.draft.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  attachments: state.pendingAttachments)
+        state.draft = ""
+        state.pendingAttachments = []
+        state.attachmentError = nil
+        store.append(message, to: session.id)
+        dispatchExistingUserTurn(message: message)
     }
 
     // MARK: ChatMessage → LLMMessage seam
@@ -1292,12 +1188,12 @@ private struct ConversationView: View {
             // name, matching the right-side browser panel's affordance.
             if name.hasPrefix("web.") {
                 let action = name.dropFirst("web.".count)
-                pendingLabel = String(localized: "🌐 Browsing: \(action.isEmpty ? name : String(action))…", locale: LocaleHolder.current)
+                state.pendingLabel = String(localized: "🌐 Browsing: \(action.isEmpty ? name : String(action))…", locale: LocaleHolder.current)
             } else {
-                pendingLabel = String(localized: "calling \(name)…", locale: LocaleHolder.current)
+                state.pendingLabel = String(localized: "calling \(name)…", locale: LocaleHolder.current)
             }
         case .toolResult:
-            pendingLabel = String(localized: "thinking…", locale: LocaleHolder.current)
+            state.pendingLabel = String(localized: "thinking…", locale: LocaleHolder.current)
         case .userTurn, .assistantRaw, .finalReply:
             break
         }

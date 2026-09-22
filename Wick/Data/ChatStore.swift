@@ -82,11 +82,21 @@ final class ChatStore {
 
     private(set) var sessions: [ChatSession]
     var selectedSessionID: UUID?
+    private var sessionStates: [UUID: ChatSessionState]
+    @ObservationIgnored private let storageURL: URL
 
-    init() {
-        let loaded = Self.loadFromDisk()
+    init(storageURL: URL? = nil) {
+        let url = storageURL ?? Self.storeURL
+        self.storageURL = url
+        let loaded = Self.loadFromDisk(at: url)
         self.sessions = loaded
+        self.sessionStates = Dictionary(loaded.map { ($0.id, ChatSessionState()) },
+                                        uniquingKeysWith: { first, _ in first })
         self.selectedSessionID = loaded.first?.id
+    }
+
+    func state(for sessionID: UUID) -> ChatSessionState? {
+        sessionStates[sessionID]
     }
 
     // MARK: - Mutations
@@ -96,6 +106,7 @@ final class ChatStore {
     @discardableResult
     func newSession(pinnedSymbol: String? = nil) -> UUID {
         let s = ChatSession(pinnedSymbol: pinnedSymbol)
+        sessionStates[s.id] = ChatSessionState()
         sessions.insert(s, at: 0)
         selectedSessionID = s.id
         persist()
@@ -103,6 +114,7 @@ final class ChatStore {
     }
 
     func delete(id: UUID) {
+        sessionStates.removeValue(forKey: id)?.invalidate()
         sessions.removeAll { $0.id == id }
         if selectedSessionID == id { selectedSessionID = sessions.first?.id }
         persist()
@@ -157,8 +169,8 @@ final class ChatStore {
         return dir.appendingPathComponent("chat-sessions.json")
     }
 
-    private static func loadFromDisk() -> [ChatSession] {
-        guard let data = try? Data(contentsOf: storeURL) else { return [] }
+    private static func loadFromDisk(at url: URL) -> [ChatSession] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([ChatSession].self, from: data)) ?? []
@@ -169,6 +181,6 @@ final class ChatStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(sessions) else { return }
-        try? data.write(to: Self.storeURL, options: .atomic)
+        try? data.write(to: storageURL, options: .atomic)
     }
 }

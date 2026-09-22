@@ -68,7 +68,27 @@ packages:
     url: https://github.com/gonzalezreal/swift-markdown-ui.git
     from: 2.4.1
 
+schemes:
+  Wick:
+    build:
+      targets:
+        Wick: all
+    test:
+      targets:
+        - WickTests
+
 targets:
+  WickTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: WickTests
+    dependencies:
+      - target: Wick
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+
   Wick:
     type: application
     platform: macOS
