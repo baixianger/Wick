@@ -73,55 +73,23 @@ public struct PositionSize: Sendable, Codable, Equatable {
     /// Extract the trader's "Position: NN%" line, if present. Tolerates a few
     /// shapes: "Position: 15%", "ALLOC: 0.15", "Target weight: 0.2".
     static func parse(_ text: String) -> PositionSize? {
-        // Try a percent first, then a 0..1 decimal. Match the LAST occurrence
-        // so a value mentioned in passing earlier in the reasoning doesn't win.
-        let lower = text.lowercased()
-        let keyed = ["position", "alloc", "allocation", "target weight", "weight"]
-        for line in text.split(separator: "\n").reversed() {
-            let l = line.lowercased()
-            guard keyed.contains(where: { l.contains($0 + ":") || l.hasPrefix($0) }) else { continue }
-            if let pct = firstPercent(in: String(line)) { return PositionSize(targetWeight: pct / 100) }
-            if let frac = firstFraction(in: String(line)) { return PositionSize(targetWeight: frac) }
-        }
-        // Fallback: scan the whole text for the first percent-with-keyword nearby.
-        if let pct = firstPercent(in: lower), pct >= 0, pct <= 100 {
-            return PositionSize(targetWeight: pct / 100)
-        }
-        return nil
-    }
-
-    private static func firstPercent(in s: String) -> Double? {
-        // Match e.g. "15%", "7.5%", " 0%" — number immediately followed by %.
-        var i = s.startIndex
-        while i < s.endIndex {
-            if let (n, end) = readNumber(s, from: i), end < s.endIndex, s[end] == "%" {
-                return n
+        // Only an explicit field can supply an allocation. Percentages in
+        // earnings, price targets or risk commentary are not position sizes.
+        let pattern = #"^\s*(?:[-*]\s+)?(?:\*\*)?(?:position|alloc|allocation|target weight|weight)(?:\*\*)?\s*:\s*(?:\*\*)?\s*([0-9]+(?:\.[0-9]+)?|\.[0-9]+)\s*(%)?(?=\s|$|\*|[;,])"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        for line in text.components(separatedBy: .newlines).reversed() {
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard let match = regex.firstMatch(in: line, range: range),
+                  let numberRange = Range(match.range(at: 1), in: line),
+                  let value = Double(line[numberRange]), value.isFinite else { continue }
+            if match.range(at: 2).location != NSNotFound {
+                return PositionSize(targetWeight: value / 100)
             }
-            i = s.index(after: i)
+            // Bare values are fractions, not unspecified percentages.
+            guard (0...1).contains(value) else { return nil }
+            return PositionSize(targetWeight: value)
         }
         return nil
-    }
-    private static func firstFraction(in s: String) -> Double? {
-        var i = s.startIndex
-        while i < s.endIndex {
-            if let (n, _) = readNumber(s, from: i), n >= 0, n <= 1 { return n }
-            i = s.index(after: i)
-        }
-        return nil
-    }
-    private static func readNumber(_ s: String, from start: String.Index) -> (Double, String.Index)? {
-        var i = start
-        var sawDigit = false
-        var sawDot = false
-        while i < s.endIndex {
-            let c = s[i]
-            if c.isNumber { sawDigit = true }
-            else if c == "." && !sawDot { sawDot = true }
-            else { break }
-            i = s.index(after: i)
-        }
-        guard sawDigit, let d = Double(s[start..<i]) else { return nil }
-        return (d, i)
     }
 }
 

@@ -40,6 +40,33 @@ struct ScriptedLLM: LLMProvider {
     #expect(abs(big.cashWeight - 0.7) < 1e-9)
 }
 
+@Test func position_size_requires_an_explicit_allocation_field() {
+    for text in [
+        "HOLD\nRevenue grew 15% year over year. No allocation recommendation.",
+        "BUY\nUpside: 25%. Stop loss: 5%.",
+        "Position remains unchanged while revenue grows 15%.",
+        "Position: unspecified; revenue grew 15%.",
+        "Position: -10%", "ALLOC: 15", "Position: 1.5", "Position: 0.2x"
+    ] {
+        #expect(PositionSize.parse(text) == nil, "Must not invent an allocation from: \(text)")
+    }
+    #expect(PositionSize.parse("**Position:** 12.5%\nRevenue grew 30%.")?.targetWeight == 0.125)
+    #expect(PositionSize.parse("  - **Target weight**: 0.2 (long-only)")?.targetWeight == 0.2)
+    #expect(PositionSize.parse("Position: 20%\nPosition: 0%")?.targetWeight == 0)
+}
+
+@Test func desk_does_not_turn_revenue_growth_into_a_position() async throws {
+    struct RevenueLLM: LLMProvider {
+        func complete(_ request: LLMRequest) async throws -> String {
+            "HOLD\nRevenue grew 15% year over year. No allocation recommendation."
+        }
+    }
+    let desk = TradingFloor(llm: RevenueLLM(), data: StubMarketDataProvider(),
+                            config: .init(maxDebateRounds: 0))
+    let report = try await desk.analyze(ticker: "NVDA")
+    #expect(report.position == nil)
+}
+
 /// Counts upstream hits so we can prove the cache short-circuits the network.
 final class CountingProvider: MarketDataProvider, @unchecked Sendable {
     private(set) var hits = 0
