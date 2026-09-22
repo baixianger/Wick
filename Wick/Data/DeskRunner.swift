@@ -50,6 +50,15 @@ final class DeskRunner {
                        config: settings.workflowConfig(),
                        providerName: settings.providerKind.displayName,
                        data: makeMarketData(settings: settings))
+        case .codex:
+            guard settings.codexAccount.isSignedIn else {
+                phase = .failed("Sign in to Codex in Settings → Provider.")
+                return
+            }
+            runDirect(ticker: ticker, llm: settings.codexAccount.provider,
+                      config: settings.workflowConfig(),
+                      providerName: settings.providerKind.displayName,
+                      data: makeMarketData(settings: settings))
         case .claudeCode:
             // Subprocess to the locally-installed `claude` CLI, using the
             // user's existing subscription auth. No API key needed; cost

@@ -770,6 +770,8 @@ private struct ProviderTab: View {
                 modePicker
                 Text(settings.providerKind == .server
                      ? String(localized: "All LLM traffic routes through Wick's hosted broker. No keys needed on this device — pricing handled via subscription. (Coming soon.)", locale: LocaleHolder.current)
+                     : settings.providerKind == .codex
+                     ? "Wick uses your ChatGPT subscription through OAuth. Nothing touches Wick's servers."
                      : String(localized: "Wick talks directly to the provider with your own key. Nothing touches our servers.", locale: LocaleHolder.current))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
@@ -793,7 +795,9 @@ private struct ProviderTab: View {
                             .labelsHidden()
                             .frame(maxWidth: 220)
                     }
-                    if settings.providerKind == .claudeCode {
+                    if settings.providerKind == .codex {
+                        CodexAccountView(account: settings.codexAccount)
+                    } else if settings.providerKind == .claudeCode {
                         // No URL / key — Claude Code uses local OAuth.
                         // Just let the user override the binary path if
                         // it's not in $PATH.
@@ -812,13 +816,21 @@ private struct ProviderTab: View {
                     }
                 }
                 Section("Models") {
+                    if settings.providerKind == .codex {
+                        Text("Codex model presets are not an account availability check. You can enter a model ID below.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     quickModelField
                     deepModelField
+                    if settings.providerKind == .codex {
+                        TextField("Custom quick model ID", text: $settings.quickModel)
+                        TextField("Custom deep model ID", text: $settings.deepModel)
+                    }
                     HStack {
                         Button {
                             Task { await refreshModels() }
                         } label: {
-                            Label(discovering ? String(localized: "Refreshing…", locale: LocaleHolder.current) : String(localized: "Refresh models", locale: LocaleHolder.current),
+                            Label(settings.providerKind == .codex ? "Load model presets" : (discovering ? String(localized: "Refreshing…", locale: LocaleHolder.current) : String(localized: "Refresh models", locale: LocaleHolder.current)),
                                   systemImage: "arrow.clockwise")
                         }
                         .disabled(discovering
@@ -1005,14 +1017,16 @@ private struct ProviderTab: View {
             discoveryError = String(localized: "Invalid base URL.", locale: LocaleHolder.current)
             return
         }
-        let key: String? = settings.providerKind.requiresAPIKey
+        let selectedKind = settings.providerKind
+        let key: String? = selectedKind.requiresAPIKey
             ? settings.currentAPIKey
             : nil
         do {
             let models = try await ProviderDiscovery.fetchModels(
-                for: settings.providerKind,
+                for: selectedKind,
                 baseURL: url,
                 apiKey: key)
+            guard !Task.isCancelled, settings.providerKind == selectedKind else { return }
             settings.availableModels = models
         } catch {
             discoveryError = (error as? LocalizedError)?.errorDescription

@@ -17,6 +17,22 @@ open Wick.xcodeproj
 
 CandleKit is referenced as a **local SPM package** at `../CandleKit/` during development. Before release, the dependency is switched to a tagged version.
 
+## Codex subscription login
+
+In **Settings → Provider → Bring Your Own**, choose **Codex (ChatGPT subscription)**.
+Select **Sign in with ChatGPT**, open the sign-in page, and enter the displayed
+one-time code. No Codex CLI, app-server, Node.js, or OpenAI API key is required.
+Wick keeps running its own chat/tool loop and analysis workflow.
+
+**More options** provides browser login with a manually pasted callback URL and
+import of a Codex CLI `auth.json` containing OAuth tokens. Credentials are
+stored in Wick's Keychain entry. **Sign out** removes that entry; it does not
+delete the source application's login. Model presets are editable and do not
+guarantee availability on your account.
+
+See [OAuth setup and implementation](docs/codex-oauth.md) for login details,
+the scope of this integration, and verification instructions.
+
 ## Layout
 
 ```

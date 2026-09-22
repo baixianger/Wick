@@ -62,6 +62,10 @@ enum ProviderDiscovery {
             // Server tier — model selection happens server-side;
             // the client never picks. Empty list signals "no UI".
             return []
+        case .codex:
+            // Local presets, as in pi-ai's provider catalog; not an account entitlement check.
+            return [ModelInfo(id: "gpt-5.6-sol"), ModelInfo(id: "gpt-5.6-terra"),
+                    ModelInfo(id: "gpt-5.6-luna"), ModelInfo(id: "gpt-5.5")]
         case .claudeCode:
             // No discovery endpoint — Claude Code accepts any model the
             // user is entitled to on their subscription. The static

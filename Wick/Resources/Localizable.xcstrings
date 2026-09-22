@@ -4780,6 +4780,256 @@
           }
         }
       }
+    },
+    "Account": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号"
+          }
+        }
+      }
+    },
+    "Not signed in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未登录"
+          }
+        }
+      }
+    },
+    "Use your ChatGPT subscription. No API key or Codex installation is required. Wick keeps its own login in Keychain.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用你的 ChatGPT 订阅，无需 API Key 或安装 Codex。Wick 将自己的登录凭证保存在钥匙串中。"
+          }
+        }
+      }
+    },
+    "One-time code": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一次性验证码"
+          }
+        }
+      }
+    },
+    "Open ChatGPT sign-in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 ChatGPT 登录页面"
+          }
+        }
+      }
+    },
+    "Enter this code on the sign-in page. Wick will finish signing in automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在登录页面输入此验证码，Wick 将自动完成登录。"
+          }
+        }
+      }
+    },
+    "Open browser sign-in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开浏览器登录"
+          }
+        }
+      }
+    },
+    "After signing in, copy the full localhost callback URL from your browser and paste it below. That page may not load; Wick completes the login here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录后，从浏览器复制完整的 localhost 回调地址并粘贴到下方。该页面可能无法打开，Wick 会在这里完成登录。"
+          }
+        }
+      }
+    },
+    "Callback URL": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回调地址"
+          }
+        }
+      }
+    },
+    "Complete sign-in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成登录"
+          }
+        }
+      }
+    },
+    "Starting sign-in…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在开始登录…"
+          }
+        }
+      }
+    },
+    "Cancel sign-in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消登录"
+          }
+        }
+      }
+    },
+    "Sign in with ChatGPT": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 ChatGPT 登录"
+          }
+        }
+      }
+    },
+    "More options": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多选项"
+          }
+        }
+      }
+    },
+    "Browser sign-in (manual callback)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览器登录（手动回调）"
+          }
+        }
+      }
+    },
+    "Import Codex credentials…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入 Codex 凭证…"
+          }
+        }
+      }
+    },
+    "Sign out": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出登录"
+          }
+        }
+      }
+    },
+    "Refreshing usage…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在刷新额度…"
+          }
+        }
+      }
+    },
+    "Refresh usage": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新额度"
+          }
+        }
+      }
+    },
+    "Plan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套餐"
+          }
+        }
+      }
+    },
+    "Usage windows are unknown.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无额度窗口数据。"
+          }
+        }
+      }
+    },
+    "Sign out removes only Wick's saved login. Codex keeps its own credentials.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出仅清除 Wick 保存的登录，不会删除 Codex 自己的凭证。"
+          }
+        }
+      }
+    },
+    "Custom quick model ID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义快速模型 ID"
+          }
+        }
+      }
+    },
+    "Custom deep model ID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义深度模型 ID"
+          }
+        }
+      }
+    },
+    "Codex model presets are not an account availability check. You can enter a model ID below.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 模型预设不代表账号可用性检查，你可以在下方输入模型 ID。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

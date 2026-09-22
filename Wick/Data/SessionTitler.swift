@@ -83,6 +83,9 @@ enum SessionTitler {
                 ?? URL(string: ProviderKind.anthropic.defaultBaseURL)!
             return AnthropicProvider(apiKey: settings.currentAPIKey,
                                       baseURL: baseURL)
+        case .codex:
+            return settings.codexAccount.isSignedIn ? settings.codexAccount.provider : nil
+
         case .claudeCode:
             // Empty CLI path → resolve from $PATH (Settings hint).
             let cli = settings.claudeCodeCLIPath.isEmpty

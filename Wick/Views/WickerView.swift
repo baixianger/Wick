@@ -1880,6 +1880,9 @@ enum WickerLLM {
             return AnthropicProvider(apiKey: settings.currentAPIKey,
                                       baseURL: baseURL)
 
+        case .codex:
+            return settings.codexAccount.isSignedIn ? settings.codexAccount.provider : nil
+
         case .claudeCode:
             // Locally-installed `claude` CLI driven by the user's
             // subscription. Empty path → resolve from $PATH (the

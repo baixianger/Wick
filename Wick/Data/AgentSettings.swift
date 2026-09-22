@@ -24,6 +24,8 @@ import TradingFloor
 @Observable
 final class AgentSettings {
 
+    let codexAccount = CodexAccount()
+
     // MARK: - Provider selection (the single switch)
 
     /// Which provider to dispatch all LLM traffic through. `.server`
@@ -31,23 +33,18 @@ final class AgentSettings {
     /// "Provider" tab is the only place this is set.
     var providerKind: ProviderKind {
         didSet {
+            guard oldValue != providerKind else { return }
             UserDefaults.standard.set(providerKind.rawValue, forKey: "tf.providerKind")
             // Refresh in-memory key + per-provider config when the
             // user switches providers. Keys are kept in Keychain
             // per-provider; we reload whichever one is now active.
             currentAPIKey = Keychain.load(account: providerKind.keychainAccount) ?? ""
-            if byoBaseURL.isEmpty || oldValue != providerKind {
-                // Auto-fill the base URL on provider change so a fresh
-                // switch lands on sensible defaults; the user can edit
-                // afterwards.
-                byoBaseURL = providerKind.defaultBaseURL
-            }
-            if quickModel.isEmpty || oldValue != providerKind {
-                quickModel = providerKind.defaultQuickModel
-            }
-            if deepModel.isEmpty || oldValue != providerKind {
-                deepModel = providerKind.defaultDeepModel
-            }
+            let modelData = UserDefaults.standard.data(forKey: "tf.byo.\(providerKind.rawValue).availableModels")
+            availableModels = modelData.flatMap { try? JSONDecoder().decode([ModelInfo].self, from: $0) } ?? []
+            let saved = ProviderPreferences(kind: providerKind)
+            byoBaseURL = saved.baseURL
+            quickModel = saved.quickModel
+            deepModel = saved.deepModel
         }
     }
 
@@ -65,9 +62,7 @@ final class AgentSettings {
         }
     }
 
-    /// Base URL for the BYO provider. Auto-filled to
-    /// `providerKind.defaultBaseURL` on provider switch; user can
-    /// override for proxies or self-hosted endpoints.
+    /// Base URL saved per provider; defaults are used only before setup.
     var byoBaseURL: String {
         didSet { UserDefaults.standard.set(byoBaseURL, forKey: "tf.byo.\(providerKind.rawValue).baseURL") }
     }
@@ -154,6 +149,8 @@ final class AgentSettings {
             return !serverBaseURL.isEmpty
         case .ollama:
             return !byoBaseURL.isEmpty
+        case .codex:
+            return codexAccount.isSignedIn
         case .claudeCode:
             // Driven by the locally-installed `claude` CLI + the
             // user's existing subscription auth. No API key, no
@@ -172,6 +169,7 @@ final class AgentSettings {
     /// button per-provider.
     var hasKey: Bool {
         switch providerKind {
+        case .codex: return codexAccount.isSignedIn
         case .server, .ollama, .claudeCode: return true       // n/a — no key needed
         default:                            return !currentAPIKey.isEmpty
         }
@@ -395,9 +393,10 @@ final class AgentSettings {
         // strings (UserDefaults), so swapping providers preserves
         // every other provider's setup.
         self.currentAPIKey = Keychain.load(account: kind.keychainAccount) ?? ""
-        self.byoBaseURL    = ud.string(forKey: "tf.byo.\(kind.rawValue).baseURL")    ?? kind.defaultBaseURL
-        self.quickModel    = ud.string(forKey: "tf.byo.\(kind.rawValue).quickModel") ?? kind.defaultQuickModel
-        self.deepModel     = ud.string(forKey: "tf.byo.\(kind.rawValue).deepModel")  ?? kind.defaultDeepModel
+        let saved = ProviderPreferences(kind: kind, defaults: ud)
+        self.byoBaseURL = saved.baseURL
+        self.quickModel = saved.quickModel
+        self.deepModel = saved.deepModel
         if let data = ud.data(forKey: "tf.byo.\(kind.rawValue).availableModels"),
            let decoded = try? JSONDecoder().decode([ModelInfo].self, from: data)
         {
@@ -529,7 +528,7 @@ final class AgentSettings {
         case .qwen:
             adopt(env["QWEN_API_KEY"] ?? env["DASHSCOPE_API_KEY"],
                   current: currentAPIKey) { currentAPIKey = $0 }
-        case .server, .custom, .ollama, .claudeCode:
+        case .server, .custom, .ollama, .claudeCode, .codex:
             // Server/custom/ollama don't have a canonical env var name —
             // the user sets baseURL by hand. `claudeCode` uses local
             // OAuth, no key at all. Skip.
