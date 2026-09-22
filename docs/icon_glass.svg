@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+  <!-- emerald body gradient (lighter top-left → deep bottom-right) -->
+  <linearGradient id="gBody" x1="0.1" y1="0" x2="0.9" y2="1">
+    <stop offset="0" stop-color="#4dE38a"/>
+    <stop offset="0.45" stop-color="#16b85f"/>
+    <stop offset="1" stop-color="#067a40"/>
+  </linearGradient>
+  <!-- top sheen: glossy white fade over the upper third -->
+  <linearGradient id="gSheen" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+    <stop offset="0.16" stop-color="#ffffff" stop-opacity="0.16"/>
+    <stop offset="0.38" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <!-- big soft specular highlight, upper-left -->
+  <radialGradient id="gSpec" cx="0.3" cy="0.22" r="0.6">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+    <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.08"/>
+    <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+  </radialGradient>
+  <!-- bottom vignette for depth -->
+  <radialGradient id="gVig" cx="0.5" cy="1.05" r="0.75">
+    <stop offset="0" stop-color="#003d20" stop-opacity="0.45"/>
+    <stop offset="0.6" stop-color="#003d20" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+    <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="gWhite" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff"/>
+    <stop offset="1" stop-color="#eafff3"/>
+  </linearGradient>
+  <filter id="fShadow" x="-25%" y="-25%" width="150%" height="150%">
+    <feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#0a3d22" flood-opacity="0.45"/>
+  </filter>
+  <clipPath id="clip"><rect x="48" y="48" width="928" height="928" rx="232"/></clipPath>
+</defs>
+
+<!-- body + shadow -->
+<rect x="48" y="48" width="928" height="928" rx="232" fill="url(#gBody)" filter="url(#fShadow)"/>
+
+<g clip-path="url(#clip)">
+  <rect x="48" y="48" width="928" height="928" fill="url(#gVig)"/>
+  <rect x="48" y="48" width="928" height="928" fill="url(#gSpec)"/>
+  <!-- candlesticks -->
+  <!-- soft area fill under the line -->
+  <path d="M 160,648 C 223.0,648 223.0,600 286,600 C 337.0,600 337.0,642 388,642 C 444.0,642 444.0,540 500,540 C 551.0,540 551.0,584 602,584 C 664.0,584 664.0,452 726,452 C 777.0,452 777.0,498 828,498 C 854.0,498 854.0,372 880,372 L 880,760 L 160,760 Z" fill="url(#gArea)"/>
+  <!-- the line: subtle shadow for lift, then white core -->
+  <path d="M 160,648 C 223.0,648 223.0,600 286,600 C 337.0,600 337.0,642 388,642 C 444.0,642 444.0,540 500,540 C 551.0,540 551.0,584 602,584 C 664.0,584 664.0,452 726,452 C 777.0,452 777.0,498 828,498 C 854.0,498 854.0,372 880,372 " fill="none" stroke="#054a28" stroke-opacity="0.35" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,8)"/>
+  <path d="M 160,648 C 223.0,648 223.0,600 286,600 C 337.0,600 337.0,642 388,642 C 444.0,642 444.0,540 500,540 C 551.0,540 551.0,584 602,584 C 664.0,584 664.0,452 726,452 C 777.0,452 777.0,498 828,498 C 854.0,498 854.0,372 880,372 " fill="none" stroke="url(#gWhite)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 160,648 C 223.0,648 223.0,600 286,600 C 337.0,600 337.0,642 388,642 C 444.0,642 444.0,540 500,540 C 551.0,540 551.0,584 602,584 C 664.0,584 664.0,452 726,452 C 777.0,452 777.0,498 828,498 C 854.0,498 854.0,372 880,372 " fill="none" stroke="#ffffff" stroke-opacity="0.6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,-5)"/>
+  <!-- glossy top sheen on top of everything for the glass read -->
+  <rect x="48" y="48" width="928" height="928" fill="url(#gSheen)"/>
+  <!-- crisp inner rim highlight (top) -->
+  <rect x="51" y="51" width="922" height="922" rx="229" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2"/>
+</g>
+</svg>
