@@ -1,0 +1,17 @@
+{
+  "source_commit": "1a88b2af04b1c108cd55c8cc7f3147a0e683a249",
+  "files_sha256": {
+    "Wick/Browser/XLiveScraper.swift": "02a23dce205106cdee850228f2d11149c1d045e84c4b1be4f62589c79933939d",
+    "Wick/Browser/XueqiuLiveScraper.swift": "e82074154f532ccb924e9e82150c22ee89d8acca142d6f50f1c64e2dd9452e23",
+    "Wick/Browser/XueqiuSentimentProvider.swift": "67de064f13553ebf464b24d8bc1c5d60074ca5779506c5617704d873874d388c",
+    "Wick/Prototypes/X/XProbe.swift": "75856898403da947407e55b34f1fcfc665fe42c789247fa8b8e03df66d11568b",
+    "Wick/Prototypes/X/XProbeView.swift": "0d4c31fafd14e0d684e2eb3585ee7164e825d805bf9a429276aebe7b90afc554",
+    "Wick/Prototypes/X/XProbeWindow.swift": "8b2a6d8f4d46c96569dea7860cbf8cd391b273a851bb823bac62363ac2f382dd",
+    "Wick/Prototypes/Xueqiu/XueqiuProbe.swift": "8467fea5ff7a663ecccbeb3a0e38b3667b27361ba267fbc191a71146d0c10714",
+    "Wick/Prototypes/Xueqiu/XueqiuProbeView.swift": "f6d5a909c671f12ca9c95b7b67f90071a7fcd4541237f62705c50dd657d62ec9",
+    "Wick/Prototypes/Xueqiu/XueqiuProbeWindow.swift": "09352fe2bfe416da564764d268d55dfa28514ad4fc50f6899ac6b819bc1d144c",
+    "Wick/Browser/BrowserSessionManager.swift": "11038e69f8a4a0d7a0a5e9854e44635aac8759910e64a435fc134affdf8e68af",
+    "Wick/Browser/BridgeServer.swift": "3ba48132a0cd50cad7f8bc9b89ca8efe0a4f4970c2384df09cf609a3374e59da",
+    "Wick/Views/SocialView.swift": "6bf1ad5eba6974430ff7a68689fb2d8f152044345be44d06b5edf39bd103123d"
+  }
+}

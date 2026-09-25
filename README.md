@@ -33,6 +33,12 @@ guarantee availability on your account.
 See [OAuth setup and implementation](docs/codex-oauth.md) for login details,
 the scope of this integration, and verification instructions.
 
+## Data sources
+
+See [数据源、接口契约与验证状态](docs/data-sources.md) for provider setup, request/response shapes, source attribution, fallback rules, and known implementation gaps.
+
+See [Swift WebKit 浏览器流程知识库](docs/reference/browser-social/README.md) for the archived X/Xueqiu implementations and lessons. These dedicated login flows have been replaced by external browser links.
+
 ## Layout
 
 ```

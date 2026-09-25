@@ -28,6 +28,8 @@ final class AgentRuntime {
 
     let tools: ToolRegistry
     let skills: SkillRegistry
+    private(set) var adanos: AdanosClient?
+    @ObservationIgnored private var adanosKey = ""
 
     /// App-scoped BYO-cookie browser session owner (雪球 Mode 1/2). Held here so
     /// its lifecycle is view-independent and the off-by-default 雪球 decorator
@@ -73,7 +75,6 @@ final class AgentRuntime {
                     // macOS 26; the Stub stays as a deterministic fallback.
                     providers: [
                         StockTwitsSentimentProvider(),
-                        StubSocialSentimentProvider(),
                     ],
                     interactive: true),
             ]
@@ -104,8 +105,15 @@ final class AgentRuntime {
     /// name overwrites the previous tool — no leak, no duplicate.
     func reconfigure(with settings: AgentSettings) {
         let provider = buildMarketData(from: settings)
+        if adanosKey != settings.adanosKey {
+            adanosKey = settings.adanosKey
+            adanos = adanosKey.isEmpty ? nil : AdanosClient(apiKey: adanosKey)
+        }
+        var social: [any SocialSentimentProvider] = [StockTwitsSentimentProvider()]
+        if let adanos { social.append(AdanosSentimentProvider(client: adanos)) }
         Task { [tools] in
             await tools.register(MarketDataTool(data: provider))
+            await tools.register(SocialSentimentTool(providers: social, interactive: true))
         }
         reconfigureWebTools(with: settings)
     }
@@ -274,21 +282,8 @@ final class AgentRuntime {
         return f.string(from: d)
     }
 
-    /// Instance wrapper around the static chain builder that splices in the
-    /// off-by-default 雪球 decorator when running on macOS 26 with the app-scoped
-    /// `BrowserSessionManager` available. Kept separate from the `static`
-    /// builder so the latter stays Foundation-only + reusable (and matches the
-    /// server tier's pure assembly).
     func buildMarketData(from settings: AgentSettings) -> any MarketDataProvider {
-        if #available(macOS 26.0, *),
-           let manager = browserSession as? BrowserSessionManager
-        {
-            return Self.buildMarketData(
-                from: settings,
-                xueqiuScraper: manager,
-                xueqiuEnabled: settings.enableXueqiuSentiment)
-        }
-        return Self.buildMarketData(from: settings)
+        Self.buildMarketData(from: settings)
     }
 
     /// Build the full EastMoney(CN) → FMP(US) / Yahoo(intl) → Finnhub → FRED
@@ -297,9 +292,7 @@ final class AgentRuntime {
     /// macro for the decorators). Caching wrapper sits at the outermost
     /// layer.
     static func buildMarketData(
-        from settings: AgentSettings,
-        xueqiuScraper: (any XueqiuScraping)? = nil,
-        xueqiuEnabled: Bool = false
+        from settings: AgentSettings
     ) -> any MarketDataProvider {
         // Base layer: split first by Chinese-market suffix (`.SS` / `.SZ` /
         // `.HK`) → EastMoney's open endpoints. Everything else falls through
@@ -331,17 +324,6 @@ final class AgentRuntime {
         // EastMoney 资讯 + 公告. No key. Disjoint with Finnhub below (each
         // only fills an empty `news`), so order doesn't matter.
         data = EastMoneyNewsProvider(base: data)
-        // BYO-cookie 雪球 discussion decorator — OFF BY DEFAULT. Appends 雪球
-        // hot-post lines into `news` for CN/HK tickers ONLY when (a) the user
-        // opted in (`enableXueqiuSentiment`) AND (b) a scraper is injected AND
-        // (c) the session is valid. Best-effort: any failure / empty / expired
-        // / non-CN ticker → pass-through, so it can never break the chain. Sits
-        // right after the EastMoney news layer so the sentiment/news analysts
-        // see the lines, and inside the cache below so scrapes are amortised.
-        if let scraper = xueqiuScraper {
-            data = BYODiscussionNewsDecorator(
-                base: data, scraper: scraper, enabled: xueqiuEnabled)
-        }
         // Main-force capital flow — appends 资金流向 to technicals for
         // A-share tickers. No key.
         data = EastMoneyFundFlowDecorator(base: data)

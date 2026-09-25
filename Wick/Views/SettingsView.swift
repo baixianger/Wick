@@ -530,10 +530,8 @@ private enum MCPTestStatus: Equatable {
 
 // MARK: - Data sources tab
 
-/// BYO data keys: FMP / Finnhub / FRED. Mirrors the decorator chain
-/// WickServer assembles for the server tier — see
-/// `AgentRuntime.makeMarketDataProvider`. Hidden information when
-/// providerKind == .server because the server has its own keys.
+/// Local data-source configuration, independent of the selected LLM provider.
+/// Catalog support is distinct from saved credentials and live connectivity.
 private struct DataSourcesTab: View {
     @Bindable var settings: AgentSettings
 
@@ -567,8 +565,8 @@ private struct DataSourcesTab: View {
         case free, freeKey, byo
         var label: String {
             switch self {
-            case .free:    String(localized: "Free", locale: LocaleHolder.current)
-            case .freeKey: String(localized: "Free · Key", locale: LocaleHolder.current)
+            case .free:    String(localized: "No key", locale: LocaleHolder.current)
+            case .freeKey: String(localized: "API Key", locale: LocaleHolder.current)
             case .byo:     String(localized: "BYO account", locale: LocaleHolder.current)
             }
         }
@@ -583,7 +581,7 @@ private struct DataSourcesTab: View {
 
     private enum DSStatus {
         case active, planned
-        var label: String { self == .active ? String(localized: "Active", locale: LocaleHolder.current) : String(localized: "Planned", locale: LocaleHolder.current) }
+        var label: String { self == .active ? String(localized: "Supported", locale: LocaleHolder.current) : String(localized: "Planned", locale: LocaleHolder.current) }
         var tint: Color { self == .active ? .green : .secondary }
     }
 
@@ -612,7 +610,6 @@ private struct DataSourcesTab: View {
         .init(symbol: "doc.text",                         name: String(localized: "EastMoney F10 financials", locale: LocaleHolder.current),   provides: String(localized: "revenue/net profit/EPS/ROE/gross margin, etc.", locale: LocaleHolder.current),      access: .free, status: .active),
         .init(symbol: "flame",                            name: String(localized: "EastMoney top-list (龙虎榜)", locale: LocaleHolder.current),     provides: String(localized: "listing reasons · net buy · seat analysis", locale: LocaleHolder.current),     access: .free, status: .active),
         .init(symbol: "flame",                            name: String(localized: "EastMoney limit-up board", locale: LocaleHolder.current),     provides: String(localized: "limit-up pool · consecutive boards · sealing orders", locale: LocaleHolder.current),          access: .free, status: .active),
-        .init(symbol: "bubble.left.and.bubble.right",     name: String(localized: "雪球 discussion/sentiment", locale: LocaleHolder.current),       provides: String(localized: "per-stock discussion · retail sentiment", locale: LocaleHolder.current),             access: .byo,  status: .active),
         .init(symbol: "dollarsign.circle",                name: String(localized: "EastMoney northbound flow", locale: LocaleHolder.current),   provides: String(localized: "Stock Connect · foreign capital flow", locale: LocaleHolder.current),             access: .free, status: .planned),
         .init(symbol: "building.columns",                 name: String(localized: "HKEX short selling", locale: LocaleHolder.current),            provides: String(localized: "Hong Kong short-sell data", locale: LocaleHolder.current),                   access: .free, status: .planned),
         .init(symbol: "building.columns",                 name: String(localized: "HKEX CCASS", locale: LocaleHolder.current),         provides: String(localized: "central clearing shareholding distribution", locale: LocaleHolder.current),               access: .free, status: .planned),
@@ -625,11 +622,10 @@ private struct DataSourcesTab: View {
         .init(symbol: "chart.xyaxis.line",                name: "Yahoo Finance",        provides: String(localized: "quotes · K-line · search", locale: LocaleHolder.current),              access: .free,    status: .active),
         .init(symbol: "newspaper",                        name: "Yahoo news",           provides: String(localized: "headlines fallback when no Finnhub key (also non-US markets)", locale: LocaleHolder.current), access: .free, status: .active),
         .init(symbol: "doc.text",                         name: "FMP",                  provides: String(localized: "fundamentals · valuation · news (paid add-on)", locale: LocaleHolder.current),                  access: .freeKey, status: .active),
-        .init(symbol: "bubble.left.and.bubble.right",     name: "Finnhub",              provides: String(localized: "news · sentiment", locale: LocaleHolder.current),                    access: .freeKey, status: .active),
+        .init(symbol: "bubble.left.and.bubble.right",     name: "Finnhub",              provides: String(localized: "Company news", locale: LocaleHolder.current),                    access: .freeKey, status: .active),
         .init(symbol: "building.columns",                 name: "FRED",                 provides: String(localized: "macro: rates/CPI/payrolls/GDP", locale: LocaleHolder.current),          access: .freeKey, status: .active),
         .init(symbol: "building.columns",                 name: "FINRA",                provides: String(localized: "Short Interest", locale: LocaleHolder.current),          access: .free,    status: .active),
         .init(symbol: "bubble.left.and.bubble.right",     name: "StockTwits",           provides: String(localized: "retail discussion · Bullish/Bearish sentiment", locale: LocaleHolder.current), access: .free, status: .active),
-        .init(symbol: "bubble.left.and.bubble.right",     name: "X (Twitter)",          provides: String(localized: "discussion · sentiment", locale: LocaleHolder.current),                    access: .byo,     status: .active),
         .init(symbol: "building.columns",                 name: "SEC EDGAR",            provides: String(localized: "insider trades (Form 4) · XBRL financials · filings", locale: LocaleHolder.current), access: .free, status: .active),
         .init(symbol: "doc.text",                         name: "Yahoo quoteSummary",   provides: String(localized: "analyst ratings · earnings dates · institutional holdings", locale: LocaleHolder.current),   access: .free,    status: .active),
         ]
@@ -693,18 +689,12 @@ private struct DataSourcesTab: View {
             } header: {
                 Text("Data Sources")
             } footer: {
-                Text("Free = no key needed; Free · Key = fill in below; BYO account = sign in within the workflow. Planned = coming soon.")
+                Text("No key = no credential configured by Wick; API Key = configure below; BYO account = sign in. Supported describes integration, not current connectivity or plan access.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
 
-            if settings.providerKind == .server {
-                Section {
-                    Text("In Wick Server mode, FMP / Finnhub / FRED are provided by our backend — you don't need to supply data keys. Switch to a BYO provider on the Provider tab to manage your own data sources.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
+            Group {
                 // Each data source is its own card: an icon-tiled
                 // header row naming the source, the key field below it,
                 // and the provider/fallback note as caption. The tile
@@ -721,17 +711,8 @@ private struct DataSourcesTab: View {
                     Text("[financialmodelingprep.com](https://site.financialmodelingprep.com/developer) · price history, fundamentals, profile. Per-symbol news needs FMP's paid News add-on; without it Wick uses Finnhub/Yahoo for headlines. Empty key = falls back to Yahoo for chart-only data.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Section("News & sentiment (Finnhub)") {
-                    SettingsRow(systemImage: "newspaper",
-                                tint: .indigo,
-                                title: "Finnhub",
-                                subtitle: "company headlines, sentiment") {
-                        EmptyView()
-                    }
-                    SecureField("Finnhub API key:", text: $settings.finnhubKey)
-                    Text("[finnhub.io](https://finnhub.io/dashboard) · company headlines, sentiment. Empty = the news/sentiment analysts report \"no data\".")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+                DataKeySection(settings: settings, provider: "finnhub")
+                DataKeySection(settings: settings, provider: "adanos")
                 Section("Macro backdrop (FRED)") {
                     SettingsRow(systemImage: "building.columns",
                                 tint: .teal,
@@ -1119,21 +1100,14 @@ private struct WorkflowTab: View {
                         .labelsHidden()
                         .disabled(!settings.enableWickerBrowser)
                 }
-                SettingsRow(systemImage: "bubble.left.and.text.bubble.right",
-                            tint: .green,
-                            title: "雪球 BYO discussion (sentiment source)",
-                            subtitle: "Fold your logged-in 雪球 per-stock discussion into sentiment analysis. Off by default; first connect a 雪球 login from a stock's Social tab.") {
-                    Toggle("", isOn: $settings.enableXueqiuSentiment)
-                        .labelsHidden()
-                }
                 // Cross-process MCP bridge exposure (TODO #39). Lets third-party
                 // MCP clients (Claude Code / Codex / …) drive the user's
                 // logged-in browser + 雪球/X session over the bundled wick-mcp
                 // server. Sensitive — default OFF, gated by the browser switch.
                 SettingsRow(systemImage: "antenna.radiowaves.left.and.right",
                             tint: .red,
-                            title: "Expose Wicker browser / social via MCP (read-only)",
-                            subtitle: "Lets third-party MCP clients (Claude Code / Codex, etc.) drive your logged-in browser and 雪球/X sessions via the bundled wick-mcp — read-only: navigate / read / snapshot / 雪球·X discussion (no click / type / run scripts). ⚠️ This lets external agents operate your logged-in sessions. Off by default; first enable the Wicker browser above, macOS 26+.") {
+                            title: "Expose Wicker browser via MCP (read-only)",
+                            subtitle: "Lets external MCP clients navigate and read the Wicker browser. Off by default; enable the Wicker browser first.") {
                     Toggle("", isOn: $settings.exposeWickerViaMCP)
                         .labelsHidden()
                         .disabled(!settings.enableWickerBrowser)

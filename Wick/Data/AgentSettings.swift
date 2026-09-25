@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Security
 import SwiftUI
 import TradingFloor
 
@@ -107,12 +108,23 @@ final class AgentSettings {
             else { Keychain.save(fmpKey, account: account) }
         }
     }
-    var finnhubKey: String {
-        didSet {
-            let account = "me.impai.wick.finnhub-key"
-            if finnhubKey.isEmpty { Keychain.delete(account: account) }
-            else { Keychain.save(finnhubKey, account: account) }
+    private(set) var finnhubKey: String
+    private(set) var adanosKey: String
+    private(set) var dataCredentialsRevision = 0
+
+    /// Commit only after Keychain confirms success; drafts stay in the Settings view.
+    func saveDataKey(_ value: String, provider: String) throws {
+        guard provider == "finnhub" || provider == "adanos" else { return }
+        let key = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let account = "me.impai.wick.\(provider)-key"
+        let status = key.isEmpty ? Keychain.delete(account: account) : Keychain.save(key, account: account)
+        guard status == errSecSuccess || (key.isEmpty && status == errSecItemNotFound) else {
+            throw NSError(domain: "Wick.Keychain", code: Int(status), userInfo: [
+                NSLocalizedDescriptionKey: String(localized: "Keychain could not save the change. Your previous key is unchanged.", locale: LocaleHolder.current)
+            ])
         }
+        if provider == "finnhub" { finnhubKey = key } else { adanosKey = key }
+        dataCredentialsRevision += 1
     }
     var fredKey: String {
         didSet {
@@ -200,15 +212,6 @@ final class AgentSettings {
     }
 
     // MARK: - BYO browser-scraping sources (off by default)
-
-    /// Append BYO-cookie 雪球 discussion lines into CN/HK snapshots' `news`
-    /// (Mode 1 of the webpage-scraping research doc). **Default FALSE** — the
-    /// path is best-effort and requires the user to sign in to 雪球 once in the
-    /// in-app browser; it stays inert until both this flag is on AND the session
-    /// is valid. CN/HK tickers only; non-CN runs are never touched.
-    var enableXueqiuSentiment: Bool {
-        didSet { UserDefaults.standard.set(enableXueqiuSentiment, forKey: "tf.enableXueqiuSentiment") }
-    }
 
     /// Give Wicker (the chat agent) browser-operation tools over the embedded
     /// WebKit — navigate / read / snapshot / click / type / eval / fetchJSON
@@ -408,6 +411,7 @@ final class AgentSettings {
         // Data-source keys (BYO tier).
         self.fmpKey     = Keychain.load(account: "me.impai.wick.fmp-key")     ?? ""
         self.finnhubKey = Keychain.load(account: "me.impai.wick.finnhub-key") ?? ""
+        self.adanosKey = Keychain.load(account: "me.impai.wick.adanos-key") ?? ""
         self.fredKey    = Keychain.load(account: "me.impai.wick.fred-key")    ?? ""
 
         // Server config — independent of provider selection.
@@ -427,7 +431,6 @@ final class AgentSettings {
         self.freeAgentMaxToolTurns = ud.object(forKey: "tf.freeAgentTurns") as? Int ?? 6
         // Off by default — the BYO 雪球 scraping path is inert until the user
         // opts in (and signs in to 雪球 in the in-app browser).
-        self.enableXueqiuSentiment = ud.bool(forKey: "tf.enableXueqiuSentiment")
         // Off by default — Wicker's browser-operation tools + live panel stay
         // inert until the user opts in (and the app is on macOS 26+).
         self.enableWickerBrowser = ud.bool(forKey: "tf.enableWickerBrowser")
@@ -493,7 +496,6 @@ final class AgentSettings {
 
         // Data-source keys.
         adopt(env["FRED_API_KEY"]   , current: fredKey)    { fredKey = $0 }
-        adopt(env["FINNHUB_API_KEY"], current: finnhubKey) { finnhubKey = $0 }
         adopt(env["FMP_API_KEY"]    , current: fmpKey)     { fmpKey = $0 }
 
         // Server auth — pick whichever the user wired locally.

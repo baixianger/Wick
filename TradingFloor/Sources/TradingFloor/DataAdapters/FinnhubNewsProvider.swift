@@ -16,27 +16,46 @@ public struct FinnhubClient: Sendable {
                           asOf: Date,
                           limit: Int = 6) async -> [String]
     {
-        let day = ISO8601DateFormatter(); day.formatOptions = [.withFullDate]
-        let from = day.string(from: asOf.addingTimeInterval(-14 * 86_400))
-        let to = day.string(from: asOf)
+        guard let articles = try? await articles(symbol: symbol, asOf: asOf, limit: limit) else { return [] }
+        return articles.map { "\($0.title) (\($0.publisher ?? "Finnhub"))" }
+    }
 
+    public func articles(symbol: String, asOf: Date = .now, limit: Int = 20) async throws -> [NewsArticle] {
+        guard StockTwitsClient.isUSSymbol(symbol) else { throw DataAPIError.unsupportedSymbol }
         var components = URLComponents(string: "https://finnhub.io/api/v1/company-news")!
+        let from = asOf.addingTimeInterval(-14 * 86_400)
         components.queryItems = [
-            .init(name: "symbol", value: symbol),
-            .init(name: "from", value: from),
-            .init(name: "to", value: to),
-            .init(name: "token", value: apiKey),
+            .init(name: "symbol", value: symbol.uppercased()),
+            .init(name: "from", value: DataAPI.day(from)),
+            .init(name: "to", value: DataAPI.day(asOf)),
         ]
-        guard let url = components.url,
-              let (data, response) = try? await session.data(from: url),
-              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
-              let items = try? JSONDecoder().decode([Item].self, from: data) else { return [] }
-        return items.prefix(limit).map { item in
-            item.source.map { "\(item.headline) (\($0))" } ?? item.headline
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 20
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue(apiKey, forHTTPHeaderField: "X-Finnhub-Token")
+        let data = try await DataAPI.fetch(request, session: session)
+        guard let items = try? JSONDecoder().decode([Item].self, from: data) else {
+            throw DataAPIError.invalidResponse
+        }
+        var seen = Set<String>()
+        return items.filter {
+            !$0.headline.isEmpty && $0.datetime <= asOf.timeIntervalSince1970
+                && $0.datetime >= from.timeIntervalSince1970
+                && seen.insert($0.url ?? $0.headline).inserted
+        }.sorted { $0.datetime > $1.datetime }.prefix(max(0, limit)).map {
+            NewsArticle(title: $0.headline, summary: $0.summary, publisher: $0.source,
+                        link: $0.url, published: Date(timeIntervalSince1970: $0.datetime))
         }
     }
 
-    private struct Item: Decodable { let headline: String; let source: String? }
+    private struct Item: Decodable {
+        let headline: String
+        let source: String?
+        let summary: String?
+        let url: String?
+        let datetime: Double
+    }
+
 }
 
 /// Decorator: fills `news` from Finnhub if the base left it empty.

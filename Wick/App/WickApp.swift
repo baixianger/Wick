@@ -90,6 +90,7 @@ struct WickApp: App {
                     // Hand the FRED cache the user's key so Macro
                     // tab cards switch from synthetic to live within
                     // ~1 s of first visit.
+                    newsStore.configure(finnhubKey: agentSettings.finnhubKey)
                     fredStore.apiKey = agentSettings.fredKey
                 }
                 // Re-register the agent's MarketDataTool whenever a
@@ -99,21 +100,17 @@ struct WickApp: App {
                 .onChange(of: agentSettings.fmpKey) { _, _ in
                     agentRuntime.reconfigure(with: agentSettings)
                 }
+                .onChange(of: agentSettings.adanosKey) { _, _ in
+                    agentRuntime.reconfigure(with: agentSettings)
+                }
                 .onChange(of: agentSettings.finnhubKey) { _, _ in
+                    newsStore.configure(finnhubKey: agentSettings.finnhubKey)
                     agentRuntime.reconfigure(with: agentSettings)
                 }
                 .onChange(of: agentSettings.fredKey) { _, _ in
                     agentRuntime.reconfigure(with: agentSettings)
                     fredStore.apiKey = agentSettings.fredKey
                 }
-                // Toggling the BYO 雪球 source rebuilds the chain so the next
-                // run picks up (or drops) the off-by-default decorator.
-                .onChange(of: agentSettings.enableXueqiuSentiment) { _, _ in
-                    agentRuntime.reconfigure(with: agentSettings)
-                }
-                // Opting Wicker's browser tools on/off registers or retracts
-                // the 7 `web.*` tools so the next chat turn (and the live
-                // panel's gate) reflect the change immediately.
                 .onChange(of: agentSettings.enableWickerBrowser) { _, _ in
                     agentRuntime.reconfigureWebTools(with: agentSettings)
                     // The bridge gate also depends on this flag — re-evaluate so
@@ -147,53 +144,6 @@ struct WickApp: App {
         // clipping. Window tabbing stays at its macOS default (enabled).
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
-        // Dev-only: expose the 雪球 WebPage BYO-cookie probe behind a
-        // "Developer" menu command that opens its own window. The whole
-        // thing is `#if DEBUG`, so it never reaches a Release build or the
-        // user-facing navigation — it's a hand-run validation surface for
-        // the two scraping linchpins (see XueqiuProbeView).
-        #if DEBUG
-        .commands {
-            CommandMenu("Developer") {
-                XueqiuProbeMenuButton()
-                // Sibling to the 雪球 probe: the hard-case X (Twitter)
-                // data-reachability probe (DOM + API paths). Same DEBUG-only,
-                // hand-run, never-in-user-nav contract.
-                XProbeMenuButton()
-            }
-        }
-        #endif
-
-        // The probe's own window. Declared at the `App` level (only in DEBUG)
-        // and opened on demand by the Developer-menu command above; it never
-        // shows unless explicitly opened.
-        #if DEBUG
-        Window("雪球 BYO-Cookie Probe (DEV)", id: XueqiuProbeWindow.id) {
-            if #available(macOS 26.0, *) {
-                XueqiuProbeView()
-            } else {
-                Text("雪球 Probe 需要 macOS 26")
-                    .padding()
-            }
-        }
-        .defaultSize(width: 1000, height: 640)
-        #endif
-
-        // The X (Twitter) probe's own window — sibling to the 雪球 one above.
-        // DEBUG-only, opened on demand by its Developer-menu command; never
-        // shows unless explicitly opened, never in user-facing nav.
-        #if DEBUG
-        Window("X (Twitter) 数据可达性 Probe (DEV)", id: XProbeWindow.id) {
-            if #available(macOS 26.0, *) {
-                XProbeView()
-            } else {
-                Text("X Probe 需要 macOS 26")
-                    .padding()
-            }
-        }
-        .defaultSize(width: 1040, height: 660)
-        #endif
-
         // Native macOS Settings scene — reachable via ⌘, and the
         // standard "Wick › Settings…" menu item. SwiftUI auto-wires
         // the menu item to this Scene's content. `SettingsView` is a

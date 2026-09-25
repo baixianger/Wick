@@ -1,5 +1,42 @@
 # Feasibility: BYO-credential webpage scraping via SwiftUI WebKit (`WebPage`)
 
+> **2026-09-24 状态更新：历史研究，已从产品移除。** Wick 不再提供 X/雪球内嵌登录或专用抓取；改用默认浏览器链接。以下旧“生产”“LIVE-VALIDATED”描述只代表当时实验记录，不代表当前可用性。两套 Swift 实现、调试 probe、UI 与会话桥接已完整归档在 [源码知识库](../reference/browser-social/README.md)，并保存提交及 SHA-256 校验清单。
+
+## 后续复用的经验索引（X 与雪球）
+
+| 知识点 | 实现入口 | 可复用的结论 / 不能假定的事 |
+|---|---|---|
+| 页面与视图分离 | 两个 LiveScraper 的 makeLoginPage / readyPage | 长期持有 WebPage；仅在需要显示时交给 WebView。不要在 body 重建页面 |
+| 会话持久化 | 固定 storeID、WKWebsiteDataStore(forIdentifier:) | 同站登录页/读取页使用同一 store；不同站、通用浏览器分离。WebKit store 不自动共享 Safari/Chrome 登录 |
+| 首次加载并发 | readyTask / readyPage | 合并就绪任务，避免两个初次加载相互取消；失败后允许再次准备 |
+| 导航取消 -999 | awaitNavigation / watchdog | 识别被后续导航替代、真正失败与超时；不能一遇 -999 就无限刷新 |
+| SPA 就绪 | X searchPosts 的页面内等待 | 导航结束不代表帖子出现；等待结果或空态，限定等待时间，返回可解释状态 |
+| 同源认证 fetch | 雪球 extractPosts / extractDiscussion | callJavaScript 通过 arguments 传参；credentials=include；返回 HTTP 状态与 JSON，不导出 cookie |
+| X 站内搜索 | X searchPosts | 让网页自行构造其内部请求，再读取 DOM；不要把当时的 queryId、transaction-id 假设写死成稳定 API |
+| Swift/JS 边界 | callJavaScript / errorDetail | optional Any 做类型检查；正确处理 JS null、异常与 JSON；禁止直接插值用户内容到脚本 |
+| 状态模型 | 原 BrowserSessionManager / SocialView | needsLogin、valid、expired、unknown 与网络空结果分开；以实际读取验证会话，单个 cookie 不是充分证据 |
+| 数据契约 | XPost / XueqiuPostParser | X 原实现只有 handle/text，不得虚构时间、链接；雪球结构化字段也需 null/单位测试 |
+| AI 集成 | XueqiuSentimentProvider / 原 BridgeServer | 主线程 WebKit 留在 app 层，模型协议留 Foundation 层；用户会话不应变成默认批处理依赖 |
+
+### 建议保留的 Swift 结构
+
+`@MainActor @Observable` 会话拥有者长期持有页面；WebPage 引用适当使用 `@ObservationIgnored`，把用户需要观察的状态独立暴露。固定站点 store 标识属于程序配置，不是 credential。读取接口用协议注入，便于提供 mock；解析器不依赖 WebKit，方便测试真实结构的脱敏 fixture。
+
+取消与时序要分两层处理：导航/脚本操作有超时和取消；UI 还需要请求 generation 或 symbol 检查，防止旧股票结果覆盖新股票。共享页面上的不同股票查询需要串行化或独立页面；仅合并首次 readyTask 不能保证后续多导航安全。
+
+### 历史结论的修正
+
+- 使用真实 WebKit **不能证明不会被检测、限流或封禁**。旧文档的“defeats fingerprint detection”“ban-safe”等措辞不是保证。
+- 用户登录不等于已获得所有自动化或数据再分发许可；站点规则、授权范围须重新核对。
+- 不要保留旧实验的整段原文/响应日志策略；生产日志应只记录脱敏状态、耗时和数量。
+- 共享 cookie store 不等于已渲染 DOM 同步；在另一页面登录后，旧页面可能仍显示登录前状态。
+- X handle+text 不是严格唯一 ID；同文帖子可能碰撞，无法证明完整讨论量。DOM 没找到节点也不一定是没有帖子。
+
+Apple 参考：[WebPage](https://developer.apple.com/documentation/webkit/webpage)、[命名数据存储](https://developer.apple.com/documentation/webkit/wkwebsitedatastore/init(foridentifier:))、[WWDC25 WebKit for SwiftUI](https://developer.apple.com/videos/play/wwdc2025/231/)。Apple 文档支持页面/视图分离及页面交互能力；具体站点行为来自项目历史代码和实验，仍需重新实测。
+
+---
+
+
 _Research deliverable — Wick (macOS 26 / SwiftUI), 2026-06-09._
 
 > ✅ **LIVE-VALIDATED, in-WebKit JSON-API path (probe `8a73738`).** The production

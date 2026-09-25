@@ -309,8 +309,11 @@ struct OverviewTab: View {
                             GridItem(.flexible(), alignment: .topLeading)],
                   alignment: .leading,
                   spacing: 20) {
-            // Real fetched news when available, else the fixture fallback so
-            // the grid is never blank while the background fetch is in flight.
+            // Render only fetched articles; show an explicit empty state otherwise.
+            if news.display(for: ticker.symbol).isEmpty {
+                Text("No live headlines loaded. The source may be loading, unavailable or have no coverage.")
+                    .foregroundStyle(.secondary)
+            }
             ForEach(news.display(for: ticker.symbol)) { item in
                 NewsRow(item: item, expanded: true)
             }
@@ -436,18 +439,21 @@ struct NewsTab: View {
                                 GridItem(.flexible(), alignment: .topLeading)],
                       alignment: .leading,
                       spacing: 20) {
-                // Real fetched news when available, else the fixture fallback so
-                // the tab is never blank while the background fetch is in flight.
+                // Only real fetched articles, including the optional logged-in feed.
                 // For CN/HK tickers the 雪球 BYO feed (#54) merges in when logged
                 // in — `runtime.browserSession` is nil below macOS 26 / when not
                 // connected, in which case this is the 东方财富 list unchanged.
-                ForEach(news.display(for: ticker.symbol, session: runtime.browserSession)) { item in
+                if news.display(for: ticker.symbol).isEmpty {
+                    Text("No live headlines loaded. The source may be loading, unavailable or have no coverage.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(news.display(for: ticker.symbol)) { item in
                     NewsRow(item: item, expanded: true)
                 }
             }
             // Footer attribution reflects the ACTUAL source (EastMoney for
             // CN/HK, Yahoo Finance for US / international).
-            Text(NewsSource.footerLabel(for: ticker.symbol))
+            Text("Sources are shown with each article. No headlines may mean no coverage or an unavailable provider.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

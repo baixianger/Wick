@@ -145,9 +145,57 @@ final class BridgeServer {
             let text = await manager.snapshotOutline(full: full, viewportOnly: viewportOnly, verbose: false)
             return ok(req, text)
 
-        case .xueqiuDiscussion, .xDiscussion:
-            return fail(req, "This social scraping tool has been removed. Open the community website in your browser.")
+        case .xueqiuDiscussion:
+            guard let symbol = req.string("symbol"), !symbol.isEmpty else {
+                return fail(req, "`symbol` 不能为空")
+            }
+            let posts = await manager.posts(for: symbol)
+            return ok(req, Self.renderXueqiu(symbol: symbol, posts: posts))
+
+        case .xDiscussion:
+            guard let symbol = req.string("symbol"), !symbol.isEmpty else {
+                return fail(req, "`symbol` 不能为空")
+            }
+            let posts = await manager.xPosts(for: symbol)
+            return ok(req, Self.renderX(symbol: symbol, posts: posts))
         }
+    }
+
+    // MARK: - Rendering
+
+    private static func renderXueqiu(symbol: String, posts: [XueqiuPost]) -> String {
+        guard !posts.isEmpty else {
+            return "雪球：未找到 \(symbol) 的讨论(可能未登录雪球、该标的非 A 股/港股,或当前无帖)。"
+                + "\n如需此源,请在 Wick 个股页 Social 标签登录雪球,并确认 \(symbol) 为 A 股/港股标的。"
+        }
+        let df = DateFormatter()
+        df.dateFormat = "MM-dd HH:mm"
+        var lines = ["# 雪球讨论 — \(symbol) (\(posts.count) 条)", ""]
+        for p in posts.prefix(30) {
+            let time = p.createdAt.map { " · \(df.string(from: $0))" } ?? ""
+            let author = p.author.isEmpty ? "匿名" : p.author
+            lines.append("**\(author)**\(time) — 赞\(p.likeCount) 评\(p.replyCount)")
+            lines.append(p.text)
+            if let url = p.url { lines.append(url.absoluteString) }
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func renderX(symbol: String, posts: [XPost]) -> String {
+        let cashtag = BrowserSessionManager.cashtag(for: symbol)
+        guard !posts.isEmpty else {
+            return "X：未找到 \(cashtag) 的讨论(可能未登录 X,或该 cashtag 当前无近期推文)。"
+                + "\n如需此源,请在 Wick 个股页 Social 标签登录 X。"
+        }
+        var lines = ["# X 讨论 — \(cashtag) (\(posts.count) 条)", ""]
+        for p in posts.prefix(30) {
+            let handle = p.handle.isEmpty ? "(unknown)" : p.handle
+            lines.append("**\(handle)**")
+            lines.append(p.text)
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Result helpers

@@ -41,12 +41,14 @@ enum Keychain {
     @discardableResult
     static func save(_ value: String, account: String) -> OSStatus {
         let data = Data(value.utf8)
-        // Delete any existing item first — SecItemAdd would otherwise
-        // fail with `errSecDuplicateItem`. We don't care if delete
-        // returns notFound (no prior entry), only catastrophic errors.
-        let deleteStatus = SecItemDelete(baseQuery(account: account) as CFDictionary)
-        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
-            log.error("delete-before-save failed for \(account, privacy: .public): \(message(for: deleteStatus), privacy: .public) (status \(deleteStatus))")
+        // Update in place: a failed write must not destroy the saved key.
+        let updateStatus = SecItemUpdate(baseQuery(account: account) as CFDictionary,
+                                        [kSecValueData as String: data] as CFDictionary)
+        if updateStatus != errSecItemNotFound {
+            if updateStatus != errSecSuccess {
+                log.error("update failed for \(account, privacy: .public): status \(updateStatus)")
+            }
+            return updateStatus
         }
         var add = baseQuery(account: account)
         add[kSecValueData as String] = data

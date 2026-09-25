@@ -41,8 +41,6 @@ final class ToolHost {
             webNavigateSpec,
             webReadSpec,
             webSnapshotSpec,
-            xueqiuDiscussionSpec,
-            xDiscussionSpec
         ]
     }
 
@@ -62,8 +60,6 @@ final class ToolHost {
         case "wick.web_navigate":      return try await webNavigate(arguments: arguments)
         case "wick.web_read":          return try await webRead(arguments: arguments)
         case "wick.web_snapshot":      return try await webSnapshot(arguments: arguments)
-        case "wick.xueqiu_discussion": return try await xueqiuDiscussion(arguments: arguments)
-        case "wick.x_discussion":      return try await xDiscussion(arguments: arguments)
         default:                throw MCPToolError.unknown(name)
         }
     }
@@ -215,67 +211,6 @@ final class ToolHost {
         if let full = arguments["full"] as? Bool { args["full"] = .bool(full) }
         if let vp = arguments["viewportOnly"] as? Bool { args["viewportOnly"] = .bool(vp) }
         return await runBridge(tool: .webSnapshot, args: args)
-    }
-
-    // MARK: wick.xueqiu_discussion
-
-    private var xueqiuDiscussionSpec: [String: Any] {
-        [
-            "name": "wick.xueqiu_discussion",
-            "description": """
-            Read recent 雪球 (Xueqiu) discussion posts for a Chinese A-share / \
-            Hong Kong ticker, using the user's logged-in 雪球 session inside Wick. \
-            Returns author / text / 赞·评 counts / time per post. Read-only. CN/HK \
-            symbols only (e.g. '600519.SS', '0700.HK'). Requires Wick running, \
-            the user signed into 雪球, and the MCP browser exposure enabled.
-            """,
-            "inputSchema": [
-                "type": "object",
-                "properties": [
-                    "symbol": ["type": "string",
-                               "description": "CN/HK symbol — '600519.SS', '0700.HK', etc."]
-                ],
-                "required": ["symbol"]
-            ]
-        ]
-    }
-
-    private func xueqiuDiscussion(arguments: [String: Any]) async throws -> [[String: Any]] {
-        guard let symbol = (arguments["symbol"] as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !symbol.isEmpty
-        else { throw MCPToolError.invalidArgument("`symbol` must be a non-empty string") }
-        return await runBridge(tool: .xueqiuDiscussion, args: ["symbol": .string(symbol)])
-    }
-
-    // MARK: wick.x_discussion
-
-    private var xDiscussionSpec: [String: Any] {
-        [
-            "name": "wick.x_discussion",
-            "description": """
-            Read recent X (Twitter) cashtag discussion ($SYMBOL) for a ticker, \
-            using the user's logged-in X session inside Wick (US / intl markets). \
-            Returns handle + tweet text per post. Read-only. The symbol is \
-            reduced to its bare ticker before the `$` (e.g. 'AAPL'/'TSLA'). \
-            Requires Wick running, the user signed into X, and the MCP browser \
-            exposure enabled.
-            """,
-            "inputSchema": [
-                "type": "object",
-                "properties": [
-                    "symbol": ["type": "string",
-                               "description": "Ticker for the cashtag — e.g. 'TSLA', 'NVDA'."]
-                ],
-                "required": ["symbol"]
-            ]
-        ]
-    }
-
-    private func xDiscussion(arguments: [String: Any]) async throws -> [[String: Any]] {
-        guard let symbol = (arguments["symbol"] as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !symbol.isEmpty
-        else { throw MCPToolError.invalidArgument("`symbol` must be a non-empty string") }
-        return await runBridge(tool: .xDiscussion, args: ["symbol": .string(symbol)])
     }
 
     // MARK: - wick.snapshot

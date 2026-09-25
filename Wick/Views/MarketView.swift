@@ -492,14 +492,9 @@ struct MarketView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .topLeading),
-                                GridItem(.flexible(), alignment: .topLeading)],
-                      alignment: .leading,
-                      spacing: 20) {
-                ForEach(NewsFixtures.common) { item in
-                    NewsRow(item: item, expanded: true)
-                }
-            }
+            Text("Open a stock’s News tab for live company headlines.")
+                .foregroundStyle(.secondary)
+
         }
     }
 

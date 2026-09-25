@@ -18,6 +18,7 @@ struct NewsItem: Identifiable, Hashable {
 
     var ageLabel: String {
         switch ageMinutes {
+        case ..<0: return String(localized: "Time unavailable", locale: LocaleHolder.current)
         case 0..<60:      return "\(ageMinutes)m ago"
         case 60..<1440:   return "\(ageMinutes / 60)h ago"
         default:          return "\(ageMinutes / 1440)d ago"
@@ -32,12 +33,14 @@ enum NewsProvider: Hashable {
     case eastMoney
     case xueqiu
     case yahoo
+    case finnhub
 
     /// Short badge label.
     var badge: String {
         switch self {
         case .eastMoney: return "东方财富"
         case .xueqiu:    return "雪球"
+        case .finnhub: return "Finnhub"
         case .yahoo:     return "Yahoo"
         }
     }

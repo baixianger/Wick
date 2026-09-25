@@ -5030,6 +5030,406 @@
           }
         }
       }
+    },
+    "Company news": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公司新闻"
+          }
+        }
+      }
+    },
+    "Reddit sentiment aggregates": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reddit 情绪聚合"
+          }
+        }
+      }
+    },
+    "No API key saved": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未保存 API Key"
+          }
+        }
+      }
+    },
+    "API key saved in Keychain": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API Key 已保存至钥匙串"
+          }
+        }
+      }
+    },
+    "New API key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新的 API Key"
+          }
+        }
+      }
+    },
+    "Test saved key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试已保存的 Key"
+          }
+        }
+      }
+    },
+    "Remove key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除 Key"
+          }
+        }
+      }
+    },
+    "Testing connection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在测试连接"
+          }
+        }
+      }
+    },
+    "Manage API key and plan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理 API Key 与套餐"
+          }
+        }
+      }
+    },
+    "Optional US company news. Yahoo remains the fallback when Finnhub has no headlines or is unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选的美股公司新闻。Finnhub 无新闻或不可用时回退至 Yahoo。"
+          }
+        }
+      }
+    },
+    "Optional Reddit aggregates for supported US tickers. Loaded on request, cached for five minutes. Each uncached load or connection test uses one API request.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选的 Reddit 美股情绪聚合。按需加载，缓存五分钟；每次未命中缓存的加载或连接测试消耗一次 API 请求。"
+          }
+        }
+      }
+    },
+    "Keys stay in this Mac’s Keychain. Data requests go directly to the provider. Your plan’s coverage, quotas and usage terms apply.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密钥保存在这台 Mac 的钥匙串中，数据请求直达服务商，受套餐覆盖、额度及使用条款限制。"
+          }
+        }
+      }
+    },
+    "Connection verified for this endpoint. Other data may require a different plan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此接口连接验证成功。其他数据可能需要不同套餐。"
+          }
+        }
+      }
+    },
+    "The provider rejected this API key.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务商拒绝了此 API Key。"
+          }
+        }
+      }
+    },
+    "Your plan does not permit this request.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的套餐不允许此请求。"
+          }
+        }
+      }
+    },
+    "Provider quota reached. Try again later or check your plan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到服务商额度，请稍后重试或检查套餐。"
+          }
+        }
+      }
+    },
+    "This source does not support this ticker format.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此数据源不支持该股票代码格式。"
+          }
+        }
+      }
+    },
+    "Data unavailable. Check your connection and try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据暂不可用，请检查网络后重试。"
+          }
+        }
+      }
+    },
+    "Keychain could not save the change. Your previous key is unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钥匙串无法保存此更改，原密钥保持不变。"
+          }
+        }
+      }
+    },
+    "Add an Adanos API key in Settings → Data Sources to view Reddit aggregates.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在设置 → 数据源中添加 Adanos API Key，即可查看 Reddit 聚合数据。"
+          }
+        }
+      }
+    },
+    "Load sentiment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载情绪数据"
+          }
+        }
+      }
+    },
+    "Mentions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提及次数"
+          }
+        }
+      }
+    },
+    "Sentiment (−1…1)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情绪分值（−1…1）"
+          }
+        }
+      }
+    },
+    "Buzz score": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "热度分值"
+          }
+        }
+      }
+    },
+    "No qualifying Reddit data for this period.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此期间没有符合条件的 Reddit 数据。"
+          }
+        }
+      }
+    },
+    "Reddit only · seven UTC calendar days · cached for five minutes. Missing data is not neutral sentiment.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅 Reddit · 七个 UTC 日历日 · 缓存五分钟。缺失数据不代表中性情绪。"
+          }
+        }
+      }
+    },
+    "No live headlines loaded. The source may be loading, unavailable or have no coverage.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未加载实时新闻；来源可能仍在加载、暂不可用或没有覆盖。"
+          }
+        }
+      }
+    },
+    "Sources are shown with each article. No headlines may mean no coverage or an unavailable provider.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每篇文章标明数据来源。无新闻可能是没有覆盖或服务商暂不可用。"
+          }
+        }
+      }
+    },
+    "Open a stock’s News tab for live company headlines.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开股票详情的新闻标签，查看实时公司新闻。"
+          }
+        }
+      }
+    },
+    "Time unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时间未知"
+          }
+        }
+      }
+    },
+    "Supported": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已支持"
+          }
+        }
+      }
+    },
+    "UTC window: %@ – %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UTC 时间范围：%@ – %@"
+          }
+        }
+      }
+    },
+    "No key = no credential configured by Wick; API Key = configure below; BYO account = sign in. Supported describes integration, not current connectivity or plan access.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无需 Key 表示 Wick 不配置该凭证；API Key 请在下方填写；自带账号需登录。已支持仅表示已实现接入，不代表当前连通或套餐可用。"
+          }
+        }
+      }
+    },
+    "No key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无需 Key"
+          }
+        }
+      }
+    },
+    "View on Xueqiu": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在雪球查看"
+          }
+        }
+      }
+    },
+    "View on X": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 X 查看"
+          }
+        }
+      }
+    },
+    "Opens in your default browser. Sign in there if needed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在系统默认浏览器中打开，需要时请在浏览器中登录。"
+          }
+        }
+      }
+    },
+    "No social data source is available for this market.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此市场尚无可用的社交数据源。"
+          }
+        }
+      }
+    },
+    "Expose Wicker browser via MCP (read-only)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 MCP 开放 Wicker 浏览器（只读）"
+          }
+        }
+      }
+    },
+    "Lets external MCP clients navigate and read the Wicker browser. Off by default; enable the Wicker browser first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许外部 MCP 客户端导航和读取 Wicker 浏览器。默认关闭，需先启用 Wicker 浏览器。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
